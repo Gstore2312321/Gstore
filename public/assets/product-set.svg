@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 760">
+  <rect width="600" height="760" fill="#fffdf8"/>
+  <circle cx="470" cy="150" r="170" fill="#dfe8dd"/>
+  <path d="M238 170h124c42 70 46 186 58 408H180c12-222 16-338 58-408Z" fill="#f8f2e5" stroke="#c7962f" stroke-width="9"/>
+  <path d="M236 172c20 54 44 94 64 122 20-28 44-68 64-122" fill="none" stroke="#17130a" stroke-width="9" stroke-linecap="round"/>
+  <path d="M206 340h188M198 438h204" stroke="#e7dbc8" stroke-width="10" stroke-linecap="round"/>
+  <text x="300" y="668" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="800" fill="#17130a">Set blanco</text>
+</svg>

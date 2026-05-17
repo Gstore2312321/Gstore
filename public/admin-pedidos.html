@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="Panel privado de GStore para gestionar pedidos.">
+  <title>Pedidos | GStore Admin</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-body" data-admin-page="orders">
+  <main class="admin-shell">
+    <section class="login-view" id="loginView">
+      <form class="login-card" id="loginForm">
+        <div class="login-brand-panel">
+          <span class="brand-mark">G</span>
+          <span class="eyebrow">Panel privado</span>
+          <h1>GStore Admin</h1>
+          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <div class="login-highlights" aria-label="Funciones del panel">
+            <span>Productos y stock</span>
+            <span>Pedidos guardados</span>
+            <span>Imágenes listas para Cloudinary</span>
+          </div>
+        </div>
+        <div class="login-form-panel">
+          <div>
+            <span class="eyebrow">Acceso</span>
+            <h2>Entrar al backend</h2>
+            <p>Usa el correo autorizado y la clave del panel.</p>
+          </div>
+          <label>
+            Correo electrónico
+            <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
+          </label>
+          <label>
+            Clave del panel
+            <input name="password" type="password" autocomplete="current-password" required placeholder="Escribe la clave">
+          </label>
+          <button class="button primary" type="submit">Entrar</button>
+          <p class="form-message" id="loginMessage"></p>
+        </div>
+      </form>
+    </section>
+
+    <section class="dashboard" id="dashboardView" hidden>
+      <aside class="admin-sidebar">
+        <a class="brand" href="admin.html" aria-label="Panel GStore">
+          <span class="brand-mark">G</span>
+          <span>
+            <strong>GStore</strong>
+            <small>Panel privado</small>
+          </span>
+        </a>
+        <nav aria-label="Navegación del panel">
+          <a href="admin.html" data-nav-page="dashboard">Resumen</a>
+          <a href="admin-reportes.html" data-nav-page="reports">Reportes</a>
+          <a href="admin-productos.html" data-nav-page="products">Productos</a>
+          <a href="admin-categorias.html" data-nav-page="categories">Categorías</a>
+          <a href="admin-pedidos.html" data-nav-page="orders">Pedidos</a>
+        </nav>
+        <div class="sidebar-status">
+          <span>Operación</span>
+          <strong id="sidebarStatus">Lista</strong>
+        </div>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesión</button>
+      </aside>
+
+      <div class="admin-content">
+        <header class="admin-topbar">
+          <div>
+            <span class="eyebrow">Ventas</span>
+            <h1>Pedidos</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="button primary" id="refreshOrdersButton" type="button">Actualizar pedidos</button>
+            <a class="button ghost" href="admin-productos.html">Ver productos</a>
+          </div>
+        </header>
+
+        <section class="admin-section orders-section">
+          <div class="admin-section-heading">
+            <div>
+              <span class="eyebrow">Seguimiento</span>
+              <h2>Órdenes recibidas</h2>
+              <p>Confirma, prepara y cierra pedidos sin perder de vista pago, entrega y productos.</p>
+            </div>
+          </div>
+          <div class="orders-overview" aria-label="Resumen de pedidos">
+            <article>
+              <span>Nuevos</span>
+              <strong id="ordersNewCount">0</strong>
+            </article>
+            <article>
+              <span>Pendientes</span>
+              <strong id="ordersPendingCount">0</strong>
+            </article>
+            <article>
+              <span>Cerrados</span>
+              <strong id="ordersDoneCount">0</strong>
+            </article>
+            <article>
+              <span>Total visible</span>
+              <strong id="ordersVisibleTotal">$0.00</strong>
+            </article>
+          </div>
+          <div class="orders-list" id="ordersList"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="js/admin.js" defer></script>
+</body>
+</html>
