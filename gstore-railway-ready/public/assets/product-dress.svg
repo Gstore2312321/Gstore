@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 760">
+  <rect width="600" height="760" fill="#fffaf0"/>
+  <circle cx="120" cy="130" r="150" fill="#f5dde0"/>
+  <path d="M282 150h36c10 66 54 94 76 160 38 116 48 206 58 286H148c10-80 20-170 58-286 22-66 66-94 76-160Z" fill="#e3bd65" stroke="#8b641b" stroke-width="8"/>
+  <path d="M252 186c20 30 76 30 96 0M218 360h164" stroke="#fffdf8" stroke-width="10" stroke-linecap="round"/>
+  <text x="300" y="668" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="800" fill="#17130a">Vestido dorado</text>
+</svg>
