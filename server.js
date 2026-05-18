@@ -6,7 +6,7 @@ const os = require("os");
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
-const { DatabaseSync } = require("node:sqlite");
+const mysql = require("mysql2/promise");
 
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
@@ -14,13 +14,6 @@ const IS_VERCEL = Boolean(process.env.VERCEL);
 const RAILWAY_VOLUME_PATH = process.env.RAILWAY_VOLUME_MOUNT_PATH ? path.resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH) : "";
 const IS_RAILWAY = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || RAILWAY_VOLUME_PATH);
 const IS_PRODUCTION = process.env.NODE_ENV === "production" || IS_VERCEL;
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : RAILWAY_VOLUME_PATH
-    ? path.join(RAILWAY_VOLUME_PATH, "data")
-    : IS_VERCEL
-    ? path.join(os.tmpdir(), "gstore-data")
-    : path.join(ROOT_DIR, "data");
 const UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
   : RAILWAY_VOLUME_PATH
@@ -29,7 +22,6 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR
     ? path.join(os.tmpdir(), "gstore-uploads")
     : path.join(PUBLIC_DIR, "uploads");
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const app = express();
@@ -37,8 +29,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 }
 });
-
-const db = new DatabaseSync(path.join(DATA_DIR, "gstore.db"));
 
 const PORT = Number(process.env.PORT || 4321);
 const STORE_NAME = process.env.STORE_NAME || "GStore";
@@ -50,6 +40,8 @@ const ADMIN_SECRET = cleanEnvSecret("ADMIN_SECRET", process.env.ADMIN_SECRET, "d
 const ADMIN_PASSWORD = cleanText(process.env.ADMIN_PASSWORD || "");
 const ADMIN_COOKIE_NAME = "gstore_admin_session";
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
+let db;
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -424,152 +416,207 @@ function categoryFromRow(row) {
   };
 }
 
-function ensureSchema() {
-  db.exec(`
-    PRAGMA foreign_keys = ON;
-    PRAGMA journal_mode = WAL;
+function mysqlConnectionOptions() {
+  if (MYSQL_CONNECTION_URL) {
+    const url = new URL(MYSQL_CONNECTION_URL);
+    return {
+      host: url.hostname,
+      port: Number(url.port || 3306),
+      user: decodeURIComponent(url.username || ""),
+      password: decodeURIComponent(url.password || ""),
+      database: decodeURIComponent(url.pathname.replace(/^\//, "")),
+      waitForConnections: true,
+      connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10),
+      queueLimit: 0,
+      decimalNumbers: true,
+      charset: "utf8mb4"
+    };
+  }
 
+  return {
+    host: process.env.MYSQLHOST || process.env.MYSQL_HOST || "127.0.0.1",
+    port: Number(process.env.MYSQLPORT || process.env.MYSQL_PORT || 3306),
+    user: process.env.MYSQLUSER || process.env.MYSQL_USER || "root",
+    password: process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || "",
+    database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || "gstore",
+    waitForConnections: true,
+    connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10),
+    queueLimit: 0,
+    decimalNumbers: true,
+    charset: "utf8mb4"
+  };
+}
+
+async function connectDatabase() {
+  db = mysql.createPool(mysqlConnectionOptions());
+  await db.query("SELECT 1");
+}
+
+async function dbAll(sql, params = []) {
+  const [rows] = await db.execute(sql, params);
+  return rows;
+}
+
+async function dbGet(sql, params = []) {
+  const rows = await dbAll(sql, params);
+  return rows[0] || null;
+}
+
+async function dbRun(sql, params = []) {
+  const [result] = await db.execute(sql, params);
+  return result;
+}
+
+async function ensureColumn(table, column, definition) {
+  const rows = await dbAll(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+  `, [table, column]);
+  if (!rows.length) {
+    await dbRun(`ALTER TABLE \`${table}\` ADD COLUMN ${definition}`);
+  }
+}
+
+async function ensureSchema() {
+  await dbRun(`
     CREATE TABLE IF NOT EXISTS categories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      slug TEXT NOT NULL UNIQUE,
-      description TEXT DEFAULT '',
-      active INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS products (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      category_id INTEGER,
-      name TEXT NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
-      description TEXT DEFAULT '',
-      price REAL NOT NULL DEFAULT 0,
-      cost_price REAL NOT NULL DEFAULT 0,
-      compare_price REAL NOT NULL DEFAULT 0,
-      stock INTEGER NOT NULL DEFAULT 0,
-      sku TEXT DEFAULT '',
-      image_url TEXT DEFAULT '',
-      sizes_json TEXT DEFAULT '[]',
-      colors_json TEXT DEFAULT '[]',
-      promo_type TEXT DEFAULT 'none',
-      promo_label TEXT DEFAULT '',
-      active INTEGER DEFAULT 1,
-      featured INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_code TEXT NOT NULL UNIQUE,
-      customer_name TEXT NOT NULL,
-      customer_phone TEXT NOT NULL,
-      customer_email TEXT DEFAULT '',
-      customer_address TEXT DEFAULT '',
-      customer_city TEXT DEFAULT '',
-      notes TEXT DEFAULT '',
-      items_json TEXT NOT NULL,
-      subtotal REAL NOT NULL,
-      shipping REAL NOT NULL DEFAULT 0,
-      total REAL NOT NULL,
-      payment_method TEXT NOT NULL,
-      payment_status TEXT NOT NULL DEFAULT 'pending',
-      status TEXT NOT NULL DEFAULT 'new',
-      source TEXT DEFAULT 'storefront',
-      paypal_order_id TEXT DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(180) NOT NULL,
+      slug VARCHAR(200) NOT NULL,
+      description TEXT,
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at VARCHAR(32) NOT NULL,
+      updated_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY categories_name_unique (name),
+      UNIQUE KEY categories_slug_unique (slug)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
-  const orderColumns = new Set(db.prepare("PRAGMA table_info(orders)").all().map((column) => column.name));
-  if (!orderColumns.has("delivery_method")) {
-    db.exec("ALTER TABLE orders ADD COLUMN delivery_method TEXT DEFAULT 'delivery'");
-  }
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      category_id INT UNSIGNED NULL,
+      name VARCHAR(220) NOT NULL,
+      slug VARCHAR(240) NOT NULL,
+      description TEXT,
+      price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      cost_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      compare_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      stock INT NOT NULL DEFAULT 0,
+      sku VARCHAR(90) DEFAULT '',
+      image_url TEXT,
+      sizes_json TEXT,
+      colors_json TEXT,
+      promo_type VARCHAR(40) DEFAULT 'none',
+      promo_label VARCHAR(160) DEFAULT '',
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      featured TINYINT(1) NOT NULL DEFAULT 0,
+      created_at VARCHAR(32) NOT NULL,
+      updated_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY products_slug_unique (slug),
+      KEY products_category_id_index (category_id),
+      CONSTRAINT products_category_id_foreign
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
-  const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map((column) => column.name));
-  if (!productColumns.has("cost_price")) {
-    db.exec("ALTER TABLE products ADD COLUMN cost_price REAL NOT NULL DEFAULT 0");
-  }
-  if (!productColumns.has("compare_price")) {
-    db.exec("ALTER TABLE products ADD COLUMN compare_price REAL NOT NULL DEFAULT 0");
-  }
-  if (!productColumns.has("promo_type")) {
-    db.exec("ALTER TABLE products ADD COLUMN promo_type TEXT DEFAULT 'none'");
-  }
-  if (!productColumns.has("promo_label")) {
-    db.exec("ALTER TABLE products ADD COLUMN promo_label TEXT DEFAULT ''");
-  }
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      order_code VARCHAR(60) NOT NULL,
+      customer_name VARCHAR(180) NOT NULL,
+      customer_phone VARCHAR(60) NOT NULL,
+      customer_email VARCHAR(180) DEFAULT '',
+      customer_address TEXT,
+      customer_city VARCHAR(120) DEFAULT '',
+      delivery_method VARCHAR(30) DEFAULT 'delivery',
+      notes TEXT,
+      items_json MEDIUMTEXT NOT NULL,
+      subtotal DECIMAL(10,2) NOT NULL,
+      shipping DECIMAL(10,2) NOT NULL DEFAULT 0,
+      total DECIMAL(10,2) NOT NULL,
+      payment_method VARCHAR(40) NOT NULL,
+      payment_status VARCHAR(40) NOT NULL DEFAULT 'pending',
+      status VARCHAR(40) NOT NULL DEFAULT 'new',
+      source VARCHAR(80) DEFAULT 'storefront',
+      paypal_order_id VARCHAR(160) DEFAULT '',
+      created_at VARCHAR(32) NOT NULL,
+      updated_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY orders_order_code_unique (order_code),
+      KEY orders_status_index (status),
+      KEY orders_payment_status_index (payment_status),
+      KEY orders_paypal_order_id_index (paypal_order_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
-  const promoCount = db.prepare(`
+  await ensureColumn("orders", "delivery_method", "delivery_method VARCHAR(30) DEFAULT 'delivery'");
+  await ensureColumn("products", "cost_price", "cost_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ensureColumn("products", "compare_price", "compare_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ensureColumn("products", "promo_type", "promo_type VARCHAR(40) DEFAULT 'none'");
+  await ensureColumn("products", "promo_label", "promo_label VARCHAR(160) DEFAULT ''");
+
+  const promoCount = await dbGet(`
     SELECT COUNT(*) AS count
     FROM products
     WHERE promo_type != 'none' OR promo_label != '' OR compare_price > price
-  `).get().count;
-  if (promoCount === 0) {
-    db.prepare(`
+  `);
+  if (Number(promoCount?.count || 0) === 0) {
+    await dbRun(`
       UPDATE products
       SET compare_price = 72, promo_type = 'discount', promo_label = 'Precio especial'
       WHERE sku = 'GS-VES-002'
-    `).run();
-    db.prepare(`
+    `);
+    await dbRun(`
       UPDATE products
       SET promo_type = 'last_units', promo_label = 'Últimas unidades'
       WHERE stock <= 2
-    `).run();
+    `);
   }
 
-  db.prepare("UPDATE products SET cost_price = 28 WHERE sku = 'GS-SET-001' AND cost_price = 0").run();
-  db.prepare("UPDATE products SET cost_price = 34 WHERE sku = 'GS-VES-002' AND cost_price = 0").run();
-  db.prepare("UPDATE products SET cost_price = 24 WHERE sku = 'GS-ZAP-003' AND cost_price = 0").run();
-  db.prepare("UPDATE products SET cost_price = 18 WHERE sku = 'GS-CAR-004' AND cost_price = 0").run();
-  db.prepare("UPDATE products SET cost_price = 7 WHERE sku = 'GS-ACC-005' AND cost_price = 0").run();
+  await dbRun("UPDATE products SET cost_price = 28 WHERE sku = 'GS-SET-001' AND cost_price = 0");
+  await dbRun("UPDATE products SET cost_price = 34 WHERE sku = 'GS-VES-002' AND cost_price = 0");
+  await dbRun("UPDATE products SET cost_price = 24 WHERE sku = 'GS-ZAP-003' AND cost_price = 0");
+  await dbRun("UPDATE products SET cost_price = 18 WHERE sku = 'GS-CAR-004' AND cost_price = 0");
+  await dbRun("UPDATE products SET cost_price = 7 WHERE sku = 'GS-ACC-005' AND cost_price = 0");
 }
 
-function ensureUniqueSlug(table, source, currentId = null) {
+async function ensureUniqueSlug(table, source, currentId = null) {
   const base = slugify(source);
   let candidate = base;
   let counter = 2;
-  const statement = db.prepare(`SELECT id FROM ${table} WHERE slug = ?`);
+  const safeTable = table === "categories" ? "categories" : "products";
   while (true) {
-    const found = statement.get(candidate);
+    const found = await dbGet(`SELECT id FROM ${safeTable} WHERE slug = ?`, [candidate]);
     if (!found || (currentId && Number(found.id) === Number(currentId))) return candidate;
     candidate = `${base}-${counter}`;
     counter += 1;
   }
 }
 
-function seedData() {
-  const categoryCount = db.prepare("SELECT COUNT(*) AS count FROM categories").get().count;
-  if (categoryCount === 0) {
-    const insertCategory = db.prepare(`
-      INSERT INTO categories (name, slug, description, active, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?)
-    `);
-    [
+async function seedData() {
+  const categoryCount = await dbGet("SELECT COUNT(*) AS count FROM categories");
+  if (Number(categoryCount?.count || 0) === 0) {
+    for (const [name, description] of [
       ["Ropa", "Prendas importadas para looks de diario y salidas especiales."],
       ["Zapatos", "Pares seleccionados para combinar con pocas piezas y verse bien."],
       ["Carteras", "Carteras y bolsos fáciles de usar, cuidar y regalar."],
       ["Accesorios", "Detalles pequeños que terminan el outfit."]
-    ].forEach(([name, description]) => {
-      insertCategory.run(name, ensureUniqueSlug("categories", name), description, now(), now());
-    });
+    ]) {
+      await dbRun(`
+        INSERT INTO categories (name, slug, description, active, created_at, updated_at)
+        VALUES (?, ?, ?, 1, ?, ?)
+      `, [name, await ensureUniqueSlug("categories", name), description, now(), now()]);
+    }
   }
 
-  const productCount = db.prepare("SELECT COUNT(*) AS count FROM products").get().count;
-  if (productCount === 0) {
-    const categoryBySlug = db.prepare("SELECT id FROM categories WHERE slug = ?");
-    const insertProduct = db.prepare(`
-      INSERT INTO products (
-        category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
-        sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-    `);
-
+  const productCount = await dbGet("SELECT COUNT(*) AS count FROM products");
+  if (Number(productCount?.count || 0) === 0) {
     const products = [
       {
         category: "ropa",
@@ -653,12 +700,18 @@ function seedData() {
       }
     ];
 
-    products.forEach((product) => {
-      const category = categoryBySlug.get(product.category);
-      insertProduct.run(
+    for (const product of products) {
+      const category = await dbGet("SELECT id FROM categories WHERE slug = ?", [product.category]);
+      await dbRun(`
+        INSERT INTO products (
+          category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+          sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+      `, [
         category ? category.id : null,
         product.name,
-        ensureUniqueSlug("products", product.name),
+        await ensureUniqueSlug("products", product.name),
         product.description,
         product.price,
         product.costPrice,
@@ -673,12 +726,12 @@ function seedData() {
         product.featured,
         now(),
         now()
-      );
-    });
+      ]);
+    }
   }
 }
 
-function getProducts({ includeInactive = false, includePrivate = false } = {}) {
+async function getProducts({ includeInactive = false, includePrivate = false } = {}) {
   const sql = `
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
@@ -686,15 +739,16 @@ function getProducts({ includeInactive = false, includePrivate = false } = {}) {
     ${includeInactive ? "" : "WHERE p.active = 1"}
     ORDER BY p.featured DESC, p.updated_at DESC, p.id DESC
   `;
-  return db.prepare(sql).all().map((row) => productFromRow(row, { includePrivate }));
+  const rows = await dbAll(sql);
+  return rows.map((row) => productFromRow(row, { includePrivate }));
 }
 
-function getProductPrivateIndex() {
-  const rows = db.prepare(`
+async function getProductPrivateIndex() {
+  const rows = await dbAll(`
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
-  `).all();
+  `);
   const index = new Map();
   rows.forEach((row) => {
     index.set(Number(row.id), productFromRow(row, { includePrivate: true }));
@@ -702,21 +756,21 @@ function getProductPrivateIndex() {
   return index;
 }
 
-function getProductById(id, options = {}) {
-  return productFromRow(db.prepare(`
+async function getProductById(id, options = {}) {
+  return productFromRow(await dbGet(`
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     WHERE p.id = ?
-  `).get(id), options);
+  `, [id]), options);
 }
 
-function getOrderByCode(code) {
-  return db.prepare("SELECT * FROM orders WHERE order_code = ?").get(code);
+async function getOrderByCode(code) {
+  return dbGet("SELECT * FROM orders WHERE order_code = ?", [code]);
 }
 
-function getOrderById(id) {
-  return db.prepare("SELECT * FROM orders WHERE id = ?").get(id);
+async function getOrderById(id) {
+  return dbGet("SELECT * FROM orders WHERE id = ?", [id]);
 }
 
 function createOrderCode() {
@@ -830,20 +884,19 @@ function validateCustomer(input, deliveryMethod = "delivery") {
   return customer;
 }
 
-function calculateCart(rawItems) {
+async function calculateCart(rawItems) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw httpError(400, "El carrito está vacío.");
   }
 
-  const findProduct = db.prepare(`
-    SELECT p.*, c.name AS category_name, c.slug AS category_slug
-    FROM products p
-    LEFT JOIN categories c ON c.id = p.category_id
-    WHERE p.id = ? AND p.active = 1
-  `);
-
-  const items = rawItems.map((item) => {
-    const product = productFromRow(findProduct.get(Number(item.productId || item.id)), { includePrivate: true });
+  const items = [];
+  for (const item of rawItems) {
+    const product = productFromRow(await dbGet(`
+      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      FROM products p
+      LEFT JOIN categories c ON c.id = p.category_id
+      WHERE p.id = ? AND p.active = 1
+    `, [Number(item.productId || item.id)]), { includePrivate: true });
     if (!product) throw httpError(404, "Uno de los productos ya no está disponible.");
 
     const quantity = Math.max(1, Math.min(99, Number(item.quantity || 1)));
@@ -869,7 +922,7 @@ function calculateCart(rawItems) {
 
     const lineTotal = money(product.price * quantity);
     const lineCost = money((product.cost_price || 0) * quantity);
-    return {
+    items.push({
       product_id: product.id,
       name: product.name,
       sku: product.sku,
@@ -882,8 +935,8 @@ function calculateCart(rawItems) {
       line_total: lineTotal,
       line_cost: lineCost,
       line_profit: money(lineTotal - lineCost)
-    };
-  });
+    });
+  }
 
   const subtotal = money(items.reduce((sum, item) => sum + item.line_total, 0));
   const shipping = money(process.env.DEFAULT_SHIPPING || 0);
@@ -895,26 +948,27 @@ function calculateCart(rawItems) {
   };
 }
 
-function decrementStock(items) {
-  const update = db.prepare(`
-    UPDATE products
-    SET stock = CASE WHEN stock - ? < 0 THEN 0 ELSE stock - ? END,
-        updated_at = ?
-    WHERE id = ?
-  `);
-  items.forEach((item) => update.run(item.quantity, item.quantity, now(), item.product_id));
+async function decrementStock(items) {
+  for (const item of items) {
+    await dbRun(`
+      UPDATE products
+      SET stock = GREATEST(stock - ?, 0),
+          updated_at = ?
+      WHERE id = ?
+    `, [item.quantity, now(), item.product_id]);
+  }
 }
 
-function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paymentStatus, status, source, paypalOrderId = "" }) {
+async function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paymentStatus, status, source, paypalOrderId = "" }) {
   const code = createOrderCode();
-  const result = db.prepare(`
+  const result = await dbRun(`
     INSERT INTO orders (
       order_code, customer_name, customer_phone, customer_email, customer_address, customer_city, delivery_method,
       notes, items_json, subtotal, shipping, total, payment_method, payment_status, status,
       source, paypal_order_id, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `, [
     code,
     customer.name,
     customer.phone,
@@ -934,9 +988,9 @@ function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paymentSta
     paypalOrderId,
     now(),
     now()
-  );
+  ]);
 
-  return getOrderById(result.lastInsertRowid);
+  return getOrderById(result.insertId);
 }
 
 function buildWhatsappMessage(order) {
@@ -1245,15 +1299,20 @@ function validateProductionConfig() {
   if (ADMIN_PASSWORD.length < 12) missing.push("ADMIN_PASSWORD de minimo 12 caracteres");
   if (!process.env.PUBLIC_BASE_URL || /localhost|127\.0\.0\.1/.test(process.env.PUBLIC_BASE_URL)) missing.push("PUBLIC_BASE_URL real");
   if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imagenes persistentes");
-  if (IS_RAILWAY && !RAILWAY_VOLUME_PATH && !process.env.DATA_DIR) missing.push("volumen Railway o DATA_DIR persistente");
+  if (!MYSQL_CONNECTION_URL && !process.env.MYSQLHOST && !process.env.MYSQL_HOST) {
+    missing.push("MYSQL_URL o variables MYSQL de Railway");
+  }
   if (missing.length) {
     throw new Error(`Configuracion de produccion incompleta: ${missing.join(", ")}.`);
   }
 }
 
-validateProductionConfig();
-ensureSchema();
-seedData();
+async function initializeApp() {
+  validateProductionConfig();
+  await connectDatabase();
+  await ensureSchema();
+  await seedData();
+}
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, store: STORE_NAME, time: now() });
@@ -1267,38 +1326,38 @@ app.get("/api/config", (req, res) => {
   });
 });
 
-app.get("/api/categories", (req, res) => {
-  const categories = db.prepare("SELECT * FROM categories WHERE active = 1 ORDER BY name ASC").all().map(categoryFromRow);
+app.get("/api/categories", asyncHandler(async (req, res) => {
+  const categories = (await dbAll("SELECT * FROM categories WHERE active = 1 ORDER BY name ASC")).map(categoryFromRow);
   res.json({ categories });
-});
+}));
 
-app.get("/api/products", (req, res) => {
-  res.json({ products: getProducts({ includeInactive: false }) });
-});
+app.get("/api/products", asyncHandler(async (req, res) => {
+  res.json({ products: await getProducts({ includeInactive: false }) });
+}));
 
-app.get("/api/products/:slug", (req, res, next) => {
-  const row = db.prepare(`
+app.get("/api/products/:slug", asyncHandler(async (req, res, next) => {
+  const row = await dbGet(`
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     WHERE p.slug = ? AND p.active = 1
-  `).get(req.params.slug);
+  `, [req.params.slug]);
   const product = productFromRow(row);
   if (!product) return next(httpError(404, "Producto no encontrado."));
   res.json({ product });
-});
+}));
 
-app.get("/api/orders/:code", (req, res, next) => {
-  const order = getOrderByCode(req.params.code);
+app.get("/api/orders/:code", asyncHandler(async (req, res, next) => {
+  const order = await getOrderByCode(req.params.code);
   if (!order) return next(httpError(404, "Pedido no encontrado."));
   res.json({ order: publicOrder(order) });
-});
+}));
 
 app.post("/api/orders/whatsapp", checkoutLimiter, asyncHandler(async (req, res) => {
   const deliveryMethod = normalizeDeliveryMethod(req.body.delivery_method);
   const customer = validateCustomer(req.body.customer || {}, deliveryMethod);
-  const cart = calculateCart(req.body.items || []);
-  const order = insertOrder({
+  const cart = await calculateCart(req.body.items || []);
+  const order = await insertOrder({
     customer,
     cart,
     deliveryMethod,
@@ -1308,7 +1367,7 @@ app.post("/api/orders/whatsapp", checkoutLimiter, asyncHandler(async (req, res) 
     source: "storefront"
   });
 
-  decrementStock(cart.items);
+  await decrementStock(cart.items);
   sendOrderEmail(order).catch((error) => console.warn(error.message));
   res.status(201).json({
     order: publicOrder(order),
@@ -1323,7 +1382,7 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
     throw httpError(400, "Para retiro, confirma el pedido por WhatsApp para coordinar directamente.");
   }
   const customer = validateCustomer(req.body.customer || {}, deliveryMethod);
-  const cart = calculateCart(req.body.items || []);
+  const cart = await calculateCart(req.body.items || []);
 
   const draftOrder = {
     order_code: createOrderCode(),
@@ -1331,7 +1390,7 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
   };
   const paypalOrder = await createPaypalOrder(draftOrder);
 
-  const order = insertOrder({
+  const order = await insertOrder({
     customer,
     cart,
     deliveryMethod,
@@ -1342,11 +1401,10 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
     paypalOrderId: paypalOrder.paypalOrderId
   });
 
-  db.prepare("UPDATE orders SET order_code = ?, updated_at = ? WHERE id = ?")
-    .run(draftOrder.order_code, now(), order.id);
+  await dbRun("UPDATE orders SET order_code = ?, updated_at = ? WHERE id = ?", [draftOrder.order_code, now(), order.id]);
 
   res.status(201).json({
-    order: publicOrder(getOrderById(order.id)),
+    order: publicOrder(await getOrderById(order.id)),
     paypalOrderId: paypalOrder.paypalOrderId,
     approvalUrl: paypalOrder.approvalUrl
   });
@@ -1356,7 +1414,7 @@ app.post("/api/paypal/capture", checkoutLimiter, asyncHandler(async (req, res) =
   const paypalOrderId = cleanText(req.body.paypalOrderId || req.body.token);
   if (!paypalOrderId) throw httpError(400, "Falta el id de la orden PayPal.");
 
-  const order = db.prepare("SELECT * FROM orders WHERE paypal_order_id = ?").get(paypalOrderId);
+  const order = await dbGet("SELECT * FROM orders WHERE paypal_order_id = ?", [paypalOrderId]);
   if (!order) throw httpError(404, "No encontramos el pedido local de PayPal.");
   if (order.payment_status === "paid") {
     return res.json({ order: publicOrder(order), capture: { status: "ALREADY_CAPTURED" } });
@@ -1366,18 +1424,18 @@ app.post("/api/paypal/capture", checkoutLimiter, asyncHandler(async (req, res) =
   const status = capture.status === "COMPLETED" ? "paid" : "pending";
   const nextOrderStatus = status === "paid" ? "paid" : "waiting_payment";
 
-  db.prepare(`
+  await dbRun(`
     UPDATE orders
     SET payment_status = ?, status = ?, updated_at = ?
     WHERE id = ?
-  `).run(status, nextOrderStatus, now(), order.id);
+  `, [status, nextOrderStatus, now(), order.id]);
 
   if (status === "paid") {
-    decrementStock(parseJsonList(order.items_json));
-    sendOrderEmail(getOrderById(order.id)).catch((error) => console.warn(error.message));
+    await decrementStock(parseJsonList(order.items_json));
+    sendOrderEmail(await getOrderById(order.id)).catch((error) => console.warn(error.message));
   }
 
-  res.json({ order: publicOrder(getOrderById(order.id)), capture });
+  res.json({ order: publicOrder(await getOrderById(order.id)), capture });
 }));
 
 app.post("/api/admin/login", loginLimiter, (req, res, next) => {
@@ -1414,16 +1472,22 @@ app.post("/api/admin/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/admin/summary", requireAdmin, (req, res) => {
-  const productCount = db.prepare("SELECT COUNT(*) AS count FROM products").get().count;
-  const activeProducts = db.prepare("SELECT COUNT(*) AS count FROM products WHERE active = 1").get().count;
-  const orderCount = db.prepare("SELECT COUNT(*) AS count FROM orders").get().count;
-  const pendingOrders = db.prepare("SELECT COUNT(*) AS count FROM orders WHERE status IN ('new', 'waiting_payment')").get().count;
-  const revenue = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM orders WHERE payment_status = 'paid'").get().total;
-  res.json({ productCount, activeProducts, orderCount, pendingOrders, revenue: money(revenue) });
-});
+app.get("/api/admin/summary", requireAdmin, asyncHandler(async (req, res) => {
+  const productCount = await dbGet("SELECT COUNT(*) AS count FROM products");
+  const activeProducts = await dbGet("SELECT COUNT(*) AS count FROM products WHERE active = 1");
+  const orderCount = await dbGet("SELECT COUNT(*) AS count FROM orders");
+  const pendingOrders = await dbGet("SELECT COUNT(*) AS count FROM orders WHERE status IN ('new', 'waiting_payment')");
+  const revenue = await dbGet("SELECT COALESCE(SUM(total), 0) AS total FROM orders WHERE payment_status = 'paid'");
+  res.json({
+    productCount: Number(productCount?.count || 0),
+    activeProducts: Number(activeProducts?.count || 0),
+    orderCount: Number(orderCount?.count || 0),
+    pendingOrders: Number(pendingOrders?.count || 0),
+    revenue: money(revenue?.total)
+  });
+}));
 
-app.get("/api/admin/analytics", requireAdmin, (req, res) => {
+app.get("/api/admin/analytics", requireAdmin, asyncHandler(async (req, res) => {
   const statusLabels = {
     new: "Nuevo",
     waiting_payment: "Esperando pago",
@@ -1434,9 +1498,9 @@ app.get("/api/admin/analytics", requireAdmin, (req, res) => {
     completed: "Completado",
     cancelled: "Cancelado"
   };
-  const productIndex = getProductPrivateIndex();
+  const productIndex = await getProductPrivateIndex();
   const products = Array.from(productIndex.values());
-  const orders = db.prepare("SELECT * FROM orders ORDER BY created_at ASC").all();
+  const orders = await dbAll("SELECT * FROM orders ORDER BY created_at ASC");
   const activeOrders = orders.filter((order) => order.status !== "cancelled");
   const paidOrders = activeOrders.filter((order) => order.payment_status === "paid");
   const dayBuckets = recentDayBuckets(7);
@@ -1538,57 +1602,57 @@ app.get("/api/admin/analytics", requireAdmin, (req, res) => {
       .sort((a, b) => b.potentialProfit - a.potentialProfit),
     orderStatus
   });
-});
+}));
 
-app.get("/api/admin/categories", requireAdmin, (req, res) => {
-  const categories = db.prepare("SELECT * FROM categories ORDER BY active DESC, name ASC").all().map(categoryFromRow);
+app.get("/api/admin/categories", requireAdmin, asyncHandler(async (req, res) => {
+  const categories = (await dbAll("SELECT * FROM categories ORDER BY active DESC, name ASC")).map(categoryFromRow);
   res.json({ categories });
-});
+}));
 
-app.post("/api/admin/categories", requireAdmin, (req, res) => {
+app.post("/api/admin/categories", requireAdmin, asyncHandler(async (req, res) => {
   const name = cleanText(req.body.name);
   if (name.length < 2) throw httpError(400, "La categoría necesita nombre.");
-  const slug = ensureUniqueSlug("categories", name);
-  const result = db.prepare(`
+  const slug = await ensureUniqueSlug("categories", name);
+  const result = await dbRun(`
     INSERT INTO categories (name, slug, description, active, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(name, slug, cleanText(req.body.description), boolToInt(req.body.active ?? true), now(), now());
-  res.status(201).json({ category: categoryFromRow(db.prepare("SELECT * FROM categories WHERE id = ?").get(result.lastInsertRowid)) });
-});
+  `, [name, slug, cleanText(req.body.description), boolToInt(req.body.active ?? true), now(), now()]);
+  res.status(201).json({ category: categoryFromRow(await dbGet("SELECT * FROM categories WHERE id = ?", [result.insertId])) });
+}));
 
-app.put("/api/admin/categories/:id", requireAdmin, (req, res, next) => {
+app.put("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, res, next) => {
   const id = Number(req.params.id);
-  const current = db.prepare("SELECT * FROM categories WHERE id = ?").get(id);
+  const current = await dbGet("SELECT * FROM categories WHERE id = ?", [id]);
   if (!current) return next(httpError(404, "Categoría no encontrada."));
   const name = cleanText(req.body.name);
   if (name.length < 2) throw httpError(400, "La categoría necesita nombre.");
-  const slug = ensureUniqueSlug("categories", name, id);
-  db.prepare(`
+  const slug = await ensureUniqueSlug("categories", name, id);
+  await dbRun(`
     UPDATE categories
     SET name = ?, slug = ?, description = ?, active = ?, updated_at = ?
     WHERE id = ?
-  `).run(name, slug, cleanText(req.body.description), boolToInt(req.body.active), now(), id);
-  res.json({ category: categoryFromRow(db.prepare("SELECT * FROM categories WHERE id = ?").get(id)) });
-});
+  `, [name, slug, cleanText(req.body.description), boolToInt(req.body.active), now(), id]);
+  res.json({ category: categoryFromRow(await dbGet("SELECT * FROM categories WHERE id = ?", [id])) });
+}));
 
-app.delete("/api/admin/categories/:id", requireAdmin, (req, res, next) => {
+app.delete("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, res, next) => {
   const id = Number(req.params.id);
-  const productCount = db.prepare("SELECT COUNT(*) AS count FROM products WHERE category_id = ?").get(id).count;
-  if (productCount > 0) {
+  const productCount = await dbGet("SELECT COUNT(*) AS count FROM products WHERE category_id = ?", [id]);
+  if (Number(productCount?.count || 0) > 0) {
     return next(httpError(409, "No se puede eliminar una categoría con productos. Mueve o elimina esos productos primero."));
   }
-  db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  await dbRun("DELETE FROM categories WHERE id = ?", [id]);
   res.json({ ok: true });
-});
+}));
 
-app.get("/api/admin/products", requireAdmin, (req, res) => {
-  res.json({ products: getProducts({ includeInactive: true, includePrivate: true }) });
-});
+app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
+  res.json({ products: await getProducts({ includeInactive: true, includePrivate: true }) });
+}));
 
-app.post("/api/admin/products", requireAdmin, (req, res) => {
+app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
   const name = cleanText(req.body.name);
   if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
-  const slug = ensureUniqueSlug("products", name);
+  const slug = await ensureUniqueSlug("products", name);
   const promoType = normalizePromoType(req.body.promo_type);
   const price = money(req.body.price);
   const costPrice = money(req.body.cost_price);
@@ -1596,13 +1660,13 @@ app.post("/api/admin/products", requireAdmin, (req, res) => {
   if (promoType === "discount" && comparePrice <= price) {
     throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
   }
-  const result = db.prepare(`
+  const result = await dbRun(`
     INSERT INTO products (
       category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
       sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `, [
     req.body.category_id ? Number(req.body.category_id) : null,
     name,
     slug,
@@ -1621,17 +1685,17 @@ app.post("/api/admin/products", requireAdmin, (req, res) => {
     boolToInt(req.body.featured),
     now(),
     now()
-  );
-  res.status(201).json({ product: getProductById(result.lastInsertRowid, { includePrivate: true }) });
-});
+  ]);
+  res.status(201).json({ product: await getProductById(result.insertId, { includePrivate: true }) });
+}));
 
-app.put("/api/admin/products/:id", requireAdmin, (req, res, next) => {
+app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, next) => {
   const id = Number(req.params.id);
-  const current = getProductById(id);
+  const current = await getProductById(id);
   if (!current) return next(httpError(404, "Producto no encontrado."));
   const name = cleanText(req.body.name);
   if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
-  const slug = ensureUniqueSlug("products", name, id);
+  const slug = await ensureUniqueSlug("products", name, id);
   const promoType = normalizePromoType(req.body.promo_type);
   const price = money(req.body.price);
   const costPrice = money(req.body.cost_price);
@@ -1639,12 +1703,12 @@ app.put("/api/admin/products/:id", requireAdmin, (req, res, next) => {
   if (promoType === "discount" && comparePrice <= price) {
     throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
   }
-  db.prepare(`
+  await dbRun(`
     UPDATE products
     SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
         image_url = ?, sizes_json = ?, colors_json = ?, promo_type = ?, promo_label = ?, active = ?, featured = ?, updated_at = ?
     WHERE id = ?
-  `).run(
+  `, [
     req.body.category_id ? Number(req.body.category_id) : null,
     name,
     slug,
@@ -1663,14 +1727,14 @@ app.put("/api/admin/products/:id", requireAdmin, (req, res, next) => {
     boolToInt(req.body.featured),
     now(),
     id
-  );
-  res.json({ product: getProductById(id, { includePrivate: true }) });
-});
+  ]);
+  res.json({ product: await getProductById(id, { includePrivate: true }) });
+}));
 
-app.delete("/api/admin/products/:id", requireAdmin, (req, res) => {
-  db.prepare("DELETE FROM products WHERE id = ?").run(Number(req.params.id));
+app.delete("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res) => {
+  await dbRun("DELETE FROM products WHERE id = ?", [Number(req.params.id)]);
   res.json({ ok: true });
-});
+}));
 
 app.post("/api/admin/upload", requireAdmin, upload.single("image"), asyncHandler(async (req, res) => {
   assertSafeImageUpload(req.file);
@@ -1678,27 +1742,27 @@ app.post("/api/admin/upload", requireAdmin, upload.single("image"), asyncHandler
   res.status(201).json(result);
 }));
 
-app.get("/api/admin/orders", requireAdmin, (req, res) => {
-  const orders = db.prepare("SELECT * FROM orders ORDER BY created_at DESC").all().map(publicOrder);
+app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
+  const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC")).map(publicOrder);
   res.json({ orders });
-});
+}));
 
-app.patch("/api/admin/orders/:id/status", requireAdmin, (req, res, next) => {
+app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req, res, next) => {
   const id = Number(req.params.id);
   const allowed = ["new", "waiting_payment", "paid", "preparing", "ready", "sent", "completed", "cancelled"];
   const status = cleanText(req.body.status);
   if (!allowed.includes(status)) throw httpError(400, "Estado no válido.");
-  const order = getOrderById(id);
+  const order = await getOrderById(id);
   if (!order) return next(httpError(404, "Pedido no encontrado."));
-  db.prepare("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?").run(status, now(), id);
-  res.json({ order: publicOrder(getOrderById(id)) });
-});
+  await dbRun("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?", [status, now(), id]);
+  res.json({ order: publicOrder(await getOrderById(id)) });
+}));
 
-app.get("/api/admin/orders/:id/whatsapp", requireAdmin, (req, res, next) => {
-  const order = getOrderById(Number(req.params.id));
+app.get("/api/admin/orders/:id/whatsapp", requireAdmin, asyncHandler(async (req, res, next) => {
+  const order = await getOrderById(Number(req.params.id));
   if (!order) return next(httpError(404, "Pedido no encontrado."));
   res.json({ whatsappUrl: getWhatsappUrl(order) });
-});
+}));
 
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/")) {
@@ -1717,10 +1781,18 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`${STORE_NAME} listo en ${PUBLIC_BASE_URL}`);
-    console.log(`Panel protegido: ${PUBLIC_BASE_URL}/admin.html`);
-  });
+  initializeApp()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`${STORE_NAME} listo en ${PUBLIC_BASE_URL}`);
+        console.log(`Panel protegido: ${PUBLIC_BASE_URL}/admin.html`);
+      });
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
 }
 
 module.exports = app;
+module.exports.initializeApp = initializeApp;

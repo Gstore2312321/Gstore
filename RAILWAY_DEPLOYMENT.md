@@ -2,18 +2,19 @@
 
 ## Recomendacion
 
-Para esta tienda de bajo trafico, Railway es la opcion mas simple: Express corre como servidor real y puedes montar un volumen persistente para SQLite e imagenes locales.
+Para esta tienda de bajo trafico, Railway es la opcion mas simple: Express corre como servidor real y MySQL queda como base administrada dentro del mismo proyecto.
 
 ## Pasos
 
 1. Sube esta carpeta a GitHub.
 2. En Railway, crea un proyecto nuevo desde el repo.
-3. Railway detecta Node/Nixpacks.
-4. Verifica que el start command sea `npm start`.
-5. Crea un volumen persistente y montalo en una ruta como `/data`.
-6. Railway expone esa ruta como `RAILWAY_VOLUME_MOUNT_PATH`; el backend la detecta automaticamente.
-7. Configura las variables de entorno.
-8. Agrega tu dominio o subdominio en Railway.
+3. Agrega el plugin/servicio `MySQL` en el mismo proyecto.
+4. Railway crea variables como `MYSQL_URL`, `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD` y `MYSQLDATABASE`.
+5. Abre el servicio `Gstore` y vincula/pega las variables de MySQL si Railway no las comparte automaticamente.
+6. Railway detecta Node/Nixpacks.
+7. Verifica que el start command sea `npm start`.
+8. Configura las variables de entorno del admin.
+9. Agrega tu dominio o subdominio en Railway.
 
 ## Variables minimas
 
@@ -21,6 +22,8 @@ Para esta tienda de bajo trafico, Railway es la opcion mas simple: Express corre
 NODE_ENV=production
 PUBLIC_BASE_URL=https://tu-subdominio.tudominio.com
 ALLOWED_ORIGINS=https://tu-subdominio.tudominio.com
+
+MYSQL_URL=mysql://usuario:clave@host:3306/base
 
 STORE_NAME=GStore
 STORE_CURRENCY=USD
@@ -51,25 +54,33 @@ RESEND_TO_EMAIL=correo-admin@tudominio.com
 RESEND_REPLY_TO_EMAIL=
 ```
 
-## Volumen
+## Base de datos
 
-Con volumen montado, la app guarda automaticamente:
-
-```text
-/data/data/gstore.db
-/data/uploads/
-```
-
-Si prefieres rutas explicitas:
+La app crea sola las tablas de MySQL al arrancar:
 
 ```text
-DATA_DIR=/data/data
-UPLOAD_DIR=/data/uploads
+categories
+products
+orders
 ```
+
+No ejecutes migraciones manuales para el primer deploy. Si Railway ya puso `MYSQL_URL`, usa esa variable.
+
+Si tu servicio de base se llama `MySQL`, en el servicio `Gstore` puedes crear esta variable como referencia:
+
+```text
+MYSQL_URL=${{MySQL.MYSQL_URL}}
+```
+
+Si el nombre del servicio es distinto, cambia `MySQL` por ese nombre exacto.
+
+## Imagenes locales
+
+MySQL guarda productos y pedidos, pero no guarda archivos de imagen. Para subir imagenes sin Cloudinary, crea un volumen y monta `/data`, luego pon `UPLOAD_DIR=/data/uploads`.
 
 ## Imagenes
 
-Para una tienda pequena puedes usar el volumen de Railway para imagenes. Para algo mas profesional y facil de migrar, usa Cloudinary.
+Para una tienda pequena puedes usar volumen de Railway para imagenes. Para algo mas profesional y facil de migrar, usa Cloudinary.
 
 ## Dominio
 
@@ -83,4 +94,4 @@ Railway permite agregar dominios y subdominios desde el panel del servicio. Para
 - Crear pedido por WhatsApp.
 - Cambiar estado del pedido.
 - Revisar `/api/health`.
-- Confirmar que el volumen esta montado antes de guardar datos reales.
+- Confirmar que el servicio `Gstore` puede leer `MYSQL_URL`.
