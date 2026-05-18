@@ -1783,8 +1783,9 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   initializeApp()
     .then(() => {
-      app.listen(PORT, () => {
-        console.log(`${STORE_NAME} listo en ${PUBLIC_BASE_URL}`);
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`${STORE_NAME} listo en 0.0.0.0:${PORT}`);
+        console.log(`Tienda publica: ${PUBLIC_BASE_URL}`);
         console.log(`Panel protegido: ${PUBLIC_BASE_URL}/admin.html`);
       });
     })
