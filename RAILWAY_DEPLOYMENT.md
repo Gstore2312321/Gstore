@@ -39,7 +39,7 @@ ADMIN_COOKIE_DOMAIN=
 
 WHATSAPP_ADMIN_PHONE=593XXXXXXXXX
 
-PAYPAL_MODE=sandbox
+PAYPAL_MODE=live
 PAYPAL_CLIENT_ID=
 PAYPAL_CLIENT_SECRET=
 
@@ -117,6 +117,22 @@ MySQL guarda productos y pedidos, pero no guarda archivos de imagen. Para subir 
 ## Imagenes
 
 Para una tienda pequena puedes usar volumen de Railway para imagenes. Para algo mas profesional y facil de migrar, usa Cloudinary.
+
+## Resend
+
+Resend se usa para:
+
+- Avisar al administrador cuando entra un pedido.
+- Enviar confirmación al cliente.
+- Enviar enlaces de recuperación de clave admin.
+
+Para producción, verifica un dominio en Resend y usa un remitente propio:
+
+```text
+RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
+```
+
+La recuperación de clave solo envía enlace si el correo escrito coincide con `ADMIN_EMAIL` o `STORE_OWNER_EMAIL`. El enlace usa `PUBLIC_BASE_URL`, por eso debe estar puesto con el dominio real de Railway o tu subdominio.
 
 ## Dominio
 

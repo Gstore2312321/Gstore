@@ -18,6 +18,7 @@ Tienda sencilla para moda, zapatos, carteras y accesorios con backend propio.
 - PayPal preparado por variables de entorno.
 - Cloudinary preparado para subir imagenes desde el panel.
 - Resend preparado para notificar pedidos por correo.
+- Recuperación de clave admin por Resend.
 - Checkout con correo de cliente obligatorio para confirmar pedidos.
 
 ## Ejecutar
@@ -77,7 +78,7 @@ STORE_CURRENCY=USD
 STORE_TIME_ZONE=America/Guayaquil
 DEFAULT_SHIPPING=0
 ADMIN_EMAIL=...
-ADMIN_PASSWORD=...
+ADMIN_PASSWORD_HASH=$2...
 ADMIN_SECRET=...
 ADMIN_SESSION_HOURS=8
 ADMIN_COOKIE_DOMAIN=
@@ -89,13 +90,15 @@ CLOUDINARY_FOLDER=gstore/productos
 RESEND_API_KEY=...
 RESEND_FROM_EMAIL=GStore <pedidos@tu-dominio.com>
 RESEND_TO_EMAIL=...
-PAYPAL_MODE=sandbox
+RESEND_REPLY_TO_EMAIL=...
+PAYPAL_MODE=live
 PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
 ```
 
 La app crea sola las tablas `categories`, `products` y `orders` cuando arranca.
-Tambien crea `audit_logs` para trazabilidad interna.
+Tambien crea `audit_logs`, `app_settings` y `password_reset_tokens`.
+La recuperacion de clave usa `ADMIN_EMAIL`, `PUBLIC_BASE_URL` y Resend. Mantén `ADMIN_PASSWORD_HASH` en Railway como clave inicial y fallback seguro.
 
 ## Seguridad operativa
 

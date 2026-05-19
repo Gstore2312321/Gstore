@@ -222,6 +222,12 @@ const orderLookupLimiter = createRateLimiter({
   message: "Demasiadas consultas de pedido. Intenta nuevamente en unos minutos."
 });
 
+const passwordResetLimiter = createRateLimiter({
+  windowMs: 30 * 60 * 1000,
+  max: 4,
+  message: "Demasiadas solicitudes de recuperación. Intenta nuevamente más tarde."
+});
+
 function parseCookies(header = "") {
   return String(header || "")
     .split(";")
@@ -465,6 +471,23 @@ async function auditLog(req, { action, entityType, entityId = "", summary, metad
   }
 }
 
+async function getAppSetting(key) {
+  const row = await dbGet("SELECT setting_value FROM app_settings WHERE setting_key = ?", [key]);
+  return row ? row.setting_value : "";
+}
+
+async function setAppSetting(key, value) {
+  await dbRun(`
+    INSERT INTO app_settings (setting_key, setting_value, updated_at)
+    VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)
+  `, [key, value, now()]);
+}
+
+function hashResetToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
 function mysqlConnectionOptions() {
   if (MYSQL_CONNECTION_URL) {
     const url = new URL(MYSQL_CONNECTION_URL);
@@ -620,6 +643,31 @@ async function ensureSchema() {
       KEY audit_logs_created_at_index (created_at),
       KEY audit_logs_entity_index (entity_type, entity_id),
       KEY audit_logs_actor_index (actor_email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      setting_key VARCHAR(120) NOT NULL,
+      setting_value MEDIUMTEXT NOT NULL,
+      updated_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (setting_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      email VARCHAR(180) NOT NULL,
+      token_hash CHAR(64) NOT NULL,
+      expires_at VARCHAR(32) NOT NULL,
+      used_at VARCHAR(32) DEFAULT NULL,
+      ip_address VARCHAR(80) DEFAULT '',
+      created_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY password_reset_tokens_hash_unique (token_hash),
+      KEY password_reset_tokens_email_index (email),
+      KEY password_reset_tokens_expires_index (expires_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
@@ -1097,18 +1145,53 @@ function getWhatsappUrl(order) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order))}`;
 }
 
-async function sendOrderEmail(order) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const ownerEmail = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "GStore <onboarding@resend.dev>";
-  const replyToEmail = cleanText(process.env.RESEND_REPLY_TO_EMAIL || order.customer_email);
-  if (!apiKey || !ownerEmail) return { skipped: true };
+function resendConfigured() {
+  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+}
 
-  const items = parseJsonList(order.items_json)
+async function sendResendEmail({ to, subject, text, replyTo }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "GStore <onboarding@resend.dev>";
+  if (!apiKey || !to) return { skipped: true };
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to,
+      reply_to: replyTo || undefined,
+      subject,
+      text
+    })
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    console.warn("Resend no pudo enviar la notificacion:", message);
+    return { ok: false, message };
+  }
+
+  return response.json();
+}
+
+function orderEmailLines(order) {
+  return parseJsonList(order.items_json)
     .map((item) => `${item.quantity} x ${item.name} - $${formatMoney(item.line_total)}`)
     .join("\n");
+}
 
-  const text = [
+async function sendOrderEmail(order) {
+  const ownerEmail = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
+  const replyToEmail = cleanText(process.env.RESEND_REPLY_TO_EMAIL || order.customer_email);
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const items = orderEmailLines(order);
+
+  const adminText = [
     `Nuevo pedido ${order.order_code}`,
     "",
     `Cliente: ${order.customer_name}`,
@@ -1125,28 +1208,39 @@ async function sendOrderEmail(order) {
     `Estado de pago: ${order.payment_status}`
   ].filter(Boolean).join("\n");
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: ownerEmail,
-      reply_to: replyToEmail || undefined,
-      subject: `${STORE_NAME}: nuevo pedido ${order.order_code}`,
-      text
-    })
-  });
+  const customerText = [
+    `Hola ${order.customer_name},`,
+    "",
+    `Recibimos tu pedido ${order.order_code} en ${STORE_NAME}.`,
+    "",
+    items,
+    "",
+    `Total: $${formatMoney(order.total)} ${CURRENCY}`,
+    `Entrega: ${normalizeDeliveryMethod(order.delivery_method) === "pickup" ? "Retiro coordinado por WhatsApp" : "Envío a domicilio"}`,
+    `Estado de pago: ${order.payment_status === "paid" ? "Pagado" : "Pendiente"}`,
+    "",
+    "Te contactaremos para confirmar los detalles."
+  ].filter(Boolean).join("\n");
 
-  if (!response.ok) {
-    const message = await response.text();
-    console.warn("Resend no pudo enviar la notificacion:", message);
-    return { ok: false, message };
+  const results = [];
+  if (ownerEmail) {
+    results.push(await sendResendEmail({
+      to: ownerEmail,
+      replyTo: replyToEmail || undefined,
+      subject: `${STORE_NAME}: nuevo pedido ${order.order_code}`,
+      text: adminText
+    }));
+  }
+  if (order.customer_email) {
+    results.push(await sendResendEmail({
+      to: order.customer_email,
+      replyTo: ownerEmail || undefined,
+      subject: `Confirmación de pedido ${order.order_code}`,
+      text: customerText
+    }));
   }
 
-  return response.json();
+  return { ok: true, results };
 }
 
 function paypalConfigured() {
@@ -1282,9 +1376,14 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-function passwordMatches(value) {
-  if (ADMIN_PASSWORD_HASH) {
-    return bcrypt.compareSync(String(value || ""), ADMIN_PASSWORD_HASH);
+async function currentAdminPasswordHash() {
+  return cleanText(await getAppSetting("admin_password_hash") || ADMIN_PASSWORD_HASH);
+}
+
+async function passwordMatches(value) {
+  const storedHash = await currentAdminPasswordHash();
+  if (storedHash) {
+    return bcrypt.compare(String(value || ""), storedHash);
   }
   const expected = Buffer.from(ADMIN_PASSWORD);
   const provided = Buffer.from(String(value || ""));
@@ -1512,8 +1611,80 @@ app.post("/api/paypal/capture", checkoutLimiter, asyncHandler(async (req, res) =
   res.json({ order: publicOrder(await getOrderById(order.id)), capture });
 }));
 
+app.post("/api/admin/password-reset/request", passwordResetLimiter, asyncHandler(async (req, res) => {
+  const email = cleanText(req.body.email).toLowerCase();
+  const generic = { ok: true, message: "Si el correo está autorizado, enviaremos un enlace de recuperación." };
+
+  if (adminEmailMatches(email) && resendConfigured()) {
+    const token = crypto.randomBytes(32).toString("base64url");
+    const tokenHash = hashResetToken(token);
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const resetUrl = `${PUBLIC_BASE_URL}/admin.html?reset=${encodeURIComponent(token)}`;
+
+    await dbRun(`
+      INSERT INTO password_reset_tokens (email, token_hash, expires_at, ip_address, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `, [email, tokenHash, expiresAt, clientIp(req), now()]);
+
+    await sendResendEmail({
+      to: email,
+      subject: `${STORE_NAME}: recuperar acceso al panel`,
+      text: [
+        "Recibimos una solicitud para recuperar el acceso al panel.",
+        "",
+        `Abre este enlace para crear una nueva clave:`,
+        resetUrl,
+        "",
+        "Este enlace vence en 30 minutos. Si no pediste esto, ignora este correo."
+      ].join("\n")
+    });
+
+    await auditLog(req, {
+      action: "admin.password_reset_requested",
+      entityType: "session",
+      entityId: email,
+      summary: "Solicitud de recuperación enviada por Resend"
+    });
+  }
+
+  res.json(generic);
+}));
+
+app.post("/api/admin/password-reset/confirm", passwordResetLimiter, asyncHandler(async (req, res) => {
+  const token = cleanText(req.body.token);
+  const password = String(req.body.password || "");
+  if (!token || password.length < 12) {
+    throw httpError(400, "La nueva clave debe tener mínimo 12 caracteres.");
+  }
+
+  const tokenHash = hashResetToken(token);
+  const reset = await dbGet(`
+    SELECT * FROM password_reset_tokens
+    WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
+    ORDER BY id DESC
+    LIMIT 1
+  `, [tokenHash, now()]);
+
+  if (!reset || !adminEmailMatches(reset.email)) {
+    throw httpError(400, "El enlace de recuperación no es válido o ya venció.");
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await setAppSetting("admin_password_hash", passwordHash);
+  await dbRun("UPDATE password_reset_tokens SET used_at = ? WHERE id = ?", [now(), reset.id]);
+
+  await auditLog(req, {
+    action: "admin.password_reset_confirmed",
+    entityType: "session",
+    entityId: reset.email,
+    summary: "Clave admin actualizada por enlace de recuperación"
+  });
+
+  res.json({ ok: true, message: "Clave actualizada. Ya puedes entrar con la nueva clave." });
+}));
+
 app.post("/api/admin/login", loginLimiter, asyncHandler(async (req, res, next) => {
-  if (!adminEmailMatches(req.body.email) || !passwordMatches(req.body.password)) {
+  if (!adminEmailMatches(req.body.email) || !(await passwordMatches(req.body.password))) {
     return next(httpError(401, "Correo o clave incorrectos."));
   }
   const expiresAt = Date.now() + ADMIN_SESSION_HOURS * 60 * 60 * 1000;

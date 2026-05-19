@@ -130,6 +130,11 @@
   background: linear-gradient(180deg, var(--admin-panel), var(--admin-panel-2));
 }
 
+.login-panel-form {
+  display: grid;
+  gap: 1.05rem;
+}
+
 .login-form-panel::after {
   content: "Sesión privada · acceso temporal · panel no indexado";
   width: fit-content;
@@ -189,6 +194,24 @@
   width: 100%;
   min-height: 58px;
   margin-top: 0.35rem;
+}
+
+.login-link-button {
+  width: fit-content;
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--admin-muted);
+  padding: 0;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.login-link-button:hover {
+  color: var(--admin-ink);
 }
 
 .form-message {

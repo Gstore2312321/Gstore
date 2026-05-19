@@ -16,7 +16,7 @@
 <body class="admin-body" data-admin-page="dashboard">
   <main class="admin-shell">
     <section class="login-view" id="loginView">
-      <form class="login-card" id="loginForm">
+      <div class="login-card">
         <div class="login-brand-panel">
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
@@ -29,23 +29,61 @@
           </div>
         </div>
         <div class="login-form-panel">
-          <div>
-            <span class="eyebrow">Acceso</span>
-            <h2>Entrar al backend</h2>
-            <p>Usa el correo autorizado y la clave del panel.</p>
-          </div>
-          <label>
-            Correo electrónico
-            <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
-          </label>
-          <label>
-            Clave del panel
-            <input name="password" type="password" autocomplete="current-password" required placeholder="Escribe la clave">
-          </label>
-          <button class="button primary" type="submit">Entrar</button>
-          <p class="form-message" id="loginMessage"></p>
+          <form class="login-panel-form" id="loginForm">
+            <div>
+              <span class="eyebrow">Acceso</span>
+              <h2>Entrar al backend</h2>
+              <p>Usa el correo autorizado y la clave del panel.</p>
+            </div>
+            <label>
+              Correo electrónico
+              <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
+            </label>
+            <label>
+              Clave del panel
+              <input name="password" type="password" autocomplete="current-password" required placeholder="Escribe la clave">
+            </label>
+            <button class="button primary" type="submit">Entrar</button>
+            <button class="login-link-button" id="forgotPasswordButton" type="button">Olvidé mi clave</button>
+            <p class="form-message" id="loginMessage"></p>
+          </form>
+
+          <form class="login-panel-form reset-panel" id="resetRequestForm" hidden>
+            <div>
+              <span class="eyebrow">Recuperación</span>
+              <h2>Enviar enlace</h2>
+              <p>Te enviaremos un enlace temporal al correo autorizado del panel.</p>
+            </div>
+            <label>
+              Correo autorizado
+              <input name="email" type="email" autocomplete="email" required placeholder="correo del admin">
+            </label>
+            <button class="button primary" type="submit">Enviar recuperación</button>
+            <button class="login-link-button" data-show-login type="button">Volver al acceso</button>
+            <p class="form-message" id="resetRequestMessage"></p>
+          </form>
+
+          <form class="login-panel-form reset-panel" id="resetConfirmForm" hidden>
+            <div>
+              <span class="eyebrow">Nueva clave</span>
+              <h2>Cambiar acceso</h2>
+              <p>Escribe una clave nueva de mínimo 12 caracteres.</p>
+            </div>
+            <input name="token" type="hidden">
+            <label>
+              Nueva clave
+              <input name="password" type="password" autocomplete="new-password" minlength="12" required placeholder="Mínimo 12 caracteres">
+            </label>
+            <label>
+              Confirmar clave
+              <input name="password_confirm" type="password" autocomplete="new-password" minlength="12" required placeholder="Repite la clave">
+            </label>
+            <button class="button primary" type="submit">Guardar nueva clave</button>
+            <button class="login-link-button" data-show-login type="button">Volver al acceso</button>
+            <p class="form-message" id="resetConfirmMessage"></p>
+          </form>
         </div>
-      </form>
+      </div>
     </section>
 
     <section class="dashboard" id="dashboardView" hidden>

@@ -27,6 +27,11 @@ const adminEls = {
   dashboardView: document.querySelector("#dashboardView"),
   loginForm: document.querySelector("#loginForm"),
   loginMessage: document.querySelector("#loginMessage"),
+  forgotPasswordButton: document.querySelector("#forgotPasswordButton"),
+  resetRequestForm: document.querySelector("#resetRequestForm"),
+  resetRequestMessage: document.querySelector("#resetRequestMessage"),
+  resetConfirmForm: document.querySelector("#resetConfirmForm"),
+  resetConfirmMessage: document.querySelector("#resetConfirmMessage"),
   logoutButton: document.querySelector("#logoutButton"),
   sidebarStatus: document.querySelector("#sidebarStatus"),
   summaryProducts: document.querySelector("#summaryProducts"),
@@ -119,11 +124,18 @@ document.addEventListener("DOMContentLoaded", initAdmin);
 function initAdmin() {
   bindAdminEvents();
   markActiveNav();
+  if (initPasswordResetFromUrl()) return;
   restoreSession().catch(() => showLogin());
 }
 
 function bindAdminEvents() {
   on(adminEls.loginForm, "submit", login);
+  on(adminEls.forgotPasswordButton, "click", () => showResetRequest());
+  on(adminEls.resetRequestForm, "submit", requestPasswordReset);
+  on(adminEls.resetConfirmForm, "submit", confirmPasswordReset);
+  document.querySelectorAll("[data-show-login]").forEach((button) => {
+    on(button, "click", showLoginForm);
+  });
   on(adminEls.logoutButton, "click", logout);
   on(adminEls.productForm, "submit", saveProduct);
   on(adminEls.categoryForm, "submit", saveCategory);
@@ -320,6 +332,7 @@ function logout() {
 function showLogin() {
   if (adminEls.loginView) adminEls.loginView.hidden = false;
   if (adminEls.dashboardView) adminEls.dashboardView.hidden = true;
+  showLoginForm();
 }
 
 function showDashboard() {
@@ -327,6 +340,91 @@ function showDashboard() {
   if (adminEls.dashboardView) adminEls.dashboardView.hidden = false;
   if (window.gsap && !prefersReducedMotion()) {
     gsap.fromTo(".dashboard-brief, .daily-action, .summary-grid article, .chart-panel, .decision-card, .ops-panel, .admin-section", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.32, ease: "power3.out", stagger: 0.025 });
+  }
+}
+
+function initPasswordResetFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("reset");
+  if (!token || !adminEls.resetConfirmForm) return false;
+  showLogin();
+  showResetConfirm(token);
+  return true;
+}
+
+function showLoginForm() {
+  if (adminEls.loginForm) adminEls.loginForm.hidden = false;
+  if (adminEls.resetRequestForm) adminEls.resetRequestForm.hidden = true;
+  if (adminEls.resetConfirmForm) adminEls.resetConfirmForm.hidden = true;
+}
+
+function showResetRequest() {
+  if (adminEls.loginForm) adminEls.loginForm.hidden = true;
+  if (adminEls.resetRequestForm) adminEls.resetRequestForm.hidden = false;
+  if (adminEls.resetConfirmForm) adminEls.resetConfirmForm.hidden = true;
+  setMessage(adminEls.resetRequestMessage, "");
+  adminEls.resetRequestForm?.elements.email?.focus();
+}
+
+function showResetConfirm(token) {
+  if (adminEls.loginForm) adminEls.loginForm.hidden = true;
+  if (adminEls.resetRequestForm) adminEls.resetRequestForm.hidden = true;
+  if (adminEls.resetConfirmForm) {
+    adminEls.resetConfirmForm.hidden = false;
+    adminEls.resetConfirmForm.elements.token.value = token;
+    adminEls.resetConfirmForm.elements.password.focus();
+  }
+  setMessage(adminEls.resetConfirmMessage, "");
+}
+
+async function requestPasswordReset(event) {
+  event.preventDefault();
+  const form = adminEls.resetRequestForm;
+  const submitButton = form.querySelector('button[type="submit"]');
+  setButtonLoading(submitButton, true);
+  setMessage(adminEls.resetRequestMessage, "Enviando enlace...");
+  try {
+    const data = new FormData(form);
+    await publicApi("/api/admin/password-reset/request", {
+      method: "POST",
+      body: { email: data.get("email") }
+    });
+    setMessage(adminEls.resetRequestMessage, "Si el correo está autorizado, enviaremos un enlace de recuperación.", false, true);
+  } catch (error) {
+    setMessage(adminEls.resetRequestMessage, error.message, true);
+  } finally {
+    setButtonLoading(submitButton, false);
+  }
+}
+
+async function confirmPasswordReset(event) {
+  event.preventDefault();
+  const form = adminEls.resetConfirmForm;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const password = String(form.elements.password.value || "");
+  const confirmation = String(form.elements.password_confirm.value || "");
+  if (password !== confirmation) {
+    setMessage(adminEls.resetConfirmMessage, "Las claves no coinciden.", true);
+    return;
+  }
+  setButtonLoading(submitButton, true);
+  setMessage(adminEls.resetConfirmMessage, "Actualizando clave...");
+  try {
+    await publicApi("/api/admin/password-reset/confirm", {
+      method: "POST",
+      body: {
+        token: form.elements.token.value,
+        password
+      }
+    });
+    window.history.replaceState({}, document.title, window.location.pathname);
+    form.reset();
+    showLoginForm();
+    setMessage(adminEls.loginMessage, "Clave actualizada. Ya puedes entrar con la nueva clave.", false, true);
+  } catch (error) {
+    setMessage(adminEls.resetConfirmMessage, error.message, true);
+  } finally {
+    setButtonLoading(submitButton, false);
   }
 }
 
