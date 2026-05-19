@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
+const bcrypt = require("bcryptjs");
 const mysql = require("mysql2/promise");
 
 const ROOT_DIR = __dirname;
@@ -38,6 +39,7 @@ const STORE_TIME_ZONE = process.env.STORE_TIME_ZONE || "America/Guayaquil";
 const ADMIN_SESSION_HOURS = Math.max(1, Math.min(24, Number(process.env.ADMIN_SESSION_HOURS || 8)));
 const ADMIN_SECRET = cleanEnvSecret("ADMIN_SECRET", process.env.ADMIN_SECRET, "dev-secret");
 const ADMIN_PASSWORD = cleanText(process.env.ADMIN_PASSWORD || "");
+const ADMIN_PASSWORD_HASH = cleanText(process.env.ADMIN_PASSWORD_HASH || "");
 const ADMIN_COOKIE_NAME = "gstore_admin_session";
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
@@ -105,6 +107,14 @@ function httpError(status, message) {
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+}
+
+function clientIp(req) {
+  return cleanText(req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || req.socket.remoteAddress);
+}
+
+function shortUserAgent(req) {
+  return cleanText(req.get("User-Agent")).slice(0, 255);
 }
 
 function cleanEnvSecret(name, value, fallback = "") {
@@ -206,6 +216,12 @@ const checkoutLimiter = createRateLimiter({
   message: "Demasiadas solicitudes de pedido. Intenta nuevamente en unos minutos."
 });
 
+const orderLookupLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 35,
+  message: "Demasiadas consultas de pedido. Intenta nuevamente en unos minutos."
+});
+
 function parseCookies(header = "") {
   return String(header || "")
     .split(";")
@@ -288,6 +304,16 @@ function parseJsonList(value) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function parseJsonObject(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
   }
 }
 
@@ -414,6 +440,29 @@ function categoryFromRow(row) {
     created_at: row.created_at,
     updated_at: row.updated_at
   };
+}
+
+async function auditLog(req, { action, entityType, entityId = "", summary, metadata = {} }) {
+  try {
+    await dbRun(`
+      INSERT INTO audit_logs (
+        actor_email, action, entity_type, entity_id, summary, metadata_json, ip_address, user_agent, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      cleanText(req?.admin?.email || "system"),
+      cleanText(action),
+      cleanText(entityType),
+      cleanText(entityId),
+      cleanText(summary).slice(0, 255),
+      JSON.stringify(metadata || {}),
+      clientIp(req),
+      shortUserAgent(req),
+      now()
+    ]);
+  } catch (error) {
+    console.warn("No se pudo guardar auditoria:", error.message);
+  }
 }
 
 function mysqlConnectionOptions() {
@@ -552,6 +601,25 @@ async function ensureSchema() {
       KEY orders_status_index (status),
       KEY orders_payment_status_index (payment_status),
       KEY orders_paypal_order_id_index (paypal_order_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      actor_email VARCHAR(180) DEFAULT '',
+      action VARCHAR(80) NOT NULL,
+      entity_type VARCHAR(80) NOT NULL,
+      entity_id VARCHAR(80) DEFAULT '',
+      summary VARCHAR(255) NOT NULL,
+      metadata_json MEDIUMTEXT,
+      ip_address VARCHAR(80) DEFAULT '',
+      user_agent VARCHAR(255) DEFAULT '',
+      created_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (id),
+      KEY audit_logs_created_at_index (created_at),
+      KEY audit_logs_entity_index (entity_type, entity_id),
+      KEY audit_logs_actor_index (actor_email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
@@ -775,7 +843,7 @@ async function getOrderById(id) {
 
 function createOrderCode() {
   const stamp = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const random = crypto.randomBytes(8).toString("hex").toUpperCase();
   return `GS-${stamp}-${random}`;
 }
 
@@ -1215,6 +1283,9 @@ function requireAdmin(req, res, next) {
 }
 
 function passwordMatches(value) {
+  if (ADMIN_PASSWORD_HASH) {
+    return bcrypt.compareSync(String(value || ""), ADMIN_PASSWORD_HASH);
+  }
   const expected = Buffer.from(ADMIN_PASSWORD);
   const provided = Buffer.from(String(value || ""));
   if (!expected.length || expected.length !== provided.length) return false;
@@ -1296,7 +1367,10 @@ function validateProductionConfig() {
   if (!IS_PRODUCTION) return;
   const missing = [];
   if (!cleanText(process.env.ADMIN_EMAIL || process.env.STORE_OWNER_EMAIL)) missing.push("ADMIN_EMAIL");
-  if (ADMIN_PASSWORD.length < 12) missing.push("ADMIN_PASSWORD de minimo 12 caracteres");
+  if (!ADMIN_PASSWORD_HASH) missing.push("ADMIN_PASSWORD_HASH bcrypt");
+  if (ADMIN_PASSWORD_HASH && !ADMIN_PASSWORD_HASH.startsWith("$2")) {
+    missing.push("ADMIN_PASSWORD_HASH bcrypt valido");
+  }
   if (!process.env.PUBLIC_BASE_URL || /localhost|127\.0\.0\.1/.test(process.env.PUBLIC_BASE_URL)) missing.push("PUBLIC_BASE_URL real");
   if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imagenes persistentes");
   if (!MYSQL_CONNECTION_URL && !process.env.MYSQLHOST && !process.env.MYSQL_HOST) {
@@ -1347,7 +1421,7 @@ app.get("/api/products/:slug", asyncHandler(async (req, res, next) => {
   res.json({ product });
 }));
 
-app.get("/api/orders/:code", asyncHandler(async (req, res, next) => {
+app.get("/api/orders/:code", orderLookupLimiter, asyncHandler(async (req, res, next) => {
   const order = await getOrderByCode(req.params.code);
   if (!order) return next(httpError(404, "Pedido no encontrado."));
   res.json({ order: publicOrder(order) });
@@ -1438,7 +1512,7 @@ app.post("/api/paypal/capture", checkoutLimiter, asyncHandler(async (req, res) =
   res.json({ order: publicOrder(await getOrderById(order.id)), capture });
 }));
 
-app.post("/api/admin/login", loginLimiter, (req, res, next) => {
+app.post("/api/admin/login", loginLimiter, asyncHandler(async (req, res, next) => {
   if (!adminEmailMatches(req.body.email) || !passwordMatches(req.body.password)) {
     return next(httpError(401, "Correo o clave incorrectos."));
   }
@@ -1451,12 +1525,18 @@ app.post("/api/admin/login", loginLimiter, (req, res, next) => {
     exp: expiresAt
   });
   setAdminSessionCookie(res, token, expiresAt);
+  await auditLog(req, {
+    action: "admin.login",
+    entityType: "session",
+    entityId: cleanText(req.body.email).toLowerCase(),
+    summary: "Inicio de sesión admin correcto"
+  });
   res.json({
     ok: true,
     csrfToken,
     expiresAt
   });
-});
+}));
 
 app.get("/api/admin/session", requireAdmin, (req, res) => {
   res.json({
@@ -1617,7 +1697,15 @@ app.post("/api/admin/categories", requireAdmin, asyncHandler(async (req, res) =>
     INSERT INTO categories (name, slug, description, active, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `, [name, slug, cleanText(req.body.description), boolToInt(req.body.active ?? true), now(), now()]);
-  res.status(201).json({ category: categoryFromRow(await dbGet("SELECT * FROM categories WHERE id = ?", [result.insertId])) });
+  const category = categoryFromRow(await dbGet("SELECT * FROM categories WHERE id = ?", [result.insertId]));
+  await auditLog(req, {
+    action: "category.create",
+    entityType: "category",
+    entityId: String(category.id),
+    summary: `Categoría creada: ${category.name}`,
+    metadata: { category }
+  });
+  res.status(201).json({ category });
 }));
 
 app.put("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, res, next) => {
@@ -1632,16 +1720,33 @@ app.put("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, res,
     SET name = ?, slug = ?, description = ?, active = ?, updated_at = ?
     WHERE id = ?
   `, [name, slug, cleanText(req.body.description), boolToInt(req.body.active), now(), id]);
-  res.json({ category: categoryFromRow(await dbGet("SELECT * FROM categories WHERE id = ?", [id])) });
+  const category = categoryFromRow(await dbGet("SELECT * FROM categories WHERE id = ?", [id]));
+  await auditLog(req, {
+    action: "category.update",
+    entityType: "category",
+    entityId: String(id),
+    summary: `Categoría actualizada: ${category.name}`,
+    metadata: { before: categoryFromRow(current), after: category }
+  });
+  res.json({ category });
 }));
 
 app.delete("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, res, next) => {
   const id = Number(req.params.id);
+  const category = await dbGet("SELECT * FROM categories WHERE id = ?", [id]);
+  if (!category) return next(httpError(404, "Categoría no encontrada."));
   const productCount = await dbGet("SELECT COUNT(*) AS count FROM products WHERE category_id = ?", [id]);
   if (Number(productCount?.count || 0) > 0) {
     return next(httpError(409, "No se puede eliminar una categoría con productos. Mueve o elimina esos productos primero."));
   }
   await dbRun("DELETE FROM categories WHERE id = ?", [id]);
+  await auditLog(req, {
+    action: "category.delete",
+    entityType: "category",
+    entityId: String(id),
+    summary: `Categoría eliminada: ${category.name}`,
+    metadata: { before: categoryFromRow(category) }
+  });
   res.json({ ok: true });
 }));
 
@@ -1686,7 +1791,15 @@ app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
     now(),
     now()
   ]);
-  res.status(201).json({ product: await getProductById(result.insertId, { includePrivate: true }) });
+  const product = await getProductById(result.insertId, { includePrivate: true });
+  await auditLog(req, {
+    action: "product.create",
+    entityType: "product",
+    entityId: String(product.id),
+    summary: `Producto creado: ${product.name}`,
+    metadata: { product }
+  });
+  res.status(201).json({ product });
 }));
 
 app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, next) => {
@@ -1728,23 +1841,72 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
     now(),
     id
   ]);
-  res.json({ product: await getProductById(id, { includePrivate: true }) });
+  const product = await getProductById(id, { includePrivate: true });
+  await auditLog(req, {
+    action: "product.update",
+    entityType: "product",
+    entityId: String(id),
+    summary: `Producto actualizado: ${product.name}`,
+    metadata: {
+      before: current,
+      after: product,
+      changes: {
+        price: [current.price, product.price],
+        cost_price: [current.cost_price, product.cost_price],
+        stock: [current.stock, product.stock],
+        active: [current.active, product.active]
+      }
+    }
+  });
+  res.json({ product });
 }));
 
 app.delete("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res) => {
-  await dbRun("DELETE FROM products WHERE id = ?", [Number(req.params.id)]);
+  const id = Number(req.params.id);
+  const product = await getProductById(id, { includePrivate: true });
+  await dbRun("DELETE FROM products WHERE id = ?", [id]);
+  await auditLog(req, {
+    action: "product.delete",
+    entityType: "product",
+    entityId: String(id),
+    summary: `Producto eliminado: ${product?.name || id}`,
+    metadata: { before: product }
+  });
   res.json({ ok: true });
 }));
 
 app.post("/api/admin/upload", requireAdmin, upload.single("image"), asyncHandler(async (req, res) => {
   assertSafeImageUpload(req.file);
   const result = await uploadToCloudinary(req.file);
+  await auditLog(req, {
+    action: "image.upload",
+    entityType: "asset",
+    entityId: result.public_id || result.url,
+    summary: "Imagen subida desde el panel",
+    metadata: { provider: result.provider, url: result.url }
+  });
   res.status(201).json(result);
 }));
 
 app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
   const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC")).map(publicOrder);
   res.json({ orders });
+}));
+
+app.get("/api/admin/audit-logs", requireAdmin, asyncHandler(async (req, res) => {
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit || 50)));
+  const logs = await dbAll(`
+    SELECT id, actor_email, action, entity_type, entity_id, summary, metadata_json, ip_address, user_agent, created_at
+    FROM audit_logs
+    ORDER BY id DESC
+    LIMIT ${limit}
+  `);
+  res.json({
+    logs: logs.map((log) => ({
+      ...log,
+      metadata: parseJsonObject(log.metadata_json)
+    }))
+  });
 }));
 
 app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req, res, next) => {
@@ -1755,7 +1917,19 @@ app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req,
   const order = await getOrderById(id);
   if (!order) return next(httpError(404, "Pedido no encontrado."));
   await dbRun("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?", [status, now(), id]);
-  res.json({ order: publicOrder(await getOrderById(id)) });
+  const updatedOrder = await getOrderById(id);
+  await auditLog(req, {
+    action: "order.status_update",
+    entityType: "order",
+    entityId: String(id),
+    summary: `Pedido ${updatedOrder.order_code}: ${order.status} -> ${updatedOrder.status}`,
+    metadata: {
+      order_code: updatedOrder.order_code,
+      before: { status: order.status, payment_status: order.payment_status },
+      after: { status: updatedOrder.status, payment_status: updatedOrder.payment_status }
+    }
+  });
+  res.json({ order: publicOrder(updatedOrder) });
 }));
 
 app.get("/api/admin/orders/:id/whatsapp", requireAdmin, asyncHandler(async (req, res, next) => {

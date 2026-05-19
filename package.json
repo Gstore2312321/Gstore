@@ -7,9 +7,12 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "hash:admin": "node scripts/generate-admin-password-hash.js",
+    "backup:mysql": "node scripts/backup-mysql.js",
     "check": "node --check server.js && node --check api/index.js && node --check public/js/admin.js && node --check public/js/store.js && node --check public/js/success.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "multer": "^2.1.1",

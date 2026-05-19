@@ -6,11 +6,13 @@ Tienda sencilla para moda, zapatos, carteras y accesorios con backend propio.
 
 - Tienda publica responsive en `public/index.html`.
 - Panel admin protegido en `public/admin.html`, sin enlace desde la tienda.
-- Acceso admin con correo autorizado y clave privada desde `.env`.
+- Acceso admin con correo autorizado y hash bcrypt desde `.env`.
 - Sesion admin temporal con cookie `HttpOnly`, `SameSite=Strict` y token CSRF.
 - CORS limitado por dominio permitido y headers de seguridad en backend.
 - Rate limit para login y checkout.
+- Rate limit para consulta publica de pedidos.
 - Backend Express con MySQL.
+- Auditoria de cambios en `audit_logs`.
 - Productos, categorias, tallas, colores, stock general e imagenes.
 - Pedidos por WhatsApp desde backend.
 - PayPal preparado por variables de entorno.
@@ -37,7 +39,7 @@ http://localhost:4321/admin.html
 El archivo `.env` local ya deja la tienda lista para pruebas. Para produccion, cambia:
 
 - `ADMIN_SECRET`
-- `ADMIN_PASSWORD` por una clave larga
+- `ADMIN_PASSWORD_HASH` generado con `npm run hash:admin -- "tu-clave-larga"`
 - `ADMIN_SESSION_HOURS`
 - `ADMIN_COOKIE_DOMAIN` opcional si usaras subdominios compartiendo sesion
 - `ALLOWED_ORIGINS` con el dominio real y cualquier subdominio permitido
@@ -93,5 +95,25 @@ PAYPAL_CLIENT_SECRET=...
 ```
 
 La app crea sola las tablas `categories`, `products` y `orders` cuando arranca.
+Tambien crea `audit_logs` para trazabilidad interna.
+
+## Seguridad operativa
+
+Antes de vender en serio:
+
+1. Rota la clave de MySQL si fue compartida.
+2. Crea usuario no-root usando `ops/create-gstore-mysql-user.sql`.
+3. Cambia `MYSQL_URL` para usar ese usuario.
+4. Genera `ADMIN_PASSWORD_HASH`:
+
+```bash
+npm run hash:admin -- "tu-clave-larga"
+```
+
+5. Programa backups con:
+
+```bash
+npm run backup:mysql
+```
 
 Lee `RAILWAY_DEPLOYMENT.md` antes de publicar.

@@ -10,26 +10,31 @@
 - CORS restringido a `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS` y dominios de Vercel.
 - Login con rate limit.
 - Checkout con rate limit.
+- Consulta publica de pedidos con rate limit.
 - Sesion admin en cookie `HttpOnly`, `SameSite=Strict`, `Secure` en produccion.
 - Token CSRF requerido para mutaciones admin.
 - `ADMIN_SECRET` fuerte obligatorio en produccion.
+- `ADMIN_PASSWORD_HASH` con bcrypt obligatorio en produccion.
+- Codigos de pedido con 16 caracteres aleatorios hexadecimales.
+- Auditoria en tabla `audit_logs` para login, productos, categorias, uploads y cambios de estado.
 - Upload de imagen valida bytes reales de JPG, PNG o WebP.
-- Cloudinary obligatorio para uploads en Vercel/produccion.
+- Cloudinary o volumen persistente para uploads en produccion.
 - Render dinamico con escape HTML/atributos.
 - No se exponen costo privado ni variables sensibles en APIs publicas.
 
-## Pendiente Recomendado
+## Operacion Requerida
 
-1. Migrar SQLite local a una base persistente para produccion.
-2. Si se usa Supabase/Postgres directo, activar RLS y politicas por tabla.
-3. Agregar auditoria de acciones admin: crear, editar, eliminar, cambio de estado.
-4. Agregar backups automaticos de base de datos.
-5. Agregar monitoreo de errores y alertas.
-6. Usar HTTPS obligatorio en dominio final.
-7. Rotar `ADMIN_SECRET` y claves si alguien externo tuvo acceso al repositorio o `.env`.
-8. Verificar dominio de Resend para no usar remitente temporal.
-9. Separar entorno preview y produccion en Vercel con variables distintas.
+1. Rotar la clave de MySQL que fue compartida durante configuracion.
+2. Crear usuario MySQL no-root con `ops/create-gstore-mysql-user.sql`.
+3. Cambiar `MYSQL_URL` al usuario `gstore_app`.
+4. Generar `ADMIN_PASSWORD_HASH` con `npm run hash:admin -- "tu-clave"`.
+5. Quitar `ADMIN_PASSWORD` de Railway cuando `ADMIN_PASSWORD_HASH` este activo.
+6. Programar `npm run backup:mysql` como tarea recurrente o servicio programado.
+7. Guardar backups fuera de Railway si la tienda empieza a vender a diario.
+8. Agregar monitoreo de errores y alertas.
+9. Verificar dominio de Resend para no usar remitente temporal.
 
-## RLS
+## Backups
 
-RLS no aplica mientras el backend sea Express con SQLite. Si se migra a Supabase, las tablas privadas deben negar acceso anonimo por defecto y exponer solo funciones o endpoints server-side para admin.
+El script `npm run backup:mysql` exporta `categories`, `products`, `orders` y `audit_logs` a `backups/*.json.gz`.
+No subas la carpeta `backups/` al repo.

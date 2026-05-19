@@ -32,7 +32,7 @@ DEFAULT_SHIPPING=0
 
 STORE_OWNER_EMAIL=correo-admin@tudominio.com
 ADMIN_EMAIL=correo-admin@tudominio.com
-ADMIN_PASSWORD=clave-larga-de-minimo-12-caracteres
+ADMIN_PASSWORD_HASH=hash-bcrypt-generado-localmente
 ADMIN_SECRET=secreto-largo-de-minimo-32-caracteres-mejor-64
 ADMIN_SESSION_HOURS=8
 ADMIN_COOKIE_DOMAIN=
@@ -73,6 +73,42 @@ MYSQL_URL=${{MySQL.MYSQL_URL}}
 ```
 
 Si el nombre del servicio es distinto, cambia `MySQL` por ese nombre exacto.
+
+## Clave admin segura
+
+Genera el hash localmente:
+
+```bash
+npm run hash:admin -- "tu-clave-larga"
+```
+
+Pega el resultado en Railway como:
+
+```text
+ADMIN_PASSWORD_HASH=$2...
+```
+
+No necesitas `ADMIN_PASSWORD` en produccion si ya tienes `ADMIN_PASSWORD_HASH`.
+
+## Usuario MySQL no-root
+
+Despues del primer deploy, crea un usuario de aplicacion con:
+
+```text
+ops/create-gstore-mysql-user.sql
+```
+
+Cambia la clave del SQL, ejecútalo con el usuario root/admin y luego reemplaza `MYSQL_URL` por el usuario `gstore_app`.
+
+## Backups
+
+El script incluido crea un backup comprimido de MySQL:
+
+```bash
+npm run backup:mysql
+```
+
+Para automatizarlo, crea un segundo servicio o tarea programada en Railway usando el mismo repo y el comando `npm run backup:mysql`. Guarda los backups fuera del repo.
 
 ## Imagenes locales
 
