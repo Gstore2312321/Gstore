@@ -20,6 +20,13 @@
   min-height: 100svh;
 }
 
+.admin-body.is-auth-checking .login-view,
+.admin-body.is-auth-checking .dashboard {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .admin-body :focus-visible {
   outline: 3px solid rgba(199, 150, 47, 0.42);
   outline-offset: 3px;

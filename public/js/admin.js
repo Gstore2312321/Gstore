@@ -195,7 +195,6 @@ function on(element, eventName, handler) {
 }
 
 async function restoreSession() {
-  showLogin();
   try {
     const session = await publicApi("/api/admin/session");
     adminState.csrfToken = session.csrfToken || "";
@@ -330,12 +329,14 @@ function logout() {
 }
 
 function showLogin() {
+  document.body.classList.remove("is-auth-checking");
   if (adminEls.loginView) adminEls.loginView.hidden = false;
   if (adminEls.dashboardView) adminEls.dashboardView.hidden = true;
   showLoginForm();
 }
 
 function showDashboard() {
+  document.body.classList.remove("is-auth-checking");
   if (adminEls.loginView) adminEls.loginView.hidden = true;
   if (adminEls.dashboardView) adminEls.dashboardView.hidden = false;
   if (window.gsap && !prefersReducedMotion()) {
