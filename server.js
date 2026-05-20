@@ -676,6 +676,7 @@ async function ensureSchema() {
   await ensureColumn("products", "compare_price", "compare_price DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ensureColumn("products", "promo_type", "promo_type VARCHAR(40) DEFAULT 'none'");
   await ensureColumn("products", "promo_label", "promo_label VARCHAR(160) DEFAULT ''");
+  await ensureColumn("products", "featured", "featured TINYINT(1) NOT NULL DEFAULT 0");
 
   const promoCount = await dbGet(`
     SELECT COUNT(*) AS count
@@ -2131,8 +2132,16 @@ app.use((req, res, next) => {
 
 app.use((err, req, res, next) => {
   const status = err.status || 500;
-  if (status >= 500) console.error(err);
-  const publicMessage = IS_PRODUCTION && status >= 500
+  if (status >= 500) {
+    console.error({
+      message: err.message,
+      method: req.method,
+      path: req.path,
+      stack: err.stack
+    });
+  }
+  const showAdminDetail = req.path.startsWith("/api/admin/") && req.admin;
+  const publicMessage = IS_PRODUCTION && status >= 500 && !showAdminDetail
     ? "Algo salio mal en el servidor."
     : err.message || "Algo salio mal.";
   res.status(status).json({ error: publicMessage });
