@@ -9,9 +9,9 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Jost:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/admin.css?v=20260519-authflash">
+  <link rel="stylesheet" href="css/admin.css?v=20260519-ux-redesign">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="orders">
   <main class="admin-shell">
@@ -83,6 +83,19 @@
           </div>
         </header>
 
+        <section class="admin-page-brief compact" aria-label="Guía de pedidos">
+          <div>
+            <span class="eyebrow">Atención</span>
+            <h2>Primero confirma, luego prepara y cierra.</h2>
+            <p>Cada pedido muestra siguiente paso, datos de cliente, entrega, pago, productos y acción directa a WhatsApp.</p>
+          </div>
+          <div class="admin-brief-stack">
+            <span><strong>Nuevo</strong> Confirmar con la clienta</span>
+            <span><strong>Preparando</strong> Separar productos</span>
+            <span><strong>Listo</strong> Coordinar envío o retiro</span>
+          </div>
+        </section>
+
         <section class="admin-section orders-section">
           <div class="admin-section-heading">
             <div>
@@ -118,6 +131,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/admin.js?v=20260519-authflash" defer></script>
+  <script src="js/admin.js?v=20260519-ux-redesign" defer></script>
 </body>
 </html>

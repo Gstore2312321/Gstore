@@ -1399,7 +1399,7 @@ function adminEmailMatches(value) {
 
 function localUpload(file) {
   if (IS_VERCEL || (IS_PRODUCTION && !RAILWAY_VOLUME_PATH && !process.env.UPLOAD_DIR)) {
-    throw httpError(500, "Configura Cloudinary o un volumen persistente para subir imagenes en produccion.");
+    throw httpError(400, "Falta configurar Cloudinary o un volumen persistente para subir imagenes en produccion.");
   }
   const original = path.basename(file.originalname || "imagen.jpg");
   const ext = path.extname(original).toLowerCase() || ".jpg";
@@ -1431,10 +1431,23 @@ async function uploadToCloudinary(file) {
   form.append("folder", folder);
   form.append("signature", signature);
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`, {
-    method: "POST",
-    body: form
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  let response;
+  try {
+    response = await fetch(`https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw httpError(504, "Cloudinary tardo demasiado en responder. Intenta otra vez o sube una imagen mas liviana.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw httpError(502, data.error?.message || "Cloudinary no pudo subir la imagen.");

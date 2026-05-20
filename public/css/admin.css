@@ -2193,6 +2193,384 @@ tbody tr:last-child td {
   }
 }
 
+/* 2026 admin UX redesign: operational hierarchy across every private page. */
+.admin-body {
+  --admin-ink: #151107;
+  --admin-panel: #fffdf7;
+  --admin-panel-2: #f8f0df;
+  --admin-panel-3: #efe0c5;
+  --admin-muted: #6f6553;
+  --admin-line: rgba(135, 95, 23, 0.18);
+  --admin-dark: #151107;
+  --admin-gold: #bd8b26;
+  --admin-gold-soft: #e7c56e;
+  --admin-shadow: 0 24px 70px rgba(73, 52, 18, 0.12);
+  background:
+    linear-gradient(90deg, rgba(21, 17, 7, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(21, 17, 7, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 12% 8%, rgba(231, 197, 110, 0.2), transparent 32rem),
+    linear-gradient(135deg, var(--admin-panel), #fbf7ed);
+  background-size: 34px 34px, 34px 34px, auto, auto;
+}
+
+.login-card {
+  border-radius: 8px;
+  box-shadow: 0 30px 90px rgba(73, 52, 18, 0.14);
+}
+
+.login-brand-panel h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.login-card h2 {
+  max-width: 12ch;
+  font-size: 3rem;
+}
+
+.login-form-panel::after {
+  content: "Acceso privado, no enlazado desde la tienda";
+}
+
+.admin-sidebar {
+  border-right: 1px solid rgba(255, 253, 247, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.04), transparent 28%),
+    #151107;
+}
+
+.admin-sidebar nav {
+  gap: 0.45rem;
+}
+
+.admin-sidebar nav a {
+  min-height: 44px;
+  border-radius: 8px;
+  gap: 0.55rem;
+}
+
+.admin-sidebar nav a::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: rgba(231, 197, 110, 0.34);
+}
+
+.admin-sidebar nav a:hover,
+.admin-sidebar nav a.is-active {
+  transform: translateX(2px);
+  background: rgba(255, 253, 247, 0.1);
+}
+
+.admin-sidebar nav a.is-active::before {
+  background: var(--admin-gold-soft);
+}
+
+.admin-content {
+  width: min(1360px, calc(100% - 1.5rem));
+}
+
+.admin-topbar {
+  position: relative;
+  align-items: center;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.84);
+  box-shadow: 0 16px 46px rgba(73, 52, 18, 0.08);
+}
+
+.admin-topbar h1 {
+  font-size: 3.25rem;
+  text-wrap: balance;
+}
+
+.topbar-actions .button,
+.section-actions .button,
+.brief-actions .button {
+  min-height: 44px;
+}
+
+.admin-page-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: clamp(1rem, 2.4vw, 1.45rem);
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.96), rgba(248, 240, 223, 0.86));
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-page-brief.compact {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+}
+
+.admin-page-brief h2 {
+  max-width: 760px;
+  margin: 0.15rem 0 0;
+  font-size: 2.35rem;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.admin-page-brief p {
+  max-width: 65ch;
+  margin: 0.8rem 0 0;
+  color: var(--admin-muted);
+  line-height: 1.55;
+}
+
+.admin-brief-stack {
+  display: grid;
+  gap: 0.55rem;
+  align-content: end;
+}
+
+.admin-brief-stack span {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: center;
+  min-height: 48px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(135, 95, 23, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.78);
+  color: var(--admin-muted);
+  font-weight: 700;
+}
+
+.admin-brief-stack strong {
+  color: var(--admin-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-brief,
+.reports-hero,
+.admin-section,
+.chart-panel,
+.report-panel,
+.summary-grid article,
+.daily-action,
+.decision-card,
+.orders-overview article,
+.category-admin-item,
+.order-card,
+.form-panel {
+  border-radius: 8px;
+}
+
+.dashboard-brief-copy h2,
+.reports-hero h2,
+.command-copy h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.summary-grid article,
+.report-metric-grid article,
+.reports-hero-metrics article {
+  min-height: 132px;
+}
+
+.summary-grid strong,
+.report-metric-grid strong,
+.reports-hero-metrics strong,
+.orders-overview strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-section {
+  margin-top: 0;
+  background: rgba(255, 253, 247, 0.9);
+}
+
+.admin-section-heading h2 {
+  font-size: 2.25rem;
+  text-wrap: balance;
+}
+
+.table-wrap {
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.86);
+}
+
+th {
+  background: rgba(248, 240, 223, 0.72);
+}
+
+tbody tr:hover {
+  background: rgba(248, 240, 223, 0.58);
+}
+
+.table-product img {
+  border-radius: 8px;
+}
+
+.small-button,
+.status-pill {
+  border-radius: 8px;
+}
+
+.row-actions {
+  align-items: center;
+}
+
+.orders-overview {
+  gap: 0.85rem;
+}
+
+.order-card {
+  border-color: rgba(135, 95, 23, 0.2);
+}
+
+.order-card::before {
+  width: 4px;
+}
+
+.order-next-step {
+  border-radius: 8px;
+}
+
+.order-info-card,
+.order-items-panel,
+.order-note,
+.order-item-row,
+.report-row {
+  border-radius: 8px;
+}
+
+.drawer-overlay {
+  background: rgba(21, 17, 7, 0.38);
+}
+
+.drawer-panel {
+  width: min(100%, 840px);
+}
+
+.drawer-header,
+.drawer-footer {
+  background: rgba(255, 253, 247, 0.94);
+}
+
+.drawer-header h2 {
+  font-size: 2.25rem;
+}
+
+.drawer-body {
+  background:
+    linear-gradient(90deg, rgba(21, 17, 7, 0.026) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(21, 17, 7, 0.02) 1px, transparent 1px),
+    var(--admin-panel-2);
+  background-size: 28px 28px, 28px 28px, auto;
+}
+
+.option-choice-grid button,
+.selected-option-chip,
+.file-drop,
+.image-preview,
+.discount-card,
+.option-picker,
+.confirm-dialog {
+  border-radius: 8px;
+}
+
+@media (min-width: 1080px) {
+  .dashboard {
+    grid-template-columns: 276px 1fr;
+  }
+
+  .admin-sidebar {
+    padding: 1.1rem;
+  }
+
+  .admin-content {
+    padding: 1rem 1.15rem 3.5rem;
+  }
+}
+
+@media (max-width: 980px) {
+  .admin-page-brief,
+  .admin-page-brief.compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-content {
+    width: min(100% - 0.85rem, 720px);
+  }
+
+  .admin-topbar {
+    margin: 0.65rem 0;
+  }
+
+  .admin-topbar h1 {
+    font-size: 2.35rem;
+  }
+
+  .admin-page-brief h2 {
+    font-size: 1.85rem;
+  }
+
+  tbody tr {
+    border-radius: 8px;
+  }
+
+  td {
+    align-items: flex-start;
+  }
+
+  td::before {
+    flex: 0 0 92px;
+  }
+
+  td .row-actions,
+  td .status-stack {
+    justify-content: flex-start;
+  }
+
+  .drawer-panel {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .login-card h2,
+  .login-brand-panel h1 {
+    font-size: 2.25rem;
+  }
+
+  .admin-sidebar {
+    gap: 0.6rem;
+  }
+
+  .admin-sidebar nav {
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  .admin-sidebar nav a {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    min-width: max-content;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.84rem;
+  }
+
+  .admin-brief-stack span {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-body *,
   .admin-body *::before,

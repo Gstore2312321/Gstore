@@ -9,9 +9,9 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Jost:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/admin.css?v=20260519-authflash">
+  <link rel="stylesheet" href="css/admin.css?v=20260519-ux-redesign">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="categories">
   <main class="admin-shell">
@@ -82,6 +82,19 @@
             <a class="button ghost" href="admin-productos.html">Ver productos</a>
           </div>
         </header>
+
+        <section class="admin-page-brief compact" aria-label="Guía de categorías">
+          <div>
+            <span class="eyebrow">Estructura</span>
+            <h2>Una tienda pequeña se entiende mejor por grupos claros.</h2>
+            <p>Activa solo las categorías que deben aparecer en la tienda y mantén nombres cortos para que el filtro sea fácil en móvil.</p>
+          </div>
+          <div class="admin-brief-stack">
+            <span><strong>Ropa</strong> Blusas, vestidos, conjuntos</span>
+            <span><strong>Zapatos</strong> Tallas visibles antes de vender</span>
+            <span><strong>Accesorios</strong> Carteras, aretes y extras</span>
+          </div>
+        </section>
 
         <section class="admin-section categories-section">
           <div class="admin-section-heading">
@@ -157,6 +170,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/admin.js?v=20260519-authflash" defer></script>
+  <script src="js/admin.js?v=20260519-ux-redesign" defer></script>
 </body>
 </html>

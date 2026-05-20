@@ -12,7 +12,7 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Jost:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -44,12 +44,20 @@
   <main class="page-shell">
     <section class="hero" id="inicio" aria-labelledby="heroTitle">
       <div class="hero-copy" data-animate="hero-copy">
-        <span class="eyebrow">Ropa, zapatos, carteras y accesorios</span>
-        <h1 id="heroTitle">Moda importada para ti.</h1>
-        <p>GStore junta prendas escogidas con ojo familiar: pocas unidades, tallas claras y compra directa para coordinar rápido.</p>
+        <div class="hero-label-line">
+          <span class="eyebrow">Ropa, zapatos, carteras y accesorios</span>
+          <span class="stock-signal">Pocas unidades por pieza</span>
+        </div>
+        <h1 id="heroTitle">Moda importada escogida para usar hoy.</h1>
+        <p>Prendas, zapatos y accesorios traídos con ojo familiar: se revisa rápido, se elige talla o color, y el pedido queda listo para coordinar.</p>
         <div class="hero-actions">
           <a class="button primary" href="#catalogo">Ver productos</a>
           <button class="button ghost" id="heroCartButton" type="button">Revisar carrito</button>
+        </div>
+        <div class="hero-proof-grid" aria-label="Datos de compra">
+          <span><strong>Stock real</strong><small>Sin vender de más</small></span>
+          <span><strong>Talla clara</strong><small>Antes de agregar</small></span>
+          <span><strong>Compra directa</strong><small>WhatsApp o PayPal</small></span>
         </div>
       </div>
 
@@ -68,16 +76,16 @@
 
     <section class="trust-strip" aria-label="Beneficios de compra">
       <div>
-        <strong>Tallas visibles</strong>
-        <span>Elige antes de agregar.</span>
+        <strong>Pocas unidades</strong>
+        <span>La vitrina muestra disponibilidad real.</span>
       </div>
       <div>
-        <strong>Pedidos guardados</strong>
-        <span>El panel conserva historial.</span>
+        <strong>Compra guiada</strong>
+        <span>Talla y color aparecen antes de confirmar.</span>
       </div>
       <div>
         <strong>Pago flexible</strong>
-        <span>WhatsApp ahora, PayPal listo.</span>
+        <span>Pedido por WhatsApp o PayPal cuando esté activo.</span>
       </div>
     </section>
 
@@ -85,9 +93,9 @@
       <div class="section-heading">
         <div>
           <span class="eyebrow">Catálogo</span>
-          <h2 id="catalogTitle">Lo que está disponible hoy</h2>
+          <h2 id="catalogTitle">Piezas disponibles, sin vueltas.</h2>
         </div>
-        <p>Productos sencillos de revisar, con tallas, colores y stock general para no vender de más.</p>
+        <p>Filtra por categoría, mira promociones y abre cada producto solo cuando necesites decidir talla, color o cantidad.</p>
       </div>
 
       <div class="catalog-tools" aria-label="Filtros de productos">

@@ -639,7 +639,7 @@ function renderDashboardCharts(analytics) {
             color: textColor,
             boxWidth: 10,
             usePointStyle: true,
-            font: { family: "Outfit", weight: "700" }
+            font: { family: "Jost", weight: "700" }
           }
         },
         tooltip: {
@@ -827,7 +827,7 @@ function cartesianChartOptions(gridColor, textColor) {
           color: textColor,
           boxWidth: 12,
           usePointStyle: true,
-          font: { family: "Outfit", weight: "700" }
+          font: { family: "Jost", weight: "700" }
         }
       },
       tooltip: {
@@ -842,7 +842,7 @@ function cartesianChartOptions(gridColor, textColor) {
     scales: {
       x: {
         grid: { display: false },
-        ticks: { color: textColor, font: { family: "Outfit", weight: "700" } }
+        ticks: { color: textColor, font: { family: "Jost", weight: "700" } }
       },
       y: {
         beginAtZero: true,
@@ -850,7 +850,7 @@ function cartesianChartOptions(gridColor, textColor) {
         ticks: {
           color: textColor,
           callback: (value) => shortCurrency(value),
-          font: { family: "Outfit", weight: "700" }
+          font: { family: "Jost", weight: "700" }
         }
       }
     }
@@ -868,14 +868,14 @@ function horizontalCurrencyChartOptions(gridColor, textColor) {
         ticks: {
           color: textColor,
           callback: (value) => shortCurrency(value),
-          font: { family: "Outfit", weight: "700" }
+          font: { family: "Jost", weight: "700" }
         }
       },
       y: {
         grid: { display: false },
         ticks: {
           color: textColor,
-          font: { family: "Outfit", weight: "700" }
+          font: { family: "Jost", weight: "700" }
         }
       }
     }
@@ -894,7 +894,7 @@ function doughnutReportOptions(textColor) {
           color: textColor,
           boxWidth: 10,
           usePointStyle: true,
-          font: { family: "Outfit", weight: "700" }
+          font: { family: "Jost", weight: "700" }
         }
       },
       tooltip: {
@@ -1265,6 +1265,8 @@ async function saveProduct(event) {
   const submitButton = form.querySelector('button[type="submit"]');
   setMessage(adminEls.productMessage, "Guardando producto...");
   setButtonLoading(submitButton, true);
+  let savedProductId = "";
+  let savedProductWasEdit = false;
 
   try {
     const formData = new FormData(form);
@@ -1306,6 +1308,8 @@ async function saveProduct(event) {
     };
 
     const id = formData.get("id");
+    savedProductId = id;
+    savedProductWasEdit = Boolean(id);
     await adminApi(id ? `/api/admin/products/${id}` : "/api/admin/products", {
       method: id ? "PUT" : "POST",
       body: payload
@@ -1313,12 +1317,20 @@ async function saveProduct(event) {
 
     closeProductDrawer();
     resetProductForm({ silent: true });
-    await Promise.all([refreshProducts(), refreshSummary()]);
+    setMessage(adminEls.productMessage, "");
     showToast(id ? "Producto actualizado." : "Producto creado.");
   } catch (error) {
     setMessage(adminEls.productMessage, error.message, true);
+    return;
   } finally {
     setButtonLoading(submitButton, false);
+  }
+
+  try {
+    await Promise.all([refreshProducts(), refreshSummary()]);
+  } catch (refreshError) {
+    console.warn(refreshError);
+    showToast(`${savedProductWasEdit || savedProductId ? "Producto guardado" : "Producto creado"}. Recarga el panel para ver los datos actualizados.`);
   }
 }
 
@@ -1606,6 +1618,9 @@ async function request(url, options = {}, needsAuth) {
   const isForm = options.body instanceof FormData;
   const method = options.method || "GET";
   let body = options.body;
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs || (isForm ? 45000 : 25000));
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   if (needsAuth && method !== "GET" && method !== "HEAD") {
     headers["X-CSRF-Token"] = adminState.csrfToken || "";
@@ -1615,12 +1630,23 @@ async function request(url, options = {}, needsAuth) {
     body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${url}`, {
-    method,
-    headers,
-    body,
-    credentials: "same-origin"
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${url}`, {
+      method,
+      headers,
+      body,
+      credentials: needsAuth ? "include" : "same-origin",
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("El servidor tardó demasiado. Revisa la conexión o intenta con una imagen más liviana.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {

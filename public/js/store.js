@@ -220,10 +220,11 @@ function productCard(product) {
         ${promoLabel ? `<span class="promo-pill">${escapeHtml(promoLabel)}</span>` : ""}
       </button>
       <div class="product-content">
-        <div class="product-meta">
-          <h3>${escapeHtml(product.name)}</h3>
+        <div class="product-topline">
+          <span>${escapeHtml(product.category?.name || "Producto")}</span>
           ${renderPriceStack(product)}
         </div>
+        <h3>${escapeHtml(product.name)}</h3>
         <p>${escapeHtml(product.description)}</p>
         <div class="variant-row">${variants || `<span class="variant-pill">Sin talla</span>`}</div>
         <div class="product-actions">
@@ -419,13 +420,16 @@ function renderCart() {
   els.cartLines.innerHTML = state.cart.map((line) => `
     <article class="cart-line">
       <img src="${escapeAttr(assetUrl(line.image))}" alt="${escapeAttr(line.name)}">
-      <div>
+      <div class="cart-line-main">
         <h3>${escapeHtml(line.name)}</h3>
         <p>${escapeHtml([line.size && `Talla ${line.size}`, line.color && `Color ${line.color}`].filter(Boolean).join(" · ") || "Producto")}</p>
-        <div class="quantity-control">
-          <button type="button" data-line-quantity="${escapeAttr(line.key)}" data-direction="-1" aria-label="Restar">-</button>
-          <span>${line.quantity}</span>
-          <button type="button" data-line-quantity="${escapeAttr(line.key)}" data-direction="1" aria-label="Sumar">+</button>
+        <div class="cart-line-footer">
+          <div class="quantity-control">
+            <button type="button" data-line-quantity="${escapeAttr(line.key)}" data-direction="-1" aria-label="Restar">-</button>
+            <span>${line.quantity}</span>
+            <button type="button" data-line-quantity="${escapeAttr(line.key)}" data-direction="1" aria-label="Sumar">+</button>
+          </div>
+          <strong class="cart-line-total">${formatCurrency(line.price * line.quantity)}</strong>
         </div>
       </div>
       <button class="remove-line" data-remove-line="${escapeAttr(line.key)}" type="button" aria-label="Quitar ${escapeAttr(line.name)}">x</button>
