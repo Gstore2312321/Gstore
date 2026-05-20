@@ -349,6 +349,38 @@ function cleanText(value, fallback = "") {
   return String(value || fallback).trim();
 }
 
+function cleanEnvValue(value, fallback = "") {
+  let text = cleanText(value);
+  if (!text) text = cleanText(fallback);
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
+    text = text.slice(1, -1).trim();
+  }
+  return text;
+}
+
+function rawEnvHasOuterWhitespace(name) {
+  const raw = String(process.env[name] || "");
+  return Boolean(raw && raw !== raw.trim());
+}
+
+function rawEnvHasWrappingQuotes(name) {
+  const raw = cleanText(process.env[name]);
+  return Boolean(
+    raw.length > 1 &&
+    ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")))
+  );
+}
+
+function maskValue(value, head = 4, tail = 4) {
+  const text = cleanText(value);
+  if (!text) return "";
+  if (text.length <= head + tail) return "*".repeat(text.length);
+  return `${text.slice(0, head)}...${text.slice(-tail)}`;
+}
+
 function normalizePhone(value) {
   return String(value || "").replace(/[^\d+]/g, "").trim();
 }
@@ -1409,34 +1441,96 @@ function localUpload(file) {
   return { url: `/uploads/${safeName}`, provider: "local" };
 }
 
+function parseCloudinaryUrl(value) {
+  const text = cleanEnvValue(value);
+  if (!text) return {};
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "cloudinary:") return {};
+    return {
+      cloudName: cleanEnvValue(url.hostname),
+      apiKey: cleanEnvValue(decodeURIComponent(url.username || "")),
+      apiSecret: cleanEnvValue(decodeURIComponent(url.password || ""))
+    };
+  } catch {
+    return {};
+  }
+}
+
+function cloudinaryConfig() {
+  const fromUrl = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+  return {
+    cloudName: cleanEnvValue(process.env.CLOUDINARY_CLOUD_NAME, fromUrl.cloudName),
+    apiKey: cleanEnvValue(process.env.CLOUDINARY_API_KEY, fromUrl.apiKey),
+    apiSecret: cleanEnvValue(process.env.CLOUDINARY_API_SECRET, fromUrl.apiSecret),
+    folder: cleanEnvValue(process.env.CLOUDINARY_FOLDER, "gstore/productos")
+  };
+}
+
+function cloudinaryWarnings(config = cloudinaryConfig()) {
+  const warnings = [];
+  if (!config.cloudName) warnings.push("Falta CLOUDINARY_CLOUD_NAME o CLOUDINARY_URL.");
+  if (!config.apiKey) warnings.push("Falta CLOUDINARY_API_KEY o CLOUDINARY_URL.");
+  if (!config.apiSecret) warnings.push("Falta CLOUDINARY_API_SECRET o CLOUDINARY_URL.");
+  if (config.apiKey && config.apiSecret && config.apiKey === config.apiSecret) {
+    warnings.push("CLOUDINARY_API_SECRET es igual a CLOUDINARY_API_KEY; debe ser el API Secret real.");
+  }
+  if (config.apiSecret && config.apiSecret.length < 16) {
+    warnings.push("CLOUDINARY_API_SECRET parece demasiado corto; confirma que no pegaste el API Key.");
+  }
+  if (
+    process.env.CLOUDINARY_URL &&
+    (cleanText(process.env.CLOUDINARY_CLOUD_NAME) || cleanText(process.env.CLOUDINARY_API_KEY) || cleanText(process.env.CLOUDINARY_API_SECRET))
+  ) {
+    warnings.push("Tienes CLOUDINARY_URL y variables separadas; el backend usa las variables separadas si existen.");
+  }
+  ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_FOLDER", "CLOUDINARY_URL"].forEach((name) => {
+    if (rawEnvHasOuterWhitespace(name)) warnings.push(`${name} tiene espacios al inicio o al final.`);
+    if (rawEnvHasWrappingQuotes(name)) warnings.push(`${name} esta guardada con comillas; quitalas en Railway.`);
+  });
+  if (process.env.CLOUDINARY_URL && !parseCloudinaryUrl(process.env.CLOUDINARY_URL).cloudName) {
+    warnings.push("CLOUDINARY_URL no tiene formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
+  }
+  return warnings;
+}
+
+function signCloudinaryParams(params, apiSecret) {
+  const stringToSign = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+  return {
+    stringToSign,
+    signature: crypto.createHash("sha1").update(`${stringToSign}${apiSecret}`).digest("hex")
+  };
+}
+
 function cloudinaryConfigured() {
-  return Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
-  );
+  const config = cloudinaryConfig();
+  return Boolean(config.cloudName && config.apiKey && config.apiSecret);
 }
 
 async function uploadToCloudinary(file) {
+  const config = cloudinaryConfig();
   if (!cloudinaryConfigured()) return localUpload(file);
 
   const timestamp = Math.round(Date.now() / 1000);
-  const folder = process.env.CLOUDINARY_FOLDER || "gstore";
-  const paramsToSign = `folder=${folder}&timestamp=${timestamp}${process.env.CLOUDINARY_API_SECRET}`;
-  const signature = crypto.createHash("sha1").update(paramsToSign).digest("hex");
+  const params = { folder: config.folder, timestamp: String(timestamp) };
+  const { signature, stringToSign } = signCloudinaryParams(params, config.apiSecret);
   const form = new FormData();
 
   form.append("file", new Blob([file.buffer], { type: file.mimetype }), file.originalname || "producto.jpg");
-  form.append("api_key", process.env.CLOUDINARY_API_KEY);
-  form.append("timestamp", String(timestamp));
-  form.append("folder", folder);
+  form.append("api_key", config.apiKey);
+  form.append("timestamp", params.timestamp);
+  form.append("folder", params.folder);
   form.append("signature", signature);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25000);
   let response;
   try {
-    response = await fetch(`https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/image/upload`, {
       method: "POST",
       body: form,
       signal: controller.signal
@@ -1451,7 +1545,23 @@ async function uploadToCloudinary(file) {
   }
 
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw httpError(502, data.error?.message || "Cloudinary no pudo subir la imagen.");
+  if (!response.ok) {
+    const cloudinaryMessage = cleanText(data.error?.message || "");
+    if (/invalid signature/i.test(cloudinaryMessage)) {
+      console.warn("Cloudinary rechazo la firma de subida.", {
+        cloudName: maskValue(config.cloudName),
+        apiKey: maskValue(config.apiKey),
+        folder: config.folder,
+        stringToSign,
+        warnings: cloudinaryWarnings(config)
+      });
+      throw httpError(
+        400,
+        "Cloudinary rechazo la firma. En Railway revisa que CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET pertenezcan a la misma cuenta, y que CLOUDINARY_API_SECRET sea el API Secret real, no el API Key."
+      );
+    }
+    throw httpError(502, cloudinaryMessage || "Cloudinary no pudo subir la imagen.");
+  }
   return { url: data.secure_url, provider: "cloudinary", public_id: data.public_id };
 }
 
@@ -2072,6 +2182,20 @@ app.post("/api/admin/upload", requireAdmin, upload.single("image"), asyncHandler
   });
   res.status(201).json(result);
 }));
+
+app.get("/api/admin/cloudinary/status", requireAdmin, (req, res) => {
+  const config = cloudinaryConfig();
+  res.json({
+    configured: Boolean(config.cloudName && config.apiKey && config.apiSecret),
+    cloudName: maskValue(config.cloudName),
+    apiKey: maskValue(config.apiKey),
+    apiSecretConfigured: Boolean(config.apiSecret),
+    apiSecretLength: config.apiSecret.length,
+    folder: config.folder,
+    usesCloudinaryUrl: Boolean(cleanEnvValue(process.env.CLOUDINARY_URL)),
+    warnings: cloudinaryWarnings(config)
+  });
+});
 
 app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
   const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC")).map(publicOrder);
