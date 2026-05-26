@@ -153,6 +153,47 @@ function assetUrl(value) {
   return url;
 }
 
+function pagePath(name) {
+  return window.location.protocol === "file:" ? `${name}.html` : `/${name}`;
+}
+
+function isCloudinaryImage(url) {
+  return /res\.cloudinary\.com\/.+\/image\/upload\//.test(url);
+}
+
+function optimizedImageUrl(value, width = 420) {
+  const url = assetUrl(value);
+  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return url;
+  if (url.includes("/image/upload/f_auto")) return url;
+  const safeWidth = Math.max(96, Math.min(1400, Number(width) || 420));
+  return url.replace("/image/upload/", `/image/upload/f_auto,q_auto:eco,c_limit,w_${safeWidth}/`);
+}
+
+function imageSrcset(value, widths = [220, 360, 520, 720]) {
+  const url = assetUrl(value);
+  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return "";
+  return widths.map((width) => `${optimizedImageUrl(url, width)} ${width}w`).join(", ");
+}
+
+function imageAttrs(value, options = {}) {
+  const {
+    width = 420,
+    sizes = "(max-width: 640px) 46vw, (max-width: 1080px) 30vw, 245px",
+    loading = "lazy",
+    fetchPriority = "low"
+  } = options;
+  const src = optimizedImageUrl(value, width);
+  const srcset = imageSrcset(value);
+  return [
+    `src="${escapeAttr(src)}"`,
+    srcset ? `srcset="${escapeAttr(srcset)}"` : "",
+    `sizes="${escapeAttr(sizes)}"`,
+    `loading="${escapeAttr(loading)}"`,
+    `decoding="async"`,
+    `fetchpriority="${escapeAttr(fetchPriority)}"`
+  ].filter(Boolean).join(" ");
+}
+
 function renderCategories() {
   els.categoryFilters.innerHTML = [
     `<button class="filter-chip is-active" data-category-filter="all" type="button">Todo</button>`,
@@ -212,7 +253,7 @@ function productCard(product) {
   return `
     <article class="product-card">
       <button class="product-media" data-open-product="${product.id}" type="button" aria-label="Ver ${escapeAttr(product.name)}">
-        <img src="${escapeAttr(assetUrl(product.image_url))}" alt="${escapeAttr(product.name)}" loading="lazy">
+        <img ${imageAttrs(product.image_url)} alt="${escapeAttr(product.name)}">
         <span class="stock-pill">${soldOut ? "Agotado" : `${product.stock} disponible${product.stock === 1 ? "" : "s"}`}</span>
         ${promoLabel ? `<span class="promo-pill">${escapeHtml(promoLabel)}</span>` : ""}
       </button>
@@ -255,7 +296,7 @@ function renderProductDetail() {
   const soldOut = product.stock <= 0;
 
   els.productDetail.innerHTML = `
-    <img src="${escapeAttr(assetUrl(product.image_url))}" alt="${escapeAttr(product.name)}">
+    <img ${imageAttrs(product.image_url, { width: 820, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} alt="${escapeAttr(product.name)}">
     <div class="detail-content">
       <div class="detail-copy">
         <span class="eyebrow">${escapeHtml(product.category?.name || "Producto")}</span>
@@ -390,7 +431,7 @@ function renderCart() {
 
   els.cartLines.innerHTML = state.cart.map((line) => `
     <article class="cart-line">
-      <img src="${escapeAttr(assetUrl(line.image))}" alt="${escapeAttr(line.name)}">
+      <img ${imageAttrs(line.image, { width: 180, sizes: "64px" })} alt="${escapeAttr(line.name)}">
       <div class="cart-line-main">
         <h3>${escapeHtml(line.name)}</h3>
         <p>${escapeHtml([line.size && `Talla ${line.size}`, line.color && `Color ${line.color}`].filter(Boolean).join(" · ") || "Producto")}</p>
@@ -419,7 +460,7 @@ function renderCheckoutState() {
   els.paypalNote.textContent = isPickup
     ? "Para retiro, confirma por WhatsApp para coordinar hora y punto."
     : state.config.paypalEnabled
-    ? "PayPal está activo. El pago se procesa desde el backend."
+    ? "PayPal está activo. El pago se procesa de forma segura."
     : "PayPal se activa cuando llenes sus variables de entorno.";
   renderDeliveryState();
 }
@@ -525,7 +566,7 @@ async function submitWhatsappOrder(event) {
     } else {
       window.open(data.whatsappUrl, "_blank", "noopener");
     }
-    window.location.href = `${window.location.protocol === "file:" ? "success.html" : "/success.html"}?order=${encodeURIComponent(data.order.order_code)}`;
+    window.location.href = `${pagePath("success")}?order=${encodeURIComponent(data.order.order_code)}`;
   } catch (error) {
     if (pendingWindow) pendingWindow.close();
     showToast(error.message);
@@ -544,7 +585,7 @@ async function submitPaypalOrder() {
     return;
   }
   if (!state.config.paypalEnabled) {
-    showToast("PayPal todavía no está configurado en el backend.");
+    showToast("PayPal todavía no está configurado.");
     return;
   }
   if (!state.cart.length) return showToast("Agrega al menos un producto.");

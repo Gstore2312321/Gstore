@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
   <meta name="description" content="Panel privado de GStore para gestionar productos.">
-  <title>Productos | GStore Admin</title>
+  <title>Productos | Panel GStore</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
         <div class="login-brand-panel">
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
-          <h1>GStore Admin</h1>
+          <h1>Panel GStore</h1>
           <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
@@ -31,7 +31,7 @@
         <div class="login-form-panel">
           <div>
             <span class="eyebrow">Acceso</span>
-            <h2>Entrar al backend</h2>
+            <h2>Entrar al panel</h2>
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
@@ -50,7 +50,7 @@
 
     <section class="dashboard" id="dashboardView" hidden>
       <aside class="admin-sidebar">
-        <a class="brand" href="admin.html" aria-label="Panel GStore">
+        <a class="brand" href="/admin" aria-label="Panel GStore">
           <span class="brand-mark">G</span>
           <span>
             <strong>GStore</strong>
@@ -58,11 +58,11 @@
           </span>
         </a>
         <nav aria-label="Navegación del panel">
-          <a href="admin.html" data-nav-page="dashboard">Resumen</a>
-          <a href="admin-reportes.html" data-nav-page="reports">Reportes</a>
-          <a href="admin-productos.html" data-nav-page="products">Productos</a>
-          <a href="admin-categorias.html" data-nav-page="categories">Categorías</a>
-          <a href="admin-pedidos.html" data-nav-page="orders">Pedidos</a>
+          <a href="/admin" data-nav-page="dashboard">Resumen</a>
+          <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
+          <a href="/admin-productos" data-nav-page="products">Productos</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
+          <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
         </nav>
         <div class="sidebar-status">
           <span>Operación</span>
@@ -74,12 +74,12 @@
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Mercaderia</span>
+            <span class="eyebrow">Mercadería</span>
             <h1>Productos</h1>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="newProductButton" type="button">Nuevo producto</button>
-            <a class="button ghost" href="index.html" target="_blank" rel="noreferrer">Ver tienda</a>
+            <a class="button ghost" href="/" target="_blank" rel="noreferrer">Ver tienda</a>
           </div>
         </header>
 
@@ -139,45 +139,52 @@
     </section>
   </main>
 
-  <div class="drawer-overlay" id="productDrawer" hidden>
-    <aside class="drawer-panel product-drawer" role="dialog" aria-modal="true" aria-labelledby="productDrawerTitle">
-      <form id="productForm" class="drawer-form">
+  <div class="drawer-overlay product-drawer-overlay" id="productDrawer" hidden>
+    <aside class="drawer-panel product-drawer product-drawer-v2" role="dialog" aria-modal="true" aria-labelledby="productDrawerTitle">
+      <form id="productForm" class="drawer-form" novalidate>
         <input type="hidden" name="id">
-        <header class="drawer-header">
+        <header class="drawer-header product-drawer-header">
           <div>
             <span class="eyebrow" id="productDrawerKicker">Nuevo producto</span>
-            <h2 id="productDrawerTitle">Agregar mercadería</h2>
-            <p>Completa la ficha como si estuvieras armando el producto para vitrina.</p>
+            <h2 id="productDrawerTitle">Agregar producto</h2>
+            <p>Completa los campos marcados para activar la ficha.</p>
           </div>
           <button class="icon-close" id="closeProductDrawer" type="button" aria-label="Cerrar">Cerrar</button>
         </header>
 
-        <div class="drawer-body">
-          <section class="form-panel">
+        <div class="product-form-guide" id="productFormGuide" role="status" aria-live="polite">
+          <strong>Completa lo básico</strong>
+          <span>Nombre, categoría, precio, stock e imagen.</span>
+        </div>
+
+        <div class="drawer-body product-form-body">
+          <section class="form-panel product-core-panel">
             <div class="form-panel-heading">
               <span>01</span>
               <div>
-                <h3>Identidad</h3>
+                <h3>Datos básicos</h3>
                 <p>Nombre, categoría y SKU para ubicarlo rápido.</p>
               </div>
             </div>
             <div class="form-grid">
-              <label>
+              <label class="field-required" data-field-wrap="name">
                 Nombre
-                <input name="name" required placeholder="Blusa blanca, cartera mini...">
+                <input name="name" required maxlength="90" placeholder="Blusa blanca, cartera mini..." aria-describedby="productNameError">
+                <span class="field-error" id="productNameError" data-error-for="name"></span>
               </label>
-              <label>
+              <label class="field-required" data-field-wrap="category_id">
                 Categoría
-                <select name="category_id" id="productCategorySelect"></select>
+                <select name="category_id" id="productCategorySelect" required aria-describedby="productCategoryError"></select>
+                <span class="field-error" id="productCategoryError" data-error-for="category_id"></span>
               </label>
               <label class="full">
                 SKU opcional
-                <input name="sku" placeholder="GS-001">
+                <input name="sku" maxlength="36" placeholder="GS-001">
               </label>
             </div>
           </section>
 
-          <section class="form-panel">
+          <section class="form-panel product-commerce-panel">
             <div class="form-panel-heading">
               <span>02</span>
               <div>
@@ -186,17 +193,20 @@
               </div>
             </div>
             <div class="form-grid three">
-              <label>
+              <label class="field-required" data-field-wrap="price">
                 Precio de venta USD
-                <input name="price" type="number" min="0" step="0.01" required placeholder="35.00">
+                <input name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" required placeholder="35.00" aria-describedby="productPriceError">
+                <span class="field-error" id="productPriceError" data-error-for="price"></span>
               </label>
-              <label>
+              <label data-field-wrap="cost_price">
                 Precio de compra privado
-                <input name="cost_price" type="number" min="0" step="0.01" placeholder="18.00">
+                <input name="cost_price" type="number" min="0" max="99999" step="0.01" inputmode="decimal" placeholder="18.00" aria-describedby="productCostPriceError">
+                <span class="field-error" id="productCostPriceError" data-error-for="cost_price"></span>
               </label>
-              <label>
+              <label class="field-required" data-field-wrap="stock">
                 Stock general
-                <input name="stock" type="number" min="0" step="1" required placeholder="3">
+                <input name="stock" type="number" min="0" max="999" step="1" inputmode="numeric" required placeholder="3" aria-describedby="productStockError">
+                <span class="field-error" id="productStockError" data-error-for="stock"></span>
               </label>
               <div class="discount-card full">
                 <label class="discount-toggle">
@@ -206,19 +216,20 @@
                     <small>Actívalo solo si quieres mostrar un precio anterior en la tienda.</small>
                   </span>
                 </label>
-                <label class="discount-field" id="discountPriceWrap" hidden>
+                <label class="discount-field" id="discountPriceWrap" data-field-wrap="compare_price" hidden>
                   Precio antes del descuento
-                  <input name="compare_price" type="number" min="0" step="0.01" placeholder="72.00">
+                  <input name="compare_price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" placeholder="72.00" aria-describedby="productComparePriceError">
+                  <span class="field-error" id="productComparePriceError" data-error-for="compare_price"></span>
                 </label>
               </div>
             </div>
           </section>
 
-          <section class="form-panel image-panel">
+          <section class="form-panel image-panel product-image-panel" data-field-wrap="image">
             <div class="form-panel-heading">
               <span>03</span>
               <div>
-                <h3>Imagen</h3>
+                <h3>Foto del producto</h3>
                 <p>Sube una foto del producto desde el panel.</p>
               </div>
             </div>
@@ -229,19 +240,20 @@
               <div class="image-fields">
                 <input name="image_url" type="hidden">
                 <label class="file-drop">
-                  <span>Subir imagen</span>
+                  <span>Subir foto</span>
                   <input name="imageFile" type="file" accept="image/*">
                 </label>
                 <p class="image-help">Si no subes una foto nueva, se conserva la imagen actual.</p>
+                <span class="field-error" id="productImageError" data-error-for="image"></span>
               </div>
             </div>
           </section>
 
-          <section class="form-panel">
+          <section class="form-panel product-options-panel">
             <div class="form-panel-heading">
               <span>04</span>
               <div>
-                <h3>Opciones de venta</h3>
+                <h3>Opciones</h3>
                 <p>Tallas, colores y etiquetas comerciales.</p>
               </div>
             </div>
@@ -256,7 +268,7 @@
               </label>
               <label>
                 Texto de promo
-                <input name="promo_label" placeholder="Precio especial, últimas unidades...">
+                <input name="promo_label" maxlength="42" placeholder="Precio especial, últimas unidades...">
               </label>
               <div class="option-picker full" data-option-picker="sizes">
                 <input type="hidden" name="sizes">
@@ -278,7 +290,7 @@
                   <button type="button" data-option-kind="sizes" data-option-value="Unitalla">Unitalla</button>
                 </div>
                 <div class="custom-option-row">
-                  <input data-custom-option="sizes" type="text" placeholder="Agregar otra talla">
+                  <input data-custom-option="sizes" type="text" maxlength="18" placeholder="Agregar otra talla">
                   <button class="small-button" data-add-option="sizes" type="button">Agregar</button>
                 </div>
                 <div class="selected-options" data-selected-options="sizes" aria-live="polite"></div>
@@ -304,15 +316,11 @@
                   <button type="button" data-option-kind="colors" data-option-value="Verde">Verde</button>
                 </div>
                 <div class="custom-option-row">
-                  <input data-custom-option="colors" type="text" placeholder="Agregar otro color">
+                  <input data-custom-option="colors" type="text" maxlength="18" placeholder="Agregar otro color">
                   <button class="small-button" data-add-option="colors" type="button">Agregar</button>
                 </div>
                 <div class="selected-options" data-selected-options="colors" aria-live="polite"></div>
               </div>
-              <label class="full">
-                Descripción
-                <textarea name="description" rows="4" placeholder="Texto humano y claro para vender la pieza."></textarea>
-              </label>
             </div>
             <div class="toggle-row">
               <label><input name="active" type="checkbox" checked> Producto activo</label>

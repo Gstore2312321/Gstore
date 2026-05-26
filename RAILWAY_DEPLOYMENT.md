@@ -103,11 +103,11 @@ Pega el resultado en Railway como:
 ADMIN_PASSWORD_HASH=$2...
 ```
 
-No necesitas `ADMIN_PASSWORD` en produccion si ya tienes `ADMIN_PASSWORD_HASH`.
+No necesitas `ADMIN_PASSWORD` en producción si ya tienes `ADMIN_PASSWORD_HASH`.
 
 ## Usuario MySQL no-root
 
-Despues del primer deploy, crea un usuario de aplicacion con:
+Después del primer deploy, crea un usuario de aplicación con:
 
 ```text
 ops/create-gstore-mysql-user.sql
@@ -125,13 +125,13 @@ npm run backup:mysql
 
 Para automatizarlo, crea un segundo servicio o tarea programada en Railway usando el mismo repo y el comando `npm run backup:mysql`. Guarda los backups fuera del repo.
 
-## Imagenes locales
+## Imágenes locales
 
-MySQL guarda productos y pedidos, pero no guarda archivos de imagen. Para subir imagenes sin Cloudinary, crea un volumen y monta `/data`, luego pon `UPLOAD_DIR=/data/uploads`.
+MySQL guarda productos y pedidos, pero no guarda archivos de imagen. Para subir imágenes sin Cloudinary, crea un volumen y monta `/data`, luego pon `UPLOAD_DIR=/data/uploads`.
 
-## Imagenes
+## Imágenes
 
-Para una tienda pequena puedes usar volumen de Railway para imagenes. Para algo mas profesional y facil de migrar, usa Cloudinary.
+Para una tienda pequeña puedes usar volumen de Railway para imágenes. Para algo más profesional y fácil de migrar, usa Cloudinary.
 
 ## Resend
 

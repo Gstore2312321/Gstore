@@ -33,7 +33,7 @@ async function initSuccess() {
   if (token) {
     eyebrow.textContent = "PayPal";
     title.textContent = "Confirmando el pago...";
-    text.textContent = "Estamos verificando PayPal desde el backend.";
+    text.textContent = "Estamos verificando PayPal.";
     try {
       const response = await fetch(`${API_BASE}/api/paypal/capture`, {
         method: "POST",

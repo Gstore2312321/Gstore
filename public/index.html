@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="GStore es una tienda familiar de moda importada con catalogo, carrito y checkout por WhatsApp o PayPal.">
-  <meta property="og:title" content="GStore | Catalogo">
+  <meta name="description" content="GStore es una tienda familiar de moda importada con catálogo, carrito y checkout por WhatsApp o PayPal.">
+  <meta property="og:title" content="GStore | Catálogo">
   <meta property="og:description" content="Busca piezas disponibles, elige talla o color y prepara tu pedido.">
   <meta property="og:image" content="assets/og-gstore.svg">
   <meta property="og:type" content="website">
-  <title>GStore | Catalogo</title>
+  <title>GStore | Catálogo</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,19 +16,19 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="catalog-only">
-  <a class="skip-link" href="#catalogo">Saltar al catalogo</a>
+  <a class="skip-link" href="#catalogo">Saltar al catálogo</a>
 
   <header class="site-header" data-animate="header">
-    <a class="brand" href="#catalogo" data-scroll-target="catalogo" aria-label="Catalogo GStore">
+    <a class="brand" href="#catalogo" data-scroll-target="catalogo" aria-label="Catálogo GStore">
       <span class="brand-mark">G</span>
       <span>
         <strong>GStore</strong>
-        <small>Catalogo</small>
+        <small>Catálogo</small>
       </span>
     </a>
 
-    <nav class="desktop-nav" aria-label="Navegacion principal">
-      <a class="header-link is-active" href="#catalogo" data-scroll-target="catalogo">Catalogo</a>
+    <nav class="desktop-nav" aria-label="Navegación principal">
+      <a class="header-link is-active" href="#catalogo" data-scroll-target="catalogo">Catálogo</a>
     </nav>
 
     <button class="cart-button" id="openCartButton" type="button" aria-label="Abrir carrito">
@@ -44,7 +44,7 @@
     <section class="catalog-section catalog-first" id="catalogo" aria-labelledby="catalogTitle">
       <div class="section-heading catalog-heading">
         <div>
-          <span class="eyebrow">Catalogo GStore</span>
+          <span class="eyebrow">Catálogo GStore</span>
           <h1 id="catalogTitle">Elige tu pieza.</h1>
         </div>
         <p>Busca, filtra y agrega al carrito. El detalle se abre solo cuando necesitas talla, color o cantidad.</p>
@@ -62,7 +62,7 @@
       <div class="product-grid" id="productGrid" aria-live="polite"></div>
       <div class="empty-state" id="emptyState" hidden>
         <strong>No encontramos productos con ese filtro.</strong>
-        <span>Prueba otra categoria o borra la busqueda.</span>
+        <span>Prueba otra categoría o borra la búsqueda.</span>
       </div>
     </section>
   </main>
@@ -99,7 +99,7 @@
           </div>
           <div class="cart-lines" id="cartLines"></div>
           <div class="cart-empty" id="cartEmpty">
-            <strong>Tu carrito esta vacio.</strong>
+            <strong>Tu carrito está vacío.</strong>
             <span>Agrega una pieza para preparar el pedido.</span>
           </div>
           <div class="cart-review-footer" id="cartReviewFooter" hidden>
@@ -107,8 +107,8 @@
               <span>Total</span>
               <strong id="cartTotal">$0.00</strong>
             </div>
-            <button class="button primary" id="continueCheckoutButton" type="button">Ya termine de elegir</button>
-            <small>Despues completas entrega y datos para confirmar el pedido.</small>
+            <button class="button primary" id="continueCheckoutButton" type="button">Ya terminé de elegir</button>
+            <small>Después completas entrega y datos para confirmar el pedido.</small>
           </div>
         </section>
 
@@ -117,7 +117,7 @@
             <div class="step-heading">
               <span>02</span>
               <div>
-                <strong>Confirmacion</strong>
+                <strong>Confirmación</strong>
                 <small>Si falta algo, vuelve al pedido y ajusta cantidades.</small>
               </div>
             </div>
@@ -132,15 +132,15 @@
               <span>03</span>
               <div>
                 <strong>Entrega</strong>
-                <small id="checkoutModeText">Envio a domicilio o retiro coordinado.</small>
+                <small id="checkoutModeText">Envío a domicilio o retiro coordinado.</small>
               </div>
             </div>
-            <div class="delivery-options" role="radiogroup" aria-label="Metodo de entrega">
+            <div class="delivery-options" role="radiogroup" aria-label="Método de entrega">
               <label class="delivery-option">
                 <input name="delivery_method" type="radio" value="delivery" checked>
                 <span>
-                  <strong>Envio</strong>
-                  <small>La direccion queda guardada en el pedido.</small>
+                  <strong>Envío</strong>
+                  <small>La dirección queda guardada en el pedido.</small>
                 </span>
               </label>
               <label class="delivery-option">
@@ -151,7 +151,7 @@
                 </span>
               </label>
             </div>
-            <p class="pickup-note" id="pickupWhatsappNote" hidden>Al confirmar un retiro se abrira WhatsApp para coordinar hora y punto de entrega.</p>
+            <p class="pickup-note" id="pickupWhatsappNote" hidden>Al confirmar un retiro se abrirá WhatsApp para coordinar hora y punto de entrega.</p>
           </section>
 
           <section class="checkout-step">
@@ -168,20 +168,20 @@
                 <input name="name" autocomplete="name" required placeholder="Nombre de quien recibe">
               </label>
               <label>
-                Telefono
-                <input name="phone" autocomplete="tel" inputmode="tel" required placeholder="Tu telefono">
+                Teléfono
+                <input name="phone" autocomplete="tel" inputmode="tel" required placeholder="Tu teléfono">
               </label>
               <label>
                 Ciudad
                 <input name="city" autocomplete="address-level2" value="Guayaquil">
               </label>
               <label>
-                Correo electronico
+                Correo electrónico
                 <input name="email" type="email" autocomplete="email" required placeholder="Para confirmar tu pedido">
               </label>
               <label class="full" id="deliveryAddressWrap">
-                Direccion o referencia
-                <input name="address" autocomplete="street-address" required placeholder="Sector, referencia o direccion">
+                Dirección o referencia
+                <input name="address" autocomplete="street-address" required placeholder="Sector, referencia o dirección">
               </label>
               <label class="full">
                 Nota
@@ -221,7 +221,7 @@
       <span>Moda importada, seleccionada con paciencia y carino.</span>
     </div>
     <a class="romalinks" href="https://romalinks.com" target="_blank" rel="noreferrer">
-      <img src="assets/romalinks-logo.png" alt="Romalinks">
+      <span class="romalinks-mark" aria-hidden="true">R</span>
       <span>Desarrollado por Romalinks</span>
     </a>
   </footer>

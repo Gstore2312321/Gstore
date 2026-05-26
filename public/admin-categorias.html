@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
   <meta name="description" content="Panel privado de GStore para gestionar categorías.">
-  <title>Categorías | GStore Admin</title>
+  <title>Categorías | Panel GStore</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
         <div class="login-brand-panel">
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
-          <h1>GStore Admin</h1>
+          <h1>Panel GStore</h1>
           <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
@@ -31,7 +31,7 @@
         <div class="login-form-panel">
           <div>
             <span class="eyebrow">Acceso</span>
-            <h2>Entrar al backend</h2>
+            <h2>Entrar al panel</h2>
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
@@ -50,7 +50,7 @@
 
     <section class="dashboard" id="dashboardView" hidden>
       <aside class="admin-sidebar">
-        <a class="brand" href="admin.html" aria-label="Panel GStore">
+        <a class="brand" href="/admin" aria-label="Panel GStore">
           <span class="brand-mark">G</span>
           <span>
             <strong>GStore</strong>
@@ -58,11 +58,11 @@
           </span>
         </a>
         <nav aria-label="Navegación del panel">
-          <a href="admin.html" data-nav-page="dashboard">Resumen</a>
-          <a href="admin-reportes.html" data-nav-page="reports">Reportes</a>
-          <a href="admin-productos.html" data-nav-page="products">Productos</a>
-          <a href="admin-categorias.html" data-nav-page="categories">Categorías</a>
-          <a href="admin-pedidos.html" data-nav-page="orders">Pedidos</a>
+          <a href="/admin" data-nav-page="dashboard">Resumen</a>
+          <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
+          <a href="/admin-productos" data-nav-page="products">Productos</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
+          <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
         </nav>
         <div class="sidebar-status">
           <span>Operación</span>
@@ -79,7 +79,7 @@
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="newCategoryButton" type="button">Nueva categoría</button>
-            <a class="button ghost" href="admin-productos.html">Ver productos</a>
+            <a class="button ghost" href="/admin-productos">Ver productos</a>
           </div>
         </header>
 
@@ -135,10 +135,6 @@
               <label>
                 Nombre
                 <input name="name" required placeholder="Ropa, zapatos, carteras...">
-              </label>
-              <label>
-                Descripción
-                <input name="description" placeholder="Descripción breve">
               </label>
               <label class="check-inline"><input name="active" type="checkbox" checked> Activa</label>
             </div>

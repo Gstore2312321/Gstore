@@ -11,6 +11,7 @@ const mysql = require("mysql2/promise");
 
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
+const IMPORTED_PRODUCTS_FILE = path.join(ROOT_DIR, "data", "imported-products.json");
 const IS_VERCEL = Boolean(process.env.VERCEL);
 const RAILWAY_VOLUME_PATH = process.env.RAILWAY_VOLUME_MOUNT_PATH ? path.resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH) : "";
 const IS_RAILWAY = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || RAILWAY_VOLUME_PATH);
@@ -45,6 +46,16 @@ const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
 let db;
 
+const CLEAN_PAGE_PATHS = new Map([
+  ["/index.html", "/"],
+  ["/success.html", "/success"],
+  ["/admin.html", "/admin"],
+  ["/admin-reportes.html", "/admin-reportes"],
+  ["/admin-productos.html", "/admin-productos"],
+  ["/admin-categorias.html", "/admin-categorias"],
+  ["/admin-pedidos.html", "/admin-pedidos"]
+]);
+
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -72,7 +83,14 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-app.get(/^\/admin(?:-[a-z]+)?\.html$/, (req, res, next) => {
+app.get(Array.from(CLEAN_PAGE_PATHS.keys()), (req, res) => {
+  const cleanPath = CLEAN_PAGE_PATHS.get(req.path);
+  const queryIndex = req.originalUrl.indexOf("?");
+  const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
+  res.redirect(301, `${cleanPath}${query}`);
+});
+
+app.get(/^\/admin(?:-[a-z]+)?$/, (req, res, next) => {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   next();
 });
@@ -179,9 +197,13 @@ function applySecurityHeaders(req, res) {
     "form-action 'self'",
     "upgrade-insecure-requests"
   ].join("; "));
-  if (req.path.startsWith("/api/admin/") || /^\/admin(?:-[a-z]+)?\.html$/.test(req.path)) {
+  if (req.path.startsWith("/api/admin/") || isAdminPagePath(req.path)) {
     res.setHeader("Cache-Control", "no-store");
   }
+}
+
+function isAdminPagePath(pathname) {
+  return /^\/admin(?:-[a-z]+)?(?:\.html)?$/.test(pathname);
 }
 
 function createRateLimiter({ windowMs, max, message }) {
@@ -748,6 +770,77 @@ async function ensureUniqueSlug(table, source, currentId = null) {
   }
 }
 
+const SEED_CATEGORIES = [
+  ["Ropa", "Prendas importadas para looks de diario y salidas especiales."],
+  ["Zapatos", "Pares seleccionados para combinar con pocas piezas y verse bien."],
+  ["Carteras", "Carteras y bolsos faciles de usar, cuidar y regalar."],
+  ["Accesorios", "Detalles pequenos que terminan el outfit."],
+  ["Belleza", "Perfumes, cremas y sets personales listos para vitrina."]
+];
+
+function loadImportedProducts() {
+  try {
+    const raw = fs.readFileSync(IMPORTED_PRODUCTS_FILE, "utf8");
+    const products = JSON.parse(raw);
+    return Array.isArray(products) ? products : [];
+  } catch {
+    return [];
+  }
+}
+
+async function ensureSeedCategories() {
+  for (const [name, description] of SEED_CATEGORIES) {
+    const slug = slugify(name);
+    const existing = await dbGet("SELECT id FROM categories WHERE slug = ? OR name = ?", [slug, name]);
+    if (existing) continue;
+    await dbRun(`
+      INSERT INTO categories (name, slug, description, active, created_at, updated_at)
+      VALUES (?, ?, ?, 1, ?, ?)
+    `, [name, slug, description, now(), now()]);
+  }
+}
+
+async function seedProductList(products) {
+  for (const product of products) {
+    const sku = cleanText(product.sku);
+    const name = cleanText(product.name);
+    const image = cleanText(product.image);
+    const categorySlug = slugify(product.category);
+    if (!sku || !name || !image || !categorySlug) continue;
+
+    const existing = await dbGet("SELECT id FROM products WHERE sku = ?", [sku]);
+    if (existing) continue;
+
+    const category = await dbGet("SELECT id FROM categories WHERE slug = ?", [categorySlug]);
+    await dbRun(`
+      INSERT INTO products (
+        category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+        sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      category ? category.id : null,
+      name,
+      await ensureUniqueSlug("products", name),
+      cleanText(product.description),
+      money(product.price),
+      money(product.costPrice),
+      money(product.comparePrice),
+      Number.isInteger(Number(product.stock)) ? Number(product.stock) : 0,
+      sku,
+      image,
+      JSON.stringify(Array.isArray(product.sizes) ? product.sizes : []),
+      JSON.stringify(Array.isArray(product.colors) ? product.colors : []),
+      normalizePromoType(product.promoType),
+      promoLabelFor(product.promoType, product.promoLabel),
+      boolToInt(product.active ?? true),
+      boolToInt(product.featured),
+      now(),
+      now()
+    ]);
+  }
+}
+
 async function seedData() {
   const categoryCount = await dbGet("SELECT COUNT(*) AS count FROM categories");
   if (Number(categoryCount?.count || 0) === 0) {
@@ -764,8 +857,11 @@ async function seedData() {
     }
   }
 
+  await ensureSeedCategories();
+
+  const importedProducts = loadImportedProducts();
   const productCount = await dbGet("SELECT COUNT(*) AS count FROM products");
-  if (Number(productCount?.count || 0) === 0) {
+  if (Number(productCount?.count || 0) === 0 && importedProducts.length === 0) {
     const products = [
       {
         category: "ropa",
@@ -878,6 +974,7 @@ async function seedData() {
       ]);
     }
   }
+  await seedProductList(importedProducts);
 }
 
 async function getProducts({ includeInactive = false, includePrivate = false } = {}) {
@@ -1327,8 +1424,8 @@ async function createPaypalOrder(order) {
         brand_name: STORE_NAME,
         user_action: "PAY_NOW",
         shipping_preference: "NO_SHIPPING",
-        return_url: `${PUBLIC_BASE_URL}/success.html?paypal=1&order=${encodeURIComponent(order.order_code)}`,
-        cancel_url: `${PUBLIC_BASE_URL}/success.html?cancelled=1&order=${encodeURIComponent(order.order_code)}`
+        return_url: `${PUBLIC_BASE_URL}/success?paypal=1&order=${encodeURIComponent(order.order_code)}`,
+        cancel_url: `${PUBLIC_BASE_URL}/success?cancelled=1&order=${encodeURIComponent(order.order_code)}`
       }
     })
   });
@@ -1743,7 +1840,7 @@ app.post("/api/admin/password-reset/request", passwordResetLimiter, asyncHandler
     const token = crypto.randomBytes(32).toString("base64url");
     const tokenHash = hashResetToken(token);
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-    const resetUrl = `${PUBLIC_BASE_URL}/admin.html?reset=${encodeURIComponent(token)}`;
+    const resetUrl = `${PUBLIC_BASE_URL}/admin?reset=${encodeURIComponent(token)}`;
 
     await dbRun(`
       INSERT INTO password_reset_tokens (email, token_hash, expires_at, ip_address, created_at)
@@ -2045,21 +2142,54 @@ app.delete("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, r
   res.json({ ok: true });
 }));
 
+async function validateAdminProductInput(body) {
+  const name = cleanText(body.name);
+  if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
+
+  const categoryId = Number(body.category_id || 0);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    throw httpError(400, "Selecciona una categoría para el producto.");
+  }
+  const category = await dbGet("SELECT id FROM categories WHERE id = ?", [categoryId]);
+  if (!category) throw httpError(400, "La categoría seleccionada no existe.");
+
+  const price = money(body.price);
+  if (!Number.isFinite(price) || price <= 0) {
+    throw httpError(400, "El precio de venta debe ser mayor a 0.");
+  }
+  if (price > 99999) throw httpError(400, "El precio de venta supera el límite permitido.");
+
+  const costPrice = money(body.cost_price);
+  if (!Number.isFinite(costPrice) || costPrice < 0) {
+    throw httpError(400, "El precio de compra no puede ser negativo.");
+  }
+
+  const stock = Number(body.stock);
+  if (!Number.isInteger(stock) || stock < 0 || stock > 999) {
+    throw httpError(400, "El stock debe ser un número entero entre 0 y 999.");
+  }
+
+  const imageUrl = cleanText(body.image_url);
+  if (!imageUrl || imageUrl.includes("product-placeholder.svg")) {
+    throw httpError(400, "Sube una foto real del producto.");
+  }
+
+  const promoType = normalizePromoType(body.promo_type);
+  const comparePrice = promoType === "discount" ? money(body.compare_price) : 0;
+  if (promoType === "discount" && (!Number.isFinite(comparePrice) || comparePrice <= price)) {
+    throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
+  }
+
+  return { name, categoryId, price, costPrice, comparePrice, stock, imageUrl, promoType };
+}
+
 app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
   res.json({ products: await getProducts({ includeInactive: true, includePrivate: true }) });
 }));
 
 app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
-  const name = cleanText(req.body.name);
-  if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
+  const { name, categoryId, price, costPrice, comparePrice, stock, imageUrl, promoType } = await validateAdminProductInput(req.body);
   const slug = await ensureUniqueSlug("products", name);
-  const promoType = normalizePromoType(req.body.promo_type);
-  const price = money(req.body.price);
-  const costPrice = money(req.body.cost_price);
-  const comparePrice = promoType === "discount" ? money(req.body.compare_price) : 0;
-  if (promoType === "discount" && comparePrice <= price) {
-    throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
-  }
   const result = await dbRun(`
     INSERT INTO products (
       category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
@@ -2067,16 +2197,16 @@ app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
-    req.body.category_id ? Number(req.body.category_id) : null,
+    categoryId,
     name,
     slug,
     cleanText(req.body.description),
     price,
     costPrice,
     comparePrice,
-    Math.max(0, Number(req.body.stock || 0)),
+    stock,
     cleanText(req.body.sku),
-    cleanText(req.body.image_url || "/assets/product-placeholder.svg"),
+    imageUrl,
     JSON.stringify(incomingList(req.body.sizes)),
     JSON.stringify(incomingList(req.body.colors)),
     promoType,
@@ -2101,32 +2231,24 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
   const id = Number(req.params.id);
   const current = await getProductById(id);
   if (!current) return next(httpError(404, "Producto no encontrado."));
-  const name = cleanText(req.body.name);
-  if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
+  const { name, categoryId, price, costPrice, comparePrice, stock, imageUrl, promoType } = await validateAdminProductInput(req.body);
   const slug = await ensureUniqueSlug("products", name, id);
-  const promoType = normalizePromoType(req.body.promo_type);
-  const price = money(req.body.price);
-  const costPrice = money(req.body.cost_price);
-  const comparePrice = promoType === "discount" ? money(req.body.compare_price) : 0;
-  if (promoType === "discount" && comparePrice <= price) {
-    throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
-  }
   await dbRun(`
     UPDATE products
     SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
         image_url = ?, sizes_json = ?, colors_json = ?, promo_type = ?, promo_label = ?, active = ?, featured = ?, updated_at = ?
     WHERE id = ?
   `, [
-    req.body.category_id ? Number(req.body.category_id) : null,
+    categoryId,
     name,
     slug,
     cleanText(req.body.description),
     price,
     costPrice,
     comparePrice,
-    Math.max(0, Number(req.body.stock || 0)),
+    stock,
     cleanText(req.body.sku),
-    cleanText(req.body.image_url || "/assets/product-placeholder.svg"),
+    imageUrl,
     JSON.stringify(incomingList(req.body.sizes)),
     JSON.stringify(incomingList(req.body.colors)),
     promoType,
@@ -2277,7 +2399,7 @@ if (require.main === module) {
       app.listen(PORT, "0.0.0.0", () => {
         console.log(`${STORE_NAME} listo en 0.0.0.0:${PORT}`);
         console.log(`Tienda publica: ${PUBLIC_BASE_URL}`);
-        console.log(`Panel protegido: ${PUBLIC_BASE_URL}/admin.html`);
+        console.log(`Panel protegido: ${PUBLIC_BASE_URL}/admin`);
       });
     })
     .catch((error) => {

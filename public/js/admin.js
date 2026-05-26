@@ -17,7 +17,8 @@ const adminState = {
     sizes: [],
     colors: []
   },
-  pendingConfirm: null
+  pendingConfirm: null,
+  productValidationStarted: false
 };
 
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" : "";
@@ -54,6 +55,7 @@ const adminEls = {
   insightLatestOrderTitle: document.querySelector("#insightLatestOrderTitle"),
   insightLatestOrder: document.querySelector("#insightLatestOrder"),
   productForm: document.querySelector("#productForm"),
+  productFormGuide: document.querySelector("#productFormGuide"),
   productMessage: document.querySelector("#productMessage"),
   productCategorySelect: document.querySelector("#productCategorySelect"),
   productsTable: document.querySelector("#productsTable"),
@@ -177,6 +179,12 @@ function bindAdminEvents() {
       if (value) setProductPreview(value);
     });
     on(adminEls.productForm.elements.has_discount, "change", renderDiscountState);
+    on(adminEls.productForm, "input", () => {
+      if (adminState.productValidationStarted) validateProductForm({ focus: false });
+    });
+    on(adminEls.productForm, "change", () => {
+      if (adminState.productValidationStarted) validateProductForm({ focus: false });
+    });
   }
 
   on(adminEls.confirmCancel, "click", () => settleConfirm(false));
@@ -939,7 +947,6 @@ function renderCategories() {
     <article class="category-admin-item">
       <div>
         <h3>${escapeHtml(category.name)}</h3>
-        <p>${escapeHtml(category.description || "Sin descripción")}</p>
       </div>
       <div class="row-actions">
         <span class="status-pill ${category.active ? "" : "off"}">${category.active ? "Activa" : "Inactiva"}</span>
@@ -970,7 +977,7 @@ function renderProductsTable() {
     <tr class="product-admin-card">
       <td data-label="Producto">
         <div class="table-product">
-          <img src="${escapeAttr(assetUrl(product.image_url))}" alt="${escapeAttr(product.name)}">
+          <img ${imageAttrs(product.image_url, { width: 180, sizes: "68px" })} alt="${escapeAttr(product.name)}">
           <div>
             <strong>${escapeHtml(product.name)}</strong>
             <span>${escapeHtml(product.sku || "Sin SKU")}</span>
@@ -1203,7 +1210,7 @@ function orderNextAction(order) {
 
 function openProductDrawer(id) {
   if (!adminEls.productDrawer || !adminEls.productForm) {
-    window.location.href = "admin-productos.html";
+    window.location.href = pagePath("admin-productos");
     return;
   }
   const product = id ? adminState.products.find((item) => item.id === id) : null;
@@ -1225,7 +1232,7 @@ function openProductDrawer(id) {
     setProductOptions("colors", product.colors);
     form.elements.promo_type.value = product.promo_type || "none";
     form.elements.promo_label.value = product.promo_label || "";
-    form.elements.description.value = product.description || "";
+    if (form.elements.description) form.elements.description.value = product.description || "";
     form.elements.active.checked = Boolean(product.active);
     form.elements.featured.checked = Boolean(product.featured);
     renderDiscountState();
@@ -1234,9 +1241,12 @@ function openProductDrawer(id) {
     setText(adminEls.productDrawerTitle, product.name);
   } else {
     setText(adminEls.productDrawerKicker, "Nuevo producto");
-    setText(adminEls.productDrawerTitle, "Agregar mercadería");
+    setText(adminEls.productDrawerTitle, "Agregar producto");
   }
 
+  adminState.productValidationStarted = false;
+  clearProductValidation();
+  updateProductGuide();
   openDrawer(adminEls.productDrawer, adminEls.productForm.elements.name);
 }
 
@@ -1259,6 +1269,9 @@ function resetProductForm(options = {}) {
   setProductOptions("sizes", []);
   setProductOptions("colors", []);
   setProductPreview("/assets/product-placeholder.svg");
+  adminState.productValidationStarted = false;
+  clearProductValidation();
+  updateProductGuide();
   if (!options.silent) setMessage(adminEls.productMessage, "");
 }
 
@@ -1274,12 +1287,139 @@ function renderDiscountState() {
     adminEls.productForm.elements.promo_type.disabled = isDiscount;
     if (isDiscount) adminEls.productForm.elements.promo_type.value = "none";
   }
+  if (adminState.productValidationStarted) validateProductForm({ focus: false });
+}
+
+function validateProductForm({ focus = false } = {}) {
+  const form = adminEls.productForm;
+  if (!form) return { ok: true, errors: [] };
+  clearProductValidation();
+
+  const errors = [];
+  const addError = (name, message) => {
+    errors.push({ name, message });
+    setProductFieldError(name, message);
+  };
+
+  const name = String(form.elements.name?.value || "").trim();
+  const categoryId = String(form.elements.category_id?.value || "").trim();
+  const priceRaw = String(form.elements.price?.value || "").trim();
+  const costRaw = String(form.elements.cost_price?.value || "").trim();
+  const stockRaw = String(form.elements.stock?.value || "").trim();
+  const compareRaw = String(form.elements.compare_price?.value || "").trim();
+  const salePrice = Number(priceRaw);
+  const comparePrice = Number(compareRaw);
+  const stock = Number(stockRaw);
+  const imageFile = form.elements.imageFile?.files?.[0];
+  const imageUrl = String(form.elements.image_url?.value || "").trim();
+
+  if (name.length < 2) addError("name", "Escribe el nombre del producto.");
+  if (!adminState.categories.length) {
+    addError("category_id", "Crea una categoría antes de guardar.");
+  } else if (!categoryId) {
+    addError("category_id", "Selecciona una categoría.");
+  }
+  if (!priceRaw || !Number.isFinite(salePrice) || salePrice <= 0) {
+    addError("price", "Escribe un precio de venta mayor a 0.");
+  } else if (salePrice > 99999) {
+    addError("price", "Usa un precio menor a 99,999.");
+  }
+  if (costRaw && (!Number.isFinite(Number(costRaw)) || Number(costRaw) < 0)) {
+    addError("cost_price", "El costo privado no puede ser negativo.");
+  }
+  if (stockRaw === "" || !Number.isFinite(stock) || stock < 0 || !Number.isInteger(stock)) {
+    addError("stock", "Escribe un stock entero: 0, 1, 2...");
+  } else if (stock > 999) {
+    addError("stock", "Usa un stock menor a 1,000.");
+  }
+
+  const hasProductImage = Boolean(imageFile || (imageUrl && !imageUrl.includes("product-placeholder.svg")));
+  if (!hasProductImage) {
+    addError("image", "Sube una foto del producto.");
+  }
+  if (imageFile && !["image/jpeg", "image/png", "image/webp"].includes(imageFile.type)) {
+    addError("image", "Usa una imagen JPG, PNG o WebP.");
+  }
+  if (imageFile && imageFile.size > 8 * 1024 * 1024) {
+    addError("image", "La imagen debe pesar máximo 8 MB.");
+  }
+
+  if (form.elements.has_discount?.checked) {
+    if (!compareRaw || !Number.isFinite(comparePrice) || comparePrice <= salePrice) {
+      addError("compare_price", "El precio anterior debe ser mayor al precio de venta.");
+    }
+  }
+
+  updateProductGuide(errors);
+
+  if (focus && errors.length) {
+    focusProductField(errors[0].name);
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+function clearProductValidation() {
+  const form = adminEls.productForm;
+  if (!form) return;
+  form.querySelectorAll(".field-has-error").forEach((element) => element.classList.remove("field-has-error"));
+  form.querySelectorAll(".field-error").forEach((element) => {
+    element.textContent = "";
+  });
+  form.querySelectorAll("[aria-invalid='true']").forEach((element) => element.removeAttribute("aria-invalid"));
+}
+
+function setProductFieldError(name, message) {
+  const form = adminEls.productForm;
+  if (!form) return;
+  const wrap = form.querySelector(`[data-field-wrap="${name}"]`);
+  wrap?.classList.add("field-has-error");
+  const error = form.querySelector(`[data-error-for="${name}"]`);
+  if (error) error.textContent = message;
+  const field = name === "image" ? form.elements.imageFile : form.elements[name];
+  field?.setAttribute("aria-invalid", "true");
+}
+
+function focusProductField(name) {
+  const form = adminEls.productForm;
+  if (!form) return;
+  const wrap = form.querySelector(`[data-field-wrap="${name}"]`);
+  const field = name === "image" ? form.elements.imageFile : form.elements[name];
+  wrap?.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  setTimeout(() => field?.focus({ preventScroll: true }), 160);
+}
+
+function updateProductGuide(errors = []) {
+  if (!adminEls.productFormGuide) return;
+  const title = adminEls.productFormGuide.querySelector("strong");
+  const copy = adminEls.productFormGuide.querySelector("span");
+  adminEls.productFormGuide.classList.toggle("is-error", errors.length > 0);
+  adminEls.productFormGuide.classList.toggle("is-ready", adminState.productValidationStarted && errors.length === 0);
+
+  if (errors.length) {
+    setText(title, `Faltan ${errors.length} dato${errors.length === 1 ? "" : "s"}`);
+    setText(copy, errors.slice(0, 3).map((error) => error.message).join(" "));
+    return;
+  }
+  if (adminState.productValidationStarted) {
+    setText(title, "Listo para guardar");
+    setText(copy, "La ficha tiene los datos importantes completos.");
+    return;
+  }
+  setText(title, "Completa lo básico");
+  setText(copy, "Nombre, categoría, precio, stock e imagen.");
 }
 
 async function saveProduct(event) {
   event.preventDefault();
   const form = adminEls.productForm;
   const submitButton = form.querySelector('button[type="submit"]');
+  adminState.productValidationStarted = true;
+  const validation = validateProductForm({ focus: true });
+  if (!validation.ok) {
+    setMessage(adminEls.productMessage, "Completa los campos marcados antes de guardar.", true);
+    return;
+  }
   setMessage(adminEls.productMessage, "Guardando producto...");
   setButtonLoading(submitButton, true);
   let savedProductId = "";
@@ -1325,7 +1465,7 @@ async function saveProduct(event) {
       colors: formData.get("colors"),
       promo_type: hasDiscount ? "discount" : formData.get("promo_type"),
       promo_label: formData.get("promo_label"),
-      description: formData.get("description"),
+      description: formData.get("description") || "",
       active: form.elements.active.checked,
       featured: form.elements.featured.checked
     };
@@ -1377,7 +1517,7 @@ async function removeProduct(id) {
 
 function openCategoryDrawer(id) {
   if (!adminEls.categoryDrawer || !adminEls.categoryForm) {
-    window.location.href = "admin-categorias.html";
+    window.location.href = pagePath("admin-categorias");
     return;
   }
   const category = id ? adminState.categories.find((item) => item.id === id) : null;
@@ -1387,7 +1527,7 @@ function openCategoryDrawer(id) {
     const form = adminEls.categoryForm;
     form.elements.id.value = category.id;
     form.elements.name.value = category.name;
-    form.elements.description.value = category.description || "";
+    if (form.elements.description) form.elements.description.value = category.description || "";
     form.elements.active.checked = Boolean(category.active);
     setText(adminEls.categoryDrawerKicker, "Editar categoría");
     setText(adminEls.categoryDrawerTitle, category.name);
@@ -1422,7 +1562,7 @@ async function saveCategory(event) {
   try {
     const payload = {
       name: data.get("name"),
-      description: data.get("description"),
+      description: data.get("description") || "",
       active: form.elements.active.checked
     };
     const id = data.get("id");
@@ -1509,11 +1649,12 @@ function previewSelectedImage() {
   if (!file) return;
   const objectUrl = URL.createObjectURL(file);
   setProductPreview(objectUrl, true);
+  if (adminState.productValidationStarted) validateProductForm({ focus: false });
 }
 
 function setProductPreview(src, revokeLater = false) {
   if (!adminEls.productImagePreview) return;
-  adminEls.productImagePreview.src = assetUrl(src || "/assets/product-placeholder.svg");
+  adminEls.productImagePreview.src = optimizedImageUrl(src || "/assets/product-placeholder.svg", 520);
   if (revokeLater) {
     adminEls.productImagePreview.onload = () => URL.revokeObjectURL(src);
   }
@@ -1683,6 +1824,47 @@ function assetUrl(value) {
   const url = String(value || "");
   if (window.location.protocol === "file:" && url.startsWith("/")) return `${API_BASE}${url}`;
   return url;
+}
+
+function pagePath(name) {
+  return window.location.protocol === "file:" ? `${name}.html` : `/${name}`;
+}
+
+function isCloudinaryImage(url) {
+  return /res\.cloudinary\.com\/.+\/image\/upload\//.test(url);
+}
+
+function optimizedImageUrl(value, width = 420) {
+  const url = assetUrl(value);
+  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return url;
+  if (url.includes("/image/upload/f_auto")) return url;
+  const safeWidth = Math.max(96, Math.min(1400, Number(width) || 420));
+  return url.replace("/image/upload/", `/image/upload/f_auto,q_auto:eco,c_limit,w_${safeWidth}/`);
+}
+
+function imageSrcset(value, widths = [120, 180, 280, 420]) {
+  const url = assetUrl(value);
+  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return "";
+  return widths.map((width) => `${optimizedImageUrl(url, width)} ${width}w`).join(", ");
+}
+
+function imageAttrs(value, options = {}) {
+  const {
+    width = 180,
+    sizes = "68px",
+    loading = "lazy",
+    fetchPriority = "low"
+  } = options;
+  const src = optimizedImageUrl(value, width);
+  const srcset = imageSrcset(value);
+  return [
+    `src="${escapeAttr(src)}"`,
+    srcset ? `srcset="${escapeAttr(srcset)}"` : "",
+    `sizes="${escapeAttr(sizes)}"`,
+    `loading="${escapeAttr(loading)}"`,
+    `decoding="async"`,
+    `fetchpriority="${escapeAttr(fetchPriority)}"`
+  ].filter(Boolean).join(" ");
 }
 
 function setText(element, value) {

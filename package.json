@@ -9,8 +9,11 @@
     "dev": "node server.js",
     "hash:admin": "node scripts/generate-admin-password-hash.js",
     "backup:mysql": "node scripts/backup-mysql.js",
+    "cloudinary:import": "node scripts/upload-imported-products-to-cloudinary.js",
+    "cloudinary:import:dry": "node scripts/upload-imported-products-to-cloudinary.js --dry-run",
+    "cloudinary:import:local": "powershell -ExecutionPolicy Bypass -File scripts/upload-imported-products-to-cloudinary.ps1",
     "railway:check": "node tests/railway-readiness-check.cjs",
-    "check": "node --check server.js && node --check api/index.js && node --check public/js/admin.js && node --check public/js/store.js && node --check public/js/success.js"
+    "check": "node --check server.js && node --check api/index.js && node --check public/js/admin.js && node --check public/js/store.js && node --check public/js/success.js && node --check scripts/upload-imported-products-to-cloudinary.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
