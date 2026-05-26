@@ -6,12 +6,19 @@ Para esta tienda de bajo trafico, Railway es la opcion mas simple: Express corre
 
 ## Pasos
 
+0. Antes de subir a GitHub, valida la carpeta:
+
+```bash
+npm run check
+npm run railway:check
+```
+
 1. Sube esta carpeta a GitHub.
 2. En Railway, crea un proyecto nuevo desde el repo.
 3. Agrega el plugin/servicio `MySQL` en el mismo proyecto.
 4. Railway crea variables como `MYSQL_URL`, `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD` y `MYSQLDATABASE`.
 5. Abre el servicio `Gstore` y vincula/pega las variables de MySQL si Railway no las comparte automaticamente.
-6. Railway detecta Node/Nixpacks.
+6. Railway usa `railway.json` con `RAILPACK` y arranca con `npm start`.
 7. Verifica que el start command sea `npm start`.
 8. Configura las variables de entorno del admin.
 9. Agrega tu dominio o subdominio en Railway.
@@ -47,12 +54,20 @@ CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 CLOUDINARY_FOLDER=gstore/productos
+CLOUDINARY_URL=
 
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
 RESEND_TO_EMAIL=correo-admin@tudominio.com
 RESEND_REPLY_TO_EMAIL=
 ```
+
+Cloudinary acepta dos formas:
+
+- Variables separadas: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+- O una sola variable: `CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME`.
+
+Si aparece `Invalid Signature`, casi siempre `CLOUDINARY_API_SECRET` no pertenece a la misma cuenta que el API key, se pego el API key en lugar del API secret, o la variable quedo con comillas/espacios. Entra al panel y abre `/api/admin/cloudinary/status` para ver el diagnostico privado sin exponer secretos.
 
 ## Base de datos
 

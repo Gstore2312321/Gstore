@@ -2205,6 +2205,7 @@ tbody tr:last-child td {
   --admin-gold: #bd8b26;
   --admin-gold-soft: #e7c56e;
   --admin-shadow: 0 24px 70px rgba(73, 52, 18, 0.12);
+  --font-display: var(--font-sans);
   background:
     linear-gradient(90deg, rgba(21, 17, 7, 0.035) 1px, transparent 1px),
     linear-gradient(180deg, rgba(21, 17, 7, 0.025) 1px, transparent 1px),
@@ -2219,8 +2220,8 @@ tbody tr:last-child td {
 }
 
 .login-brand-panel h1 {
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-weight: 800;
 }
 
 .login-card h2 {
@@ -2369,8 +2370,9 @@ tbody tr:last-child td {
 .dashboard-brief-copy h2,
 .reports-hero h2,
 .command-copy h2 {
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .summary-grid article,
@@ -2578,5 +2580,382 @@ tbody tr:hover {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+
+/* 2026 mobile operational polish: compact admin, visible nav, safer drawers. */
+.admin-body {
+  overflow-x: hidden;
+}
+
+.dashboard {
+  overflow-x: clip;
+}
+
+.login-form-panel input,
+.drawer-form input,
+.drawer-form textarea,
+.drawer-form select,
+.search-control input,
+.section-actions select,
+.order-actions select {
+  font-size: 16px;
+}
+
+@media (max-width: 760px) {
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.62rem;
+  }
+
+  .admin-sidebar .brand {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .admin-sidebar .brand strong {
+    font-size: 0.95rem;
+  }
+
+  .admin-sidebar .button.ghost {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0.52rem 0.68rem;
+    font-size: 0.78rem;
+  }
+
+  .admin-sidebar nav {
+    order: 3;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    width: 100%;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .admin-sidebar nav a {
+    min-width: 0;
+    min-height: 40px;
+    justify-content: center;
+    padding: 0.5rem 0.35rem;
+    text-align: center;
+    white-space: normal;
+    font-size: 0.78rem;
+    line-height: 1.05;
+  }
+
+  .admin-sidebar nav a::before {
+    display: none;
+  }
+
+  .admin-sidebar nav a:hover,
+  .admin-sidebar nav a.is-active {
+    transform: none;
+  }
+
+  .admin-content {
+    width: min(100% - 0.8rem, 720px);
+    padding-bottom: 2rem;
+  }
+
+  .admin-topbar {
+    gap: 0.72rem;
+    margin: 0.65rem 0;
+    padding: 0.85rem;
+  }
+
+  .admin-topbar h1 {
+    font-size: 2.05rem;
+    line-height: 1;
+  }
+
+  .topbar-actions .button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.65rem;
+  }
+
+  .admin-page-brief,
+  .dashboard-brief,
+  .reports-hero,
+  .admin-section,
+  .chart-panel,
+  .report-panel,
+  .summary-grid article,
+  .daily-action,
+  .decision-card,
+  .orders-overview article,
+  .category-admin-item,
+  .order-card,
+  .form-panel {
+    box-shadow: 0 12px 32px rgba(73, 52, 18, 0.07);
+  }
+
+  .admin-page-brief {
+    gap: 0.7rem;
+    padding: 0.88rem;
+  }
+
+  .admin-page-brief h2,
+  .dashboard-brief-copy h2,
+  .reports-hero h2 {
+    font-size: 1.75rem;
+    line-height: 1.04;
+  }
+
+  .admin-page-brief p,
+  .dashboard-brief-copy p,
+  .reports-hero p {
+    margin-top: 0.55rem;
+    line-height: 1.48;
+  }
+
+  .admin-brief-stack {
+    gap: 0.42rem;
+  }
+
+  .admin-brief-stack span {
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 42px;
+    padding: 0.55rem 0.65rem;
+  }
+
+  .summary-grid,
+  .dashboard-summary-grid,
+  .report-metric-grid,
+  .orders-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-grid article,
+  .report-metric-grid article,
+  .reports-hero-metrics article,
+  .orders-overview article {
+    min-height: 104px;
+    padding: 0.82rem;
+  }
+
+  .summary-grid strong,
+  .report-metric-grid strong,
+  .reports-hero-metrics strong,
+  .orders-overview strong {
+    font-size: 1.55rem;
+  }
+
+  .chart-wrap,
+  .dashboard-chart-primary .chart-wrap,
+  .dashboard-mini-chart .chart-wrap,
+  .dashboard-status-chart .chart-wrap {
+    height: 230px;
+    min-height: 230px;
+  }
+
+  .section-actions {
+    gap: 0.5rem;
+  }
+
+  .search-control,
+  .section-actions select,
+  .section-actions .button {
+    flex: 1 1 100%;
+  }
+
+  .product-admin-card {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.68rem 0.85rem;
+    padding: 0.82rem;
+    border-radius: 8px;
+  }
+
+  .product-admin-card td {
+    display: grid;
+    gap: 0.18rem;
+    align-items: start;
+    justify-content: stretch;
+    padding: 0;
+    border: 0;
+  }
+
+  .product-admin-card td::before {
+    display: block;
+    flex: none;
+    font-size: 0.66rem;
+    line-height: 1;
+  }
+
+  .product-admin-card td[data-label="Producto"],
+  .product-admin-card td[data-label="Estado"],
+  .product-admin-card td[data-label="Acciones"] {
+    grid-column: 1 / -1;
+  }
+
+  .product-admin-card td[data-label="Producto"]::before {
+    display: none;
+  }
+
+  .product-admin-card .table-product {
+    gap: 0.65rem;
+  }
+
+  .product-admin-card .table-product img {
+    width: 58px;
+    height: 68px;
+    flex-basis: 58px;
+  }
+
+  .product-admin-card .table-product strong {
+    font-size: 0.98rem;
+  }
+
+  .product-admin-card .admin-price-stack strong {
+    font-size: 1rem;
+  }
+
+  .product-admin-card .status-stack,
+  .product-admin-card .row-actions {
+    justify-content: flex-start;
+  }
+
+  .product-admin-card .row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-admin-card .small-button {
+    min-height: 40px;
+  }
+
+  .drawer-overlay {
+    align-items: flex-end;
+  }
+
+  .drawer-panel,
+  .compact-drawer {
+    width: 100%;
+    height: 94dvh;
+    max-height: 94dvh;
+    overflow: hidden;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .drawer-header,
+  .drawer-footer {
+    padding: 0.82rem;
+  }
+
+  .drawer-header h2 {
+    font-size: 1.46rem;
+    line-height: 1.05;
+  }
+
+  .icon-close {
+    min-width: 0;
+    min-height: 38px;
+    padding-inline: 0.7rem;
+  }
+
+  .drawer-body {
+    gap: 0.7rem;
+    padding: 0.75rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .form-panel {
+    gap: 0.75rem;
+    padding: 0.78rem;
+  }
+
+  .form-panel-heading {
+    gap: 0.58rem;
+  }
+
+  .form-grid,
+  .form-grid.three {
+    grid-template-columns: 1fr;
+    gap: 0.68rem;
+  }
+
+  .drawer-footer {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+  }
+
+  .drawer-footer > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .drawer-footer .button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 520px) {
+  .login-view {
+    padding: 0.65rem;
+  }
+
+  .login-brand-panel {
+    min-height: 188px;
+  }
+
+  .login-form-panel {
+    gap: 0.85rem;
+  }
+
+  .login-card h2,
+  .login-brand-panel h1 {
+    font-size: 2rem;
+  }
+
+  .admin-sidebar nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-sidebar nav a {
+    min-width: 0;
+    padding: 0.48rem 0.25rem;
+    font-size: 0.74rem;
+  }
+
+  .admin-brief-stack {
+    display: none;
+  }
+
+  .summary-grid,
+  .dashboard-summary-grid,
+  .report-metric-grid,
+  .orders-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-action-stack,
+  .reports-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-section {
+    padding: 0.82rem;
+  }
+
+  .admin-section-heading h2 {
+    font-size: 1.65rem;
+  }
+
+  .product-admin-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .drawer-footer > div {
+    grid-template-columns: 1fr;
   }
 }

@@ -9,6 +9,7 @@
     "dev": "node server.js",
     "hash:admin": "node scripts/generate-admin-password-hash.js",
     "backup:mysql": "node scripts/backup-mysql.js",
+    "railway:check": "node tests/railway-readiness-check.cjs",
     "check": "node --check server.js && node --check api/index.js && node --check public/js/admin.js && node --check public/js/store.js && node --check public/js/success.js"
   },
   "dependencies": {

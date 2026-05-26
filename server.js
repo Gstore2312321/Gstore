@@ -14,7 +14,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const IS_VERCEL = Boolean(process.env.VERCEL);
 const RAILWAY_VOLUME_PATH = process.env.RAILWAY_VOLUME_MOUNT_PATH ? path.resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH) : "";
 const IS_RAILWAY = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || RAILWAY_VOLUME_PATH);
-const IS_PRODUCTION = process.env.NODE_ENV === "production" || IS_VERCEL;
+const IS_PRODUCTION = process.env.NODE_ENV === "production" || IS_VERCEL || IS_RAILWAY;
 const UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
   : RAILWAY_VOLUME_PATH

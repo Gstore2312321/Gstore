@@ -19,6 +19,7 @@
 - Auditoria en tabla `audit_logs` para login, productos, categorias, uploads y cambios de estado.
 - Upload de imagen valida bytes reales de JPG, PNG o WebP.
 - Cloudinary o volumen persistente para uploads en produccion.
+- Diagnostico privado de Cloudinary en `/api/admin/cloudinary/status` sin exponer secretos.
 - Render dinamico con escape HTML/atributos.
 - No se exponen costo privado ni variables sensibles en APIs publicas.
 

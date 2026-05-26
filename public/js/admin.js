@@ -209,9 +209,17 @@ async function restoreSession() {
 }
 
 function markActiveNav() {
+  let activeLink = null;
   document.querySelectorAll("[data-nav-page]").forEach((link) => {
-    link.classList.toggle("is-active", link.dataset.navPage === adminState.page);
+    const isActive = link.dataset.navPage === adminState.page;
+    link.classList.toggle("is-active", isActive);
+    if (isActive) activeLink = link;
   });
+  if (activeLink && window.innerWidth < 1080) {
+    requestAnimationFrame(() => {
+      activeLink.scrollIntoView({ block: "nearest", inline: "center" });
+    });
+  }
 }
 
 function handleDocumentClick(event) {
@@ -639,7 +647,7 @@ function renderDashboardCharts(analytics) {
             color: textColor,
             boxWidth: 10,
             usePointStyle: true,
-            font: { family: "Jost", weight: "700" }
+            font: { family: "Outfit", weight: "700" }
           }
         },
         tooltip: {
@@ -827,7 +835,7 @@ function cartesianChartOptions(gridColor, textColor) {
           color: textColor,
           boxWidth: 12,
           usePointStyle: true,
-          font: { family: "Jost", weight: "700" }
+          font: { family: "Outfit", weight: "700" }
         }
       },
       tooltip: {
@@ -842,7 +850,7 @@ function cartesianChartOptions(gridColor, textColor) {
     scales: {
       x: {
         grid: { display: false },
-        ticks: { color: textColor, font: { family: "Jost", weight: "700" } }
+        ticks: { color: textColor, font: { family: "Outfit", weight: "700" } }
       },
       y: {
         beginAtZero: true,
@@ -850,7 +858,7 @@ function cartesianChartOptions(gridColor, textColor) {
         ticks: {
           color: textColor,
           callback: (value) => shortCurrency(value),
-          font: { family: "Jost", weight: "700" }
+          font: { family: "Outfit", weight: "700" }
         }
       }
     }
@@ -858,9 +866,13 @@ function cartesianChartOptions(gridColor, textColor) {
 }
 
 function horizontalCurrencyChartOptions(gridColor, textColor) {
+  const compactAxis = window.matchMedia("(max-width: 760px)").matches;
   return {
     ...cartesianChartOptions(gridColor, textColor),
     indexAxis: "y",
+    layout: {
+      padding: { left: 14, right: 6 }
+    },
     scales: {
       x: {
         beginAtZero: true,
@@ -868,14 +880,19 @@ function horizontalCurrencyChartOptions(gridColor, textColor) {
         ticks: {
           color: textColor,
           callback: (value) => shortCurrency(value),
-          font: { family: "Jost", weight: "700" }
+          font: { family: "Outfit", weight: "700" }
         }
       },
       y: {
         grid: { display: false },
         ticks: {
+          display: !compactAxis,
           color: textColor,
-          font: { family: "Jost", weight: "700" }
+          callback: function(value) {
+            const label = String(this.getLabelForValue ? this.getLabelForValue(value) : value || "");
+            return label.length > 20 ? `${label.slice(0, 18)}...` : label;
+          },
+          font: { family: "Outfit", weight: "700" }
         }
       }
     }
@@ -894,7 +911,7 @@ function doughnutReportOptions(textColor) {
           color: textColor,
           boxWidth: 10,
           usePointStyle: true,
-          font: { family: "Jost", weight: "700" }
+          font: { family: "Outfit", weight: "700" }
         }
       },
       tooltip: {
@@ -950,7 +967,7 @@ function renderProductsTable() {
   if (!adminEls.productsTable) return;
   const products = filteredProducts();
   adminEls.productsTable.innerHTML = products.map((product) => `
-    <tr>
+    <tr class="product-admin-card">
       <td data-label="Producto">
         <div class="table-product">
           <img src="${escapeAttr(assetUrl(product.image_url))}" alt="${escapeAttr(product.name)}">
@@ -1282,10 +1299,16 @@ async function saveProduct(event) {
     if (imageFile) {
       const uploadForm = new FormData();
       uploadForm.append("image", imageFile);
-      const uploaded = await adminApi("/api/admin/upload", {
-        method: "POST",
-        body: uploadForm
-      });
+      let uploaded;
+      try {
+        uploaded = await adminApi("/api/admin/upload", {
+          method: "POST",
+          body: uploadForm
+        });
+      } catch (uploadError) {
+        throw new Error(`No se pudo subir la imagen: ${uploadError.message}`);
+      }
+      if (!uploaded?.url) throw new Error("Cloudinary no devolvio una URL de imagen.");
       imageUrl = uploaded.url;
     }
 

@@ -14,7 +14,6 @@ const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
   productGrid: document.querySelector("#productGrid"),
-  promoBannerRow: document.querySelector("#promoBannerRow"),
   emptyState: document.querySelector("#emptyState"),
   searchInput: document.querySelector("#searchInput"),
   cartCount: document.querySelector("#cartCount"),
@@ -50,7 +49,6 @@ async function init() {
 
 function bindEvents() {
   document.querySelector("#openCartButton")?.addEventListener("click", openCart);
-  document.querySelector("#heroCartButton")?.addEventListener("click", openCart);
   document.querySelector(".close-cart")?.addEventListener("click", closeCart);
   document.querySelector(".close-product")?.addEventListener("click", closeProduct);
   els.drawerBackdrop?.addEventListener("click", closeDrawers);
@@ -189,7 +187,6 @@ function renderProducts() {
 
   els.productGrid.innerHTML = products.map(productCard).join("");
   els.emptyState.hidden = products.length > 0;
-  renderPromoBanners(products);
 
   if (window.gsap && !prefersReducedMotion()) {
     gsap.fromTo(".product-card", { y: 18, opacity: 0 }, {
@@ -236,34 +233,6 @@ function productCard(product) {
       </div>
     </article>
   `;
-}
-
-function renderPromoBanners(products) {
-  if (!els.promoBannerRow) return;
-  const promoProducts = products.filter((product) => getProductPromoLabel(product) || getDiscountPercent(product) > 0);
-  const selected = [
-    promoProducts.find((product) => getDiscountPercent(product) > 0),
-    promoProducts.find((product) => product.promo_type === "last_units" || product.stock <= 2),
-    promoProducts.find((product) => product.promo_type === "new_arrival")
-  ].filter(Boolean);
-
-  const unique = [...new Map(selected.concat(promoProducts).map((product) => [product.id, product])).values()].slice(0, 3);
-  els.promoBannerRow.hidden = unique.length === 0;
-  els.promoBannerRow.innerHTML = unique.map((product) => {
-    const discount = getDiscountPercent(product);
-    const label = getProductPromoLabel(product);
-    const heading = discount > 0 ? `${discount}% menos` : label;
-    const copy = product.promo_type === "last_units" || product.stock <= 2
-      ? `Quedan ${product.stock} disponible${product.stock === 1 ? "" : "s"}.`
-      : "Disponible por tiempo limitado.";
-    return `
-      <button class="promo-banner" data-open-product="${product.id}" type="button">
-        <span>${escapeHtml(label || "Promo activa")}</span>
-        <strong>${escapeHtml(heading)}</strong>
-        <small>${escapeHtml(product.name)} - ${copy}</small>
-      </button>
-    `;
-  }).join("");
 }
 
 function openProduct(productId) {
@@ -328,7 +297,7 @@ function renderProductDetail() {
   });
 
   els.productDetail.querySelector("#addDetailToCart")?.addEventListener("click", () => {
-    addToCart(product, { size: detail.size, color: detail.color }, detail.quantity);
+    addToCart(product, { size: detail.size, color: detail.color }, detail.quantity, { silent: true });
     closeProduct();
     openCart();
   });
@@ -350,7 +319,7 @@ function renderOptionGroup(label, key, values, selected) {
   `;
 }
 
-function addToCart(product, options, quantity) {
+function addToCart(product, options, quantity, settings = {}) {
   if (product.stock <= 0) {
     showToast("Ese producto está agotado.");
     return;
@@ -378,7 +347,9 @@ function addToCart(product, options, quantity) {
   saveCart();
   state.checkoutStage = "review";
   renderCart();
-  showToast(`${product.name} agregado al carrito.`);
+  if (!settings.silent) {
+    showToast(`${product.name} agregado al carrito.`);
+  }
 }
 
 function getDiscountPercent(product) {
@@ -671,8 +642,8 @@ function closeDrawer(drawer) {
 function animateInitialView() {
   if (!window.gsap || prefersReducedMotion()) return;
   gsap.fromTo("[data-animate='header']", { y: -18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" });
-  gsap.fromTo("[data-animate='hero-copy'] > *", { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.58, ease: "power3.out", stagger: 0.08 });
-  gsap.fromTo("[data-animate='hero-visual']", { y: 24, scale: 0.96, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.7, ease: "power3.out" });
+  gsap.fromTo(".catalog-heading > *", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.48, ease: "power3.out", stagger: 0.06 });
+  gsap.fromTo(".catalog-tools", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: "power3.out", delay: 0.1 });
 }
 
 function cartKey(productId, size, color) {

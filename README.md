@@ -52,6 +52,7 @@ El archivo `.env` local ya deja la tienda lista para pruebas. Para produccion, c
   - `CLOUDINARY_API_KEY`
   - `CLOUDINARY_API_SECRET`
   - `CLOUDINARY_FOLDER`
+  - `CLOUDINARY_URL` opcional si prefieres usar la URL completa
 - Credenciales de Resend:
   - `RESEND_API_KEY`
   - `RESEND_FROM_EMAIL`
@@ -65,6 +66,13 @@ El correo privado y el numero de WhatsApp viven solo en variables de entorno. No
 ## Railway
 
 Para esta tienda, Railway es la opcion recomendada con Express + MySQL. Agrega un servicio MySQL en Railway y asegúrate de que el servicio `Gstore` reciba `MYSQL_URL`.
+
+Antes de subir a GitHub o conectar Railway, corre:
+
+```bash
+npm run check
+npm run railway:check
+```
 
 Variables minimas en Railway:
 
@@ -87,6 +95,7 @@ CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
 CLOUDINARY_FOLDER=gstore/productos
+CLOUDINARY_URL=
 RESEND_API_KEY=...
 RESEND_FROM_EMAIL=GStore <pedidos@tu-dominio.com>
 RESEND_TO_EMAIL=...
@@ -95,6 +104,8 @@ PAYPAL_MODE=live
 PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
 ```
+
+Si Cloudinary muestra `Invalid Signature`, revisa que el API key y API secret sean de la misma cuenta. El panel tiene diagnostico privado en `/api/admin/cloudinary/status`; muestra valores enmascarados, carpeta y advertencias sin exponer secretos.
 
 La app crea sola las tablas `categories`, `products` y `orders` cuando arranca.
 Tambien crea `audit_logs`, `app_settings` y `password_reset_tokens`.
