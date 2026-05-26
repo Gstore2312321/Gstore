@@ -1704,11 +1704,16 @@ function openDrawer(drawer, focusTarget) {
   drawer.hidden = false;
   document.body.classList.add("drawer-open");
   const panel = drawer.querySelector(".drawer-panel");
+  if (panel) {
+    panel.style.transform = "none";
+    panel.style.opacity = "1";
+  }
   const isMobile = window.innerWidth <= 760;
   if (panel && isMobile) {
     panel.style.transform = "translate3d(0, 0, 0)";
     panel.style.opacity = "1";
   } else if (panel && window.gsap && !prefersReducedMotion()) {
+    gsap.killTweensOf(panel);
     gsap.fromTo(panel, { x: 36, opacity: 0.9 }, { x: 0, opacity: 1, duration: 0.22, ease: "power3.out" });
   }
   setTimeout(() => focusTarget?.focus(), 40);

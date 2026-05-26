@@ -1422,6 +1422,26 @@ tbody tr:last-child td {
   justify-content: flex-end;
 }
 
+.admin-body .drawer-overlay > .drawer-panel {
+  position: relative;
+  right: auto;
+  top: auto;
+  max-width: none;
+  padding: 0;
+  transform: none;
+  transition: none;
+  pointer-events: auto;
+}
+
+.admin-body .drawer-overlay > .product-drawer-v2 {
+  display: block;
+  place-items: initial;
+}
+
+.admin-body .drawer-header {
+  margin-bottom: 0;
+}
+
 .drawer-panel {
   width: min(100%, 780px);
   height: 100%;
