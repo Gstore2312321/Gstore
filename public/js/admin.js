@@ -1,7 +1,9 @@
 const ADMIN_TOKEN_KEY = "gstore_admin_token";
 const ADMIN_CSRF_KEY = "gstore_admin_csrf";
+const CHART_JS_SRC = "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js";
 localStorage.removeItem(ADMIN_TOKEN_KEY);
 sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+let chartJsPromise = null;
 
 const adminState = {
   csrfToken: sessionStorage.getItem(ADMIN_CSRF_KEY) || "",
@@ -22,6 +24,8 @@ const adminState = {
 };
 
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" : "";
+const ADMIN_IMAGE_WIDTHS = [96, 140, 180, 260];
+const ADMIN_PREVIEW_WIDTHS = [260, 360, 520, 720];
 
 const adminEls = {
   loginView: document.querySelector("#loginView"),
@@ -126,6 +130,7 @@ document.addEventListener("DOMContentLoaded", initAdmin);
 function initAdmin() {
   bindAdminEvents();
   markActiveNav();
+  prefetchAdminPages();
   if (initPasswordResetFromUrl()) return;
   restoreSession().catch(() => showLogin());
 }
@@ -196,10 +201,54 @@ function bindAdminEvents() {
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("change", handleDocumentChange);
   document.addEventListener("keydown", handleKeydown);
+  bindAdminNavigation();
 }
 
 function on(element, eventName, handler) {
   if (element) element.addEventListener(eventName, handler);
+}
+
+function bindAdminNavigation() {
+  const links = Array.from(document.querySelectorAll(".admin-sidebar nav a, .topbar-actions a, .brief-actions a, .daily-action"));
+  links.forEach((link) => {
+    const href = link.getAttribute("href") || "";
+    if (!href || href.startsWith("#") || link.target) return;
+    on(link, "pointerenter", () => prefetchAdminPage(link.href));
+    on(link, "focus", () => prefetchAdminPage(link.href));
+    on(link, "click", () => {
+      if (link.dataset.navPage === adminState.page) return;
+      document.body.classList.add("is-admin-navigating");
+      link.classList.add("is-pending");
+    });
+  });
+}
+
+function prefetchAdminPages() {
+  if (window.location.protocol === "file:") return;
+  const run = () => {
+    document.querySelectorAll(".admin-sidebar nav a, .topbar-actions a, .brief-actions a").forEach((link) => {
+      prefetchAdminPage(link.href);
+    });
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 1800 });
+  } else {
+    window.setTimeout(run, 700);
+  }
+}
+
+function prefetchAdminPage(href) {
+  try {
+    const url = new URL(href, window.location.href);
+    if (url.origin !== window.location.origin || document.querySelector(`link[data-prefetch="${url.pathname}"]`)) return;
+    const link = document.createElement("link");
+    link.rel = "prefetch";
+    link.href = url.pathname;
+    link.dataset.prefetch = url.pathname;
+    document.head.appendChild(link);
+  } catch {
+    // Ignore malformed URLs; normal navigation still works.
+  }
 }
 
 async function restoreSession() {
@@ -218,8 +267,9 @@ async function restoreSession() {
 
 function markActiveNav() {
   let activeLink = null;
+  const activePage = adminState.page === "reports" ? "dashboard" : adminState.page;
   document.querySelectorAll("[data-nav-page]").forEach((link) => {
-    const isActive = link.dataset.navPage === adminState.page;
+    const isActive = link.dataset.navPage === activePage;
     link.classList.toggle("is-active", isActive);
     if (isActive) activeLink = link;
   });
@@ -355,8 +405,8 @@ function showDashboard() {
   document.body.classList.remove("is-auth-checking");
   if (adminEls.loginView) adminEls.loginView.hidden = true;
   if (adminEls.dashboardView) adminEls.dashboardView.hidden = false;
-  if (window.gsap && !prefersReducedMotion()) {
-    gsap.fromTo(".dashboard-brief, .daily-action, .summary-grid article, .chart-panel, .decision-card, .ops-panel, .admin-section", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.32, ease: "power3.out", stagger: 0.025 });
+  if (window.gsap && !prefersReducedMotion() && !["dashboard", "reports"].includes(adminState.page)) {
+    gsap.fromTo(".admin-section", { y: 8, opacity: 0.96 }, { y: 0, opacity: 1, duration: 0.16, ease: "power2.out" });
   }
 }
 
@@ -446,13 +496,13 @@ async function confirmPasswordReset(event) {
 }
 
 async function refreshAll() {
-  await Promise.all([
-    refreshSummary(),
-    refreshAnalytics(),
-    refreshCategories(),
-    refreshProducts(),
-    refreshOrders(false)
-  ]);
+  const tasks = [];
+  if (["dashboard", "reports"].includes(adminState.page)) tasks.push(refreshSummary());
+  if (["dashboard", "reports"].includes(adminState.page)) tasks.push(refreshAnalytics());
+  if (["dashboard", "products", "categories"].includes(adminState.page)) tasks.push(refreshCategories());
+  if (["dashboard", "products"].includes(adminState.page)) tasks.push(refreshProducts());
+  if (["dashboard", "reports", "orders"].includes(adminState.page)) tasks.push(refreshOrders(false));
+  await Promise.all(tasks);
   renderInsights();
   renderReports();
 }
@@ -554,6 +604,10 @@ function renderDashboardAnalytics() {
 }
 
 function renderDashboardCharts(analytics) {
+  if (!window.Chart) {
+    loadChartJs().then(() => renderDashboardCharts(analytics)).catch(() => {});
+    return;
+  }
   const days = analytics.salesProfitByDay || [];
   const products = analytics.topProducts || [];
   const categories = analytics.categoryProfit || [];
@@ -698,6 +752,10 @@ function renderReports() {
 }
 
 function renderReportCharts(analytics) {
+  if (!window.Chart) {
+    loadChartJs().then(() => renderReportCharts(analytics)).catch(() => {});
+    return;
+  }
   const days = analytics.salesProfitByDay || [];
   const categories = analytics.categoryProfit || [];
   const statuses = analytics.orderStatus || [];
@@ -823,6 +881,26 @@ function renderReportRecentOrders() {
       </div>
     </div>
   `).join("") || emptyAdminState("Sin pedidos recientes.", "Cuando entre una compra, aparecerá en este reporte.");
+}
+
+function loadChartJs() {
+  if (window.Chart) return Promise.resolve(window.Chart);
+  if (chartJsPromise) return chartJsPromise;
+  chartJsPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${CHART_JS_SRC}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.Chart), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = CHART_JS_SRC;
+    script.async = true;
+    script.onload = () => resolve(window.Chart);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return chartJsPromise;
 }
 
 function renderChart(key, canvas, config) {
@@ -1834,17 +1912,42 @@ function isCloudinaryImage(url) {
   return /res\.cloudinary\.com\/.+\/image\/upload\//.test(url);
 }
 
-function optimizedImageUrl(value, width = 420) {
-  const url = assetUrl(value);
-  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return url;
-  if (url.includes("/image/upload/f_auto")) return url;
-  const safeWidth = Math.max(96, Math.min(1400, Number(width) || 420));
-  return url.replace("/image/upload/", `/image/upload/f_auto,q_auto:eco,c_limit,w_${safeWidth}/`);
+function localImagePath(value) {
+  const raw = String(value || "");
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, window.location.protocol === "file:" ? API_BASE : window.location.origin);
+    if (!["", window.location.host, "localhost:4321", "127.0.0.1:4321"].includes(parsed.host) && parsed.origin !== window.location.origin) return "";
+    const pathname = parsed.pathname;
+    return pathname.startsWith("/assets/products/") || pathname.startsWith("/uploads/") ? pathname : "";
+  } catch {
+    const pathname = raw.split("?")[0];
+    return pathname.startsWith("/assets/products/") || pathname.startsWith("/uploads/") ? pathname : "";
+  }
 }
 
-function imageSrcset(value, widths = [120, 180, 280, 420]) {
+function isLocalOptimizableImage(url) {
+  const path = localImagePath(url);
+  return Boolean(path && !path.endsWith(".svg"));
+}
+
+function optimizedImageUrl(value, width = 420) {
   const url = assetUrl(value);
-  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return "";
+  const safeWidth = Math.max(96, Math.min(1400, Number(width) || 420));
+  if (!url || url.endsWith(".svg")) return url;
+  if (isCloudinaryImage(url)) {
+    if (url.includes("/image/upload/f_auto")) return url;
+    return url.replace("/image/upload/", `/image/upload/f_auto,q_auto:good,dpr_auto,fl_progressive,c_limit,w_${safeWidth}/`);
+  }
+  if (isLocalOptimizableImage(url)) {
+    return `${API_BASE}/api/image?src=${encodeURIComponent(localImagePath(url))}&w=${safeWidth}`;
+  }
+  return url;
+}
+
+function imageSrcset(value, widths = ADMIN_IMAGE_WIDTHS) {
+  const url = assetUrl(value);
+  if (!url || url.endsWith(".svg") || (!isCloudinaryImage(url) && !isLocalOptimizableImage(url))) return "";
   return widths.map((width) => `${optimizedImageUrl(url, width)} ${width}w`).join(", ");
 }
 
@@ -1853,10 +1956,11 @@ function imageAttrs(value, options = {}) {
     width = 180,
     sizes = "68px",
     loading = "lazy",
-    fetchPriority = "low"
+    fetchPriority = "low",
+    widths = ADMIN_IMAGE_WIDTHS
   } = options;
   const src = optimizedImageUrl(value, width);
-  const srcset = imageSrcset(value);
+  const srcset = imageSrcset(value, widths);
   return [
     `src="${escapeAttr(src)}"`,
     srcset ? `srcset="${escapeAttr(srcset)}"` : "",

@@ -8,6 +8,7 @@ const express = require("express");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
 const mysql = require("mysql2/promise");
+const sharp = require("sharp");
 
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
@@ -43,6 +44,9 @@ const ADMIN_PASSWORD = cleanText(process.env.ADMIN_PASSWORD || "");
 const ADMIN_PASSWORD_HASH = cleanText(process.env.ADMIN_PASSWORD_HASH || "");
 const ADMIN_COOKIE_NAME = "gstore_admin_session";
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const LOCAL_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const IMAGE_WIDTHS = [96, 140, 180, 220, 260, 320, 360, 420, 520, 640, 720, 820, 960, 1100, 1200, 1400];
+const IMAGE_CACHE_DIR = path.join(UPLOAD_DIR, "_image-cache");
 const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
 let db;
 
@@ -1538,6 +1542,82 @@ function localUpload(file) {
   return { url: `/uploads/${safeName}`, provider: "local" };
 }
 
+function normalizeImageWidth(value) {
+  const requested = Math.max(96, Math.min(1400, Number(value) || 420));
+  return IMAGE_WIDTHS.reduce((closest, width) => (
+    Math.abs(width - requested) < Math.abs(closest - requested) ? width : closest
+  ), IMAGE_WIDTHS[0]);
+}
+
+function resolveOptimizableLocalImage(value) {
+  const src = cleanText(value).split("?")[0];
+  if (!src || src.includes("\0")) return null;
+
+  let baseDir = "";
+  let relativePath = "";
+  if (src.startsWith("/assets/products/")) {
+    baseDir = path.join(PUBLIC_DIR, "assets", "products");
+    relativePath = src.slice("/assets/products/".length);
+  } else if (src.startsWith("/uploads/")) {
+    baseDir = UPLOAD_DIR;
+    relativePath = src.slice("/uploads/".length);
+    if (relativePath.startsWith("_image-cache/")) return null;
+  } else {
+    return null;
+  }
+
+  const extension = path.extname(relativePath).toLowerCase();
+  if (!relativePath || !LOCAL_IMAGE_EXTENSIONS.has(extension)) return null;
+
+  const safeBase = path.resolve(baseDir);
+  const resolved = path.resolve(safeBase, relativePath);
+  if (resolved !== safeBase && !resolved.startsWith(`${safeBase}${path.sep}`)) return null;
+  return resolved;
+}
+
+async function serveOptimizedLocalImage(req, res, next) {
+  const sourcePath = resolveOptimizableLocalImage(req.query.src);
+  if (!sourcePath) return next(httpError(404, "Imagen no disponible."));
+
+  let stats;
+  try {
+    stats = await fs.promises.stat(sourcePath);
+  } catch {
+    return next(httpError(404, "Imagen no disponible."));
+  }
+  if (!stats.isFile()) return next(httpError(404, "Imagen no disponible."));
+
+  const width = normalizeImageWidth(req.query.w || req.query.width);
+  const cacheKey = crypto
+    .createHash("sha1")
+    .update(`${sourcePath}:${stats.size}:${stats.mtimeMs}:${width}`)
+    .digest("hex");
+  const cachePath = path.join(IMAGE_CACHE_DIR, `${cacheKey}-w${width}.webp`);
+
+  try {
+    await fs.promises.mkdir(IMAGE_CACHE_DIR, { recursive: true });
+    try {
+      await fs.promises.access(cachePath, fs.constants.R_OK);
+    } catch {
+      await sharp(sourcePath, { failOn: "none" })
+        .rotate()
+        .resize({ width, withoutEnlargement: true })
+        .webp({ quality: 88, effort: 4, smartSubsample: true })
+        .toFile(cachePath);
+    }
+    res.setHeader("Content-Type", "image/webp");
+    res.setHeader("Cache-Control", IS_PRODUCTION ? "public, max-age=31536000, immutable" : "public, max-age=3600");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(cachePath);
+  } catch (error) {
+    console.warn("No se pudo optimizar imagen local.", {
+      width,
+      message: cleanText(error.message || "")
+    });
+    return next(httpError(500, "No se pudo preparar la imagen."));
+  }
+}
+
 function parseCloudinaryUrl(value) {
   const text = cleanEnvValue(value);
   if (!text) return {};
@@ -1719,6 +1799,8 @@ app.get("/api/config", (req, res) => {
     paypalEnabled: paypalConfigured()
   });
 });
+
+app.get("/api/image", asyncHandler(serveOptimizedLocalImage));
 
 app.get("/api/categories", asyncHandler(async (req, res) => {
   const categories = (await dbAll("SELECT * FROM categories WHERE active = 1 ORDER BY name ASC")).map(categoryFromRow);

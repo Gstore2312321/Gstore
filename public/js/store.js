@@ -10,6 +10,9 @@ const state = {
 };
 
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" : "";
+const CARD_IMAGE_WIDTHS = [180, 260, 360, 520];
+const DETAIL_IMAGE_WIDTHS = [420, 640, 820, 1100];
+const CART_IMAGE_WIDTHS = [96, 140, 180];
 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
@@ -161,17 +164,42 @@ function isCloudinaryImage(url) {
   return /res\.cloudinary\.com\/.+\/image\/upload\//.test(url);
 }
 
-function optimizedImageUrl(value, width = 420) {
-  const url = assetUrl(value);
-  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return url;
-  if (url.includes("/image/upload/f_auto")) return url;
-  const safeWidth = Math.max(96, Math.min(1400, Number(width) || 420));
-  return url.replace("/image/upload/", `/image/upload/f_auto,q_auto:eco,c_limit,w_${safeWidth}/`);
+function isLocalOptimizableImage(url) {
+  const path = localImagePath(url);
+  return Boolean(path && !path.endsWith(".svg"));
 }
 
-function imageSrcset(value, widths = [220, 360, 520, 720]) {
+function localImagePath(value) {
+  const raw = String(value || "");
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, window.location.protocol === "file:" ? API_BASE : window.location.origin);
+    if (!["", window.location.host, "localhost:4321", "127.0.0.1:4321"].includes(parsed.host) && parsed.origin !== window.location.origin) return "";
+    const pathname = parsed.pathname;
+    return pathname.startsWith("/assets/products/") || pathname.startsWith("/uploads/") ? pathname : "";
+  } catch {
+    const pathname = raw.split("?")[0];
+    return pathname.startsWith("/assets/products/") || pathname.startsWith("/uploads/") ? pathname : "";
+  }
+}
+
+function optimizedImageUrl(value, width = 420) {
   const url = assetUrl(value);
-  if (!url || url.endsWith(".svg") || !isCloudinaryImage(url)) return "";
+  if (!url || url.endsWith(".svg")) return url;
+  const safeWidth = Math.max(96, Math.min(1400, Number(width) || 420));
+  if (isCloudinaryImage(url)) {
+    if (url.includes("/image/upload/f_auto")) return url;
+    return url.replace("/image/upload/", `/image/upload/f_auto,q_auto:good,dpr_auto,fl_progressive,c_limit,w_${safeWidth}/`);
+  }
+  if (isLocalOptimizableImage(url)) {
+    return `${API_BASE}/api/image?src=${encodeURIComponent(localImagePath(url))}&w=${safeWidth}`;
+  }
+  return url;
+}
+
+function imageSrcset(value, widths = CARD_IMAGE_WIDTHS) {
+  const url = assetUrl(value);
+  if (!url || url.endsWith(".svg") || (!isCloudinaryImage(url) && !isLocalOptimizableImage(url))) return "";
   return widths.map((width) => `${optimizedImageUrl(url, width)} ${width}w`).join(", ");
 }
 
@@ -180,10 +208,11 @@ function imageAttrs(value, options = {}) {
     width = 420,
     sizes = "(max-width: 640px) 46vw, (max-width: 1080px) 30vw, 245px",
     loading = "lazy",
-    fetchPriority = "low"
+    fetchPriority = "low",
+    widths = CARD_IMAGE_WIDTHS
   } = options;
   const src = optimizedImageUrl(value, width);
-  const srcset = imageSrcset(value);
+  const srcset = imageSrcset(value, widths);
   return [
     `src="${escapeAttr(src)}"`,
     srcset ? `srcset="${escapeAttr(srcset)}"` : "",
@@ -240,7 +269,7 @@ function renderProducts() {
   }
 }
 
-function productCard(product) {
+function productCard(product, index = 0) {
   const needsChoice = product.sizes.length > 0 || product.colors.length > 0;
   const soldOut = product.stock <= 0;
   const promoLabel = getProductPromoLabel(product);
@@ -253,7 +282,10 @@ function productCard(product) {
   return `
     <article class="product-card">
       <button class="product-media" data-open-product="${product.id}" type="button" aria-label="Ver ${escapeAttr(product.name)}">
-        <img ${imageAttrs(product.image_url)} alt="${escapeAttr(product.name)}">
+        <img ${imageAttrs(product.image_url, {
+          loading: index < 4 ? "eager" : "lazy",
+          fetchPriority: index < 2 ? "high" : "low"
+        })} alt="${escapeAttr(product.name)}">
         <span class="stock-pill">${soldOut ? "Agotado" : `${product.stock} disponible${product.stock === 1 ? "" : "s"}`}</span>
         ${promoLabel ? `<span class="promo-pill">${escapeHtml(promoLabel)}</span>` : ""}
       </button>
@@ -296,7 +328,7 @@ function renderProductDetail() {
   const soldOut = product.stock <= 0;
 
   els.productDetail.innerHTML = `
-    <img ${imageAttrs(product.image_url, { width: 820, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} alt="${escapeAttr(product.name)}">
+    <img ${imageAttrs(product.image_url, { width: 820, widths: DETAIL_IMAGE_WIDTHS, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} alt="${escapeAttr(product.name)}">
     <div class="detail-content">
       <div class="detail-copy">
         <span class="eyebrow">${escapeHtml(product.category?.name || "Producto")}</span>
@@ -431,7 +463,7 @@ function renderCart() {
 
   els.cartLines.innerHTML = state.cart.map((line) => `
     <article class="cart-line">
-      <img ${imageAttrs(line.image, { width: 180, sizes: "64px" })} alt="${escapeAttr(line.name)}">
+      <img ${imageAttrs(line.image, { width: 180, widths: CART_IMAGE_WIDTHS, sizes: "64px" })} alt="${escapeAttr(line.name)}">
       <div class="cart-line-main">
         <h3>${escapeHtml(line.name)}</h3>
         <p>${escapeHtml([line.size && `Talla ${line.size}`, line.color && `Color ${line.color}`].filter(Boolean).join(" · ") || "Producto")}</p>
