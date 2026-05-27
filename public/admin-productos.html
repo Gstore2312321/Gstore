@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-speed-lite">
-  <link rel="stylesheet" href="css/admin.css?v=20260526-speed-lite">
+  <link rel="stylesheet" href="css/styles.css?v=20260526-catalog-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260526-catalog-filters">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
@@ -160,7 +160,8 @@
         </div>
 
         <div class="drawer-body product-form-body">
-          <section class="form-panel product-core-panel">
+          <div class="product-form-main">
+            <section class="form-panel product-core-panel">
             <div class="form-panel-heading">
               <span>01</span>
               <div>
@@ -184,9 +185,9 @@
                 <input name="sku" maxlength="36" placeholder="GS-001">
               </label>
             </div>
-          </section>
+            </section>
 
-          <section class="form-panel product-commerce-panel">
+            <section class="form-panel product-commerce-panel">
             <div class="form-panel-heading">
               <span>02</span>
               <div>
@@ -235,9 +236,11 @@
                 </div>
               </div>
             </div>
-          </section>
+            </section>
+          </div>
 
-          <section class="form-panel image-panel product-image-panel" data-field-wrap="image">
+          <aside class="product-form-side">
+            <section class="form-panel image-panel product-image-panel" data-field-wrap="image">
             <div class="form-panel-heading">
               <span>03</span>
               <div>
@@ -281,9 +284,9 @@
                 <span class="field-error" id="productImageError" data-error-for="image"></span>
               </div>
             </div>
-          </section>
+            </section>
 
-          <section class="form-panel product-options-panel">
+            <section class="form-panel product-options-panel">
             <div class="form-panel-heading">
               <span>04</span>
               <div>
@@ -360,7 +363,8 @@
               <label><input name="active" type="checkbox" checked> Producto activo</label>
               <label><input name="featured" type="checkbox"> Destacado</label>
             </div>
-          </section>
+            </section>
+          </aside>
         </div>
 
         <footer class="drawer-footer">
@@ -388,6 +392,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260526-speed-lite" defer></script>
+  <script src="js/admin.js?v=20260526-catalog-filters" defer></script>
 </body>
 </html>

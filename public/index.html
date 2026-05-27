@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-speed-lite">
+  <link rel="stylesheet" href="css/styles.css?v=20260526-catalog-filters">
 </head>
 <body class="catalog-only">
   <a class="skip-link" href="#catalogo">Saltar al catálogo</a>
@@ -61,6 +61,24 @@
           <input id="searchInput" type="search" placeholder="Buscar ropa, zapatos, carteras...">
         </label>
         <div class="category-row" id="categoryFilters"></div>
+        <div class="catalog-refine" aria-label="Opciones de catálogo">
+          <label>
+            <span>Talla</span>
+            <select id="sizeFilter">
+              <option value="all">Todas</option>
+            </select>
+          </label>
+          <label>
+            <span>Ordenar</span>
+            <select id="sortFilter">
+              <option value="default">Recomendados</option>
+              <option value="price-asc">Más barato primero</option>
+              <option value="price-desc">Más caro primero</option>
+              <option value="name-asc">Nombre A-Z</option>
+            </select>
+          </label>
+          <button class="filter-reset" id="clearCatalogFilters" type="button">Limpiar</button>
+        </div>
       </div>
 
       <div class="product-grid" id="productGrid" aria-live="polite"></div>
@@ -199,7 +217,7 @@
               <span>05</span>
               <div>
                 <strong>Enviar</strong>
-                <small>El pedido queda guardado antes de abrir WhatsApp o PayPal.</small>
+                <small>El pedido queda guardado antes de confirmar.</small>
               </div>
             </div>
             <div class="checkout-actions">
@@ -209,7 +227,7 @@
               <button class="button paypal" id="paypalCheckoutButton" type="button">
                 Pagar con PayPal
               </button>
-              <p class="checkout-note" id="paypalNote">PayPal se activa cuando llenes sus variables de entorno.</p>
+              <p class="checkout-note" id="paypalNote" hidden></p>
             </div>
           </section>
         </form>
@@ -233,6 +251,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/store.js?v=20260526-speed-lite" defer></script>
+  <script src="js/store.js?v=20260526-catalog-filters" defer></script>
 </body>
 </html>

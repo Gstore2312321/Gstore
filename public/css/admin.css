@@ -3587,6 +3587,7 @@ tbody tr:hover {
 .product-form-body {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   align-content: start;
+  align-items: start;
   gap: 0.62rem;
   padding: 0.68rem;
   min-height: 0;
@@ -3597,29 +3598,45 @@ tbody tr:hover {
 
 .product-core-panel,
 .product-commerce-panel {
+  align-self: start;
+}
+
+.product-form-main,
+.product-form-side {
+  display: grid;
+  align-content: start;
+  gap: 0.62rem;
+  min-width: 0;
+}
+
+.product-form-main {
   grid-column: 1;
 }
 
-.product-image-panel {
+.product-form-side {
   grid-column: 2;
-  grid-row: 1;
-  position: static;
+}
+
+.product-core-panel,
+.product-commerce-panel,
+.product-image-panel,
+.product-options-panel {
+  grid-column: auto;
+  grid-row: auto;
   align-self: start;
 }
 
-.product-options-panel {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: start;
+.product-image-panel {
+  position: static;
 }
 
 .product-drawer-v2 .form-panel {
+  align-content: start;
   gap: 0.56rem;
   padding: 0.62rem;
   border-radius: 10px;
   background: rgba(255, 253, 248, 0.86);
   box-shadow: none;
-  contain: layout paint;
 }
 
 .product-drawer-v2 .form-panel-heading {
@@ -3807,6 +3824,11 @@ tbody tr:hover {
 
   .product-form-body {
     grid-template-columns: 1fr;
+  }
+
+  .product-form-main,
+  .product-form-side {
+    grid-column: 1;
   }
 
   .product-core-panel,

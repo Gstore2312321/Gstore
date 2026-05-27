@@ -558,6 +558,56 @@ a {
   display: none;
 }
 
+.catalog-refine {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.catalog-refine label {
+  flex: 1 1 170px;
+  display: grid;
+  gap: 0.22rem;
+  min-width: 150px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.catalog-refine select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 2.15rem 0 0.85rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 800;
+  outline: 0;
+}
+
+.filter-reset {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border: 1px solid rgba(199, 150, 47, 0.28);
+  border-radius: 999px;
+  padding: 0 0.92rem;
+  background: rgba(255, 253, 248, 0.66);
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.catalog-refine select:focus-visible,
+.filter-reset:focus-visible {
+  outline: 3px solid rgba(199, 150, 47, 0.28);
+  outline-offset: 2px;
+}
+
 .promo-banner-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
@@ -730,8 +780,11 @@ a {
 
 .product-content {
   display: grid;
+  grid-template-rows: auto minmax(2.55em, auto) minmax(3.05em, auto) minmax(32px, auto) auto;
+  align-content: start;
   gap: 0.7rem;
   padding: 1rem;
+  min-width: 0;
 }
 
 .product-meta {
@@ -763,6 +816,9 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  align-content: start;
+  min-height: 32px;
+  overflow: hidden;
 }
 
 .variant-pill {
@@ -782,6 +838,7 @@ a {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+  align-self: end;
 }
 
 .product-actions .button {
@@ -889,9 +946,11 @@ a {
   position: relative;
   right: auto;
   top: auto;
-  width: min(94vw, 780px);
+  width: min(94vw, 980px);
   height: auto;
   max-height: min(90svh, 820px);
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: clamp(0.8rem, 2vw, 1.2rem);
   border: 1px solid rgba(199, 150, 47, 0.24);
   border-radius: var(--radius);
@@ -916,9 +975,10 @@ a {
 
 .product-detail {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   align-items: start;
   gap: clamp(1rem, 3vw, 1.5rem);
+  min-width: 0;
 }
 
 .product-detail-media {
@@ -945,6 +1005,7 @@ a {
 .detail-copy {
   display: grid;
   gap: 0.85rem;
+  min-width: 0;
 }
 
 .detail-content {
@@ -953,9 +1014,10 @@ a {
 
 .product-detail h2 {
   margin: 0;
-  max-width: 11ch;
-  font-size: clamp(2rem, 4.6vw, 3.25rem);
+  max-width: 13ch;
+  font-size: clamp(2.15rem, 3.8vw, 3.65rem);
   line-height: 1.02;
+  overflow-wrap: anywhere;
 }
 
 .product-detail p {
@@ -969,18 +1031,20 @@ a {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.65rem;
+  min-width: 0;
 }
 
 .detail-stock,
 .detail-promo {
   display: inline-flex;
-  width: max-content;
+  width: fit-content;
   max-width: 100%;
   min-height: 34px;
   align-items: center;
   border-radius: 999px;
   padding: 0.42rem 0.75rem;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .detail-stock {
@@ -991,6 +1055,8 @@ a {
 .detail-promo {
   background: var(--ink);
   color: var(--gold-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .option-group {
@@ -1029,6 +1095,7 @@ a {
   grid-template-columns: 42px 56px 42px;
   align-items: center;
   width: max-content;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 999px;
   overflow: hidden;
@@ -1551,6 +1618,10 @@ a:focus-visible {
     font-size: 2rem;
   }
 
+  .detail-promo {
+    width: 100%;
+  }
+
   .product-detail p {
     line-height: 1.45;
   }
@@ -1565,6 +1636,7 @@ a:focus-visible {
   }
 
   .product-detail .button.primary {
+    width: 100%;
     min-height: 46px;
     position: sticky;
     bottom: 0.25rem;
@@ -1838,6 +1910,7 @@ body {
   align-items: start;
   justify-content: space-between;
   gap: 0.75rem;
+  min-height: 52px;
 }
 
 .product-topline > span:first-child {
@@ -1848,16 +1921,25 @@ body {
 }
 
 .product-content h3 {
+  display: -webkit-box;
+  overflow: hidden;
   margin: 0;
   max-width: 18ch;
+  min-height: 2.55em;
   font-size: 1.18rem;
   line-height: 1.08;
   text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .product-content p {
-  min-height: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 3em;
   font-size: 0.98rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .variant-pill {
@@ -1913,9 +1995,14 @@ body {
   border-radius: 8px;
 }
 
+.product-detail .button.primary {
+  width: 100%;
+  min-width: 0;
+}
+
 .product-detail h2 {
   font-family: var(--font-display);
-  max-width: 12ch;
+  max-width: 13ch;
 }
 
 @media (min-width: 920px) {
@@ -2264,6 +2351,41 @@ body {
   .category-row {
     padding: 0.05rem 0.05rem 0.28rem;
     scroll-snap-type: x proximity;
+  }
+
+  .catalog-refine {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.42rem;
+  }
+
+  .catalog-refine label {
+    min-width: 0;
+    font-size: 0.62rem;
+  }
+
+  .catalog-refine select,
+  .filter-reset {
+    min-height: 40px;
+    font-size: 0.78rem;
+  }
+
+  .filter-reset {
+    width: 40px;
+    padding: 0;
+    overflow: hidden;
+    text-indent: -999px;
+    position: relative;
+  }
+
+  .filter-reset::after {
+    content: "x";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-indent: 0;
   }
 
   .filter-chip {
@@ -2671,6 +2793,10 @@ body {
     padding-bottom: 0;
   }
 
+  .catalog-only .catalog-refine {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+  }
+
   .catalog-only .product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.55rem;
@@ -2716,12 +2842,14 @@ body {
   }
 
   .catalog-only .product-content {
+    grid-template-rows: auto minmax(2.05em, auto) minmax(44px, auto) auto;
     gap: 0.34rem;
     padding: 0.56rem;
   }
 
   .catalog-only .product-topline {
     gap: 0.18rem;
+    min-height: 42px;
   }
 
   .catalog-only .product-topline > span {
@@ -2745,6 +2873,7 @@ body {
   .catalog-only .product-content h3 {
     display: -webkit-box;
     overflow: hidden;
+    min-height: 2.16em;
     font-size: 0.88rem;
     line-height: 1.08;
     -webkit-box-orient: vertical;
@@ -2756,6 +2885,7 @@ body {
   }
 
   .catalog-only .variant-row {
+    min-height: 44px;
     max-height: 54px;
     gap: 0.22rem;
     overflow: hidden;

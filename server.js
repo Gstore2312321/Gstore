@@ -1388,7 +1388,7 @@ function buildWhatsappMessage(order) {
 
 function getWhatsappUrl(order) {
   const phone = normalizePhone(process.env.WHATSAPP_ADMIN_PHONE);
-  if (!phone) throw httpError(500, "Falta configurar WHATSAPP_ADMIN_PHONE en el backend.");
+  if (!phone) throw httpError(503, "WhatsApp no está disponible por ahora.");
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order))}`;
 }
 
@@ -1501,7 +1501,7 @@ function paypalBaseUrl() {
 }
 
 async function paypalAccessToken() {
-  if (!paypalConfigured()) throw httpError(400, "PayPal todavía no está configurado.");
+  if (!paypalConfigured()) throw httpError(503, "PayPal no está disponible por ahora.");
   const credentials = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString("base64");
   const response = await fetch(`${paypalBaseUrl()}/v1/oauth2/token`, {
     method: "POST",
@@ -1969,7 +1969,7 @@ app.post("/api/orders/whatsapp", checkoutLimiter, asyncHandler(async (req, res) 
 }));
 
 app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, res) => {
-  if (!paypalConfigured()) throw httpError(400, "PayPal está listo en código, pero faltan credenciales en .env.");
+  if (!paypalConfigured()) throw httpError(503, "PayPal no está disponible por ahora.");
   const deliveryMethod = normalizeDeliveryMethod(req.body.delivery_method);
   if (deliveryMethod === "pickup") {
     throw httpError(400, "Para retiro, confirma el pedido por WhatsApp para coordinar directamente.");

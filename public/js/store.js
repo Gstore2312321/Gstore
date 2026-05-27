@@ -5,6 +5,8 @@ const state = {
   banners: [],
   cart: loadCart(),
   activeCategory: "all",
+  activeSize: "all",
+  sortOrder: "default",
   search: "",
   detail: null,
   checkoutStage: "review",
@@ -15,9 +17,13 @@ const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" 
 const CARD_IMAGE_WIDTHS = [180, 260, 360, 520];
 const DETAIL_IMAGE_WIDTHS = [420, 640, 820, 1100];
 const CART_IMAGE_WIDTHS = [96, 140, 180];
+const SIZE_NONE = "__none";
 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
+  sizeFilter: document.querySelector("#sizeFilter"),
+  sortFilter: document.querySelector("#sortFilter"),
+  clearCatalogFilters: document.querySelector("#clearCatalogFilters"),
   storeBanners: document.querySelector("#storeBanners"),
   productGrid: document.querySelector("#productGrid"),
   emptyState: document.querySelector("#emptyState"),
@@ -64,6 +70,28 @@ function bindEvents() {
 
   els.searchInput?.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
+    renderProducts();
+  });
+
+  els.sizeFilter?.addEventListener("change", (event) => {
+    state.activeSize = event.target.value || "all";
+    renderProducts();
+  });
+
+  els.sortFilter?.addEventListener("change", (event) => {
+    state.sortOrder = event.target.value || "default";
+    renderProducts();
+  });
+
+  els.clearCatalogFilters?.addEventListener("click", () => {
+    state.search = "";
+    state.activeCategory = "all";
+    state.activeSize = "all";
+    state.sortOrder = "default";
+    if (els.searchInput) els.searchInput.value = "";
+    if (els.sizeFilter) els.sizeFilter.value = "all";
+    if (els.sortFilter) els.sortFilter.value = "default";
+    syncCategoryButtons();
     renderProducts();
   });
 
@@ -135,6 +163,7 @@ async function loadData() {
     state.banners = banners.banners || [];
     renderStoreBanners();
     renderCategories();
+    renderCatalogOptions();
     renderProducts();
     renderCheckoutState();
   } catch (error) {
@@ -311,12 +340,57 @@ function syncCategoryButtons() {
   });
 }
 
+function renderCatalogOptions() {
+  if (els.sizeFilter) {
+    const sizes = uniqueProductSizes();
+    const current = sizes.some((size) => size.value === state.activeSize) ? state.activeSize : "all";
+    state.activeSize = current;
+    els.sizeFilter.innerHTML = [
+      `<option value="all">Todas</option>`,
+      ...sizes.map((size) => `<option value="${escapeAttr(size.value)}">${escapeHtml(size.label)}</option>`)
+    ].join("");
+    els.sizeFilter.value = current;
+  }
+  if (els.sortFilter) {
+    els.sortFilter.value = state.sortOrder;
+  }
+}
+
+function uniqueProductSizes() {
+  const sizeMap = new Map();
+  let hasNoSize = false;
+  state.products.forEach((product) => {
+    if (!product.sizes.length) hasNoSize = true;
+    product.sizes.forEach((size) => {
+      const label = String(size || "").trim();
+      if (!label) return;
+      const value = normalizeText(label);
+      if (!sizeMap.has(value)) sizeMap.set(value, label);
+    });
+  });
+  const sizes = Array.from(sizeMap, ([value, label]) => ({ value, label }))
+    .sort((a, b) => sizeSortRank(a.label) - sizeSortRank(b.label) || a.label.localeCompare(b.label, "es", { numeric: true, sensitivity: "base" }));
+  if (hasNoSize) sizes.push({ value: SIZE_NONE, label: "Sin talla" });
+  return sizes;
+}
+
+function sizeSortRank(size) {
+  const normalized = normalizeText(size).toUpperCase();
+  const order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "UNITALLA"];
+  const index = order.indexOf(normalized);
+  if (index >= 0) return index;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? 100 + number : 1000;
+}
+
 function renderProducts() {
   const normalizedSearch = normalizeText(state.search);
-  const products = state.products.filter((product) => {
+  const filteredProducts = state.products.filter((product) => {
     const categoryMatch = state.activeCategory === "all" || product.category?.slug === state.activeCategory;
+    const sizeMatch = matchesSizeFilter(product);
     const searchText = normalizeText([
       product.name,
+      formatProductName(product.name),
       product.description,
       product.category?.name,
       product.promo_label,
@@ -324,8 +398,9 @@ function renderProducts() {
       product.sizes.join(" "),
       product.colors.join(" ")
     ].join(" "));
-    return categoryMatch && (!normalizedSearch || searchText.includes(normalizedSearch));
+    return categoryMatch && sizeMatch && (!normalizedSearch || searchText.includes(normalizedSearch));
   });
+  const products = sortProducts(filteredProducts);
 
   els.productGrid.innerHTML = products.map(productCard).join("");
   els.emptyState.hidden = products.length > 0;
@@ -344,11 +419,35 @@ function renderProducts() {
   }
 }
 
+function matchesSizeFilter(product) {
+  if (state.activeSize === "all") return true;
+  if (state.activeSize === SIZE_NONE) return product.sizes.length === 0;
+  return product.sizes.some((size) => normalizeText(size) === state.activeSize);
+}
+
+function sortProducts(products) {
+  const sorted = [...products];
+  if (state.sortOrder === "price-asc") {
+    return sorted.sort((a, b) => Number(a.price || 0) - Number(b.price || 0) || compareProductNames(a, b));
+  }
+  if (state.sortOrder === "price-desc") {
+    return sorted.sort((a, b) => Number(b.price || 0) - Number(a.price || 0) || compareProductNames(a, b));
+  }
+  if (state.sortOrder === "name-asc") {
+    return sorted.sort(compareProductNames);
+  }
+  return sorted;
+}
+
+function compareProductNames(a, b) {
+  return formatProductName(a.name).localeCompare(formatProductName(b.name), "es", { numeric: true, sensitivity: "base" });
+}
+
 function productCard(product, index = 0) {
   const needsChoice = product.sizes.length > 0 || product.colors.length > 0;
   const soldOut = product.stock <= 0;
   const promoLabel = getProductPromoLabel(product);
-  const discount = getDiscountPercent(product);
+  const displayName = formatProductName(product.name);
   const variants = [
     product.sizes.length ? product.sizes.slice(0, 4).map((size) => `<span class="variant-pill">${escapeHtml(size)}</span>`).join("") : "",
     product.colors.length ? product.colors.slice(0, 3).map((color) => `<span class="variant-pill">${escapeHtml(color)}</span>`).join("") : ""
@@ -356,11 +455,11 @@ function productCard(product, index = 0) {
 
   return `
     <article class="product-card">
-      <button class="product-media" data-open-product="${product.id}" type="button" aria-label="Ver ${escapeAttr(product.name)}">
+      <button class="product-media" data-open-product="${product.id}" type="button" aria-label="Ver ${escapeAttr(displayName)}">
         <img ${imageAttrs(product.image_url, {
           loading: index < 4 ? "eager" : "lazy",
           fetchPriority: index < 2 ? "high" : "low"
-        })} ${imageFrameAttrs(product)} alt="${escapeAttr(product.name)}">
+        })} ${imageFrameAttrs(product)} alt="${escapeAttr(displayName)}">
         <span class="stock-pill">${soldOut ? "Agotado" : `${product.stock} disponible${product.stock === 1 ? "" : "s"}`}</span>
         ${promoLabel ? `<span class="promo-pill">${escapeHtml(promoLabel)}</span>` : ""}
       </button>
@@ -369,7 +468,7 @@ function productCard(product, index = 0) {
           <span>${escapeHtml(product.category?.name || "Producto")}</span>
           ${renderPriceStack(product)}
         </div>
-        <h3>${escapeHtml(product.name)}</h3>
+        <h3>${escapeHtml(displayName)}</h3>
         <p>${escapeHtml(product.description)}</p>
         <div class="variant-row">${variants || `<span class="variant-pill">Sin talla</span>`}</div>
         <div class="product-actions">
@@ -401,15 +500,16 @@ function renderProductDetail() {
   if (!detail) return;
   const product = detail.product;
   const soldOut = product.stock <= 0;
+  const displayName = formatProductName(product.name);
 
   els.productDetail.innerHTML = `
     <div class="product-detail-media">
-      <img ${imageAttrs(product.image_url, { width: 820, widths: DETAIL_IMAGE_WIDTHS, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} ${imageFrameAttrs(product)} alt="${escapeAttr(product.name)}">
+      <img ${imageAttrs(product.image_url, { width: 820, widths: DETAIL_IMAGE_WIDTHS, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} ${imageFrameAttrs(product)} alt="${escapeAttr(displayName)}">
     </div>
     <div class="detail-content">
       <div class="detail-copy">
         <span class="eyebrow">${escapeHtml(product.category?.name || "Producto")}</span>
-        <h2>${escapeHtml(product.name)}</h2>
+        <h2>${escapeHtml(displayName)}</h2>
         <p>${escapeHtml(product.description)}</p>
         <div class="detail-meta-row">
           ${renderPriceStack(product, "detail-price")}
@@ -554,9 +654,9 @@ function renderCart() {
 
   els.cartLines.innerHTML = state.cart.map((line) => `
     <article class="cart-line">
-      <img ${imageAttrs(line.image, { width: 180, widths: CART_IMAGE_WIDTHS, sizes: "64px" })} ${imageFrameAttrs(line, { includeZoom: false })} alt="${escapeAttr(line.name)}">
+      <img ${imageAttrs(line.image, { width: 180, widths: CART_IMAGE_WIDTHS, sizes: "64px" })} ${imageFrameAttrs(line, { includeZoom: false })} alt="${escapeAttr(formatProductName(line.name))}">
       <div class="cart-line-main">
-        <h3>${escapeHtml(line.name)}</h3>
+        <h3>${escapeHtml(formatProductName(line.name))}</h3>
         <p>${escapeHtml([line.size && `Talla ${line.size}`, line.color && `Color ${line.color}`].filter(Boolean).join(" · ") || "Producto")}</p>
         <div class="cart-line-footer">
           <div class="quantity-control">
@@ -567,7 +667,7 @@ function renderCart() {
           <strong class="cart-line-total">${formatCurrency(line.price * line.quantity)}</strong>
         </div>
       </div>
-      <button class="remove-line" data-remove-line="${escapeAttr(line.key)}" type="button" aria-label="Quitar ${escapeAttr(line.name)}">x</button>
+      <button class="remove-line" data-remove-line="${escapeAttr(line.key)}" type="button" aria-label="Quitar ${escapeAttr(formatProductName(line.name))}">x</button>
     </article>
   `).join("");
 
@@ -578,13 +678,21 @@ function renderCheckoutState() {
   const hasItems = state.cart.length > 0;
   const isPickup = getDeliveryMethod() === "pickup";
   const checkoutReady = hasItems && state.checkoutStage === "checkout";
+  const paypalEnabled = Boolean(state.config.paypalEnabled);
   els.whatsappCheckoutButton.disabled = !checkoutReady;
-  els.paypalCheckoutButton.disabled = !checkoutReady || !state.config.paypalEnabled || isPickup;
-  els.paypalNote.textContent = isPickup
-    ? "Para retiro, confirma por WhatsApp para coordinar hora y punto."
-    : state.config.paypalEnabled
-    ? "PayPal está activo. El pago se procesa de forma segura."
-    : "PayPal se activa cuando llenes sus variables de entorno.";
+  if (els.paypalCheckoutButton) {
+    els.paypalCheckoutButton.hidden = !paypalEnabled;
+    els.paypalCheckoutButton.disabled = !checkoutReady || !paypalEnabled || isPickup;
+  }
+  if (els.paypalNote) {
+    const note = !paypalEnabled
+      ? ""
+      : isPickup
+      ? "Para retiro, confirma por WhatsApp para coordinar hora y punto."
+      : "PayPal está activo. El pago se procesa de forma segura.";
+    els.paypalNote.textContent = note;
+    els.paypalNote.hidden = !note;
+  }
   renderDeliveryState();
 }
 
@@ -708,7 +816,7 @@ async function submitPaypalOrder() {
     return;
   }
   if (!state.config.paypalEnabled) {
-    showToast("PayPal todavía no está configurado.");
+    showToast("PayPal no está disponible por ahora.");
     return;
   }
   if (!state.cart.length) return showToast("Agrega al menos un producto.");
@@ -753,8 +861,12 @@ function buildOrderPayload() {
 function setCheckoutLoading(isLoading, label = "") {
   const isPickup = getDeliveryMethod() === "pickup";
   const checkoutReady = state.cart.length && state.checkoutStage === "checkout";
+  const paypalEnabled = Boolean(state.config.paypalEnabled);
   els.whatsappCheckoutButton.disabled = isLoading || !checkoutReady;
-  els.paypalCheckoutButton.disabled = isLoading || !checkoutReady || !state.config.paypalEnabled || isPickup;
+  if (els.paypalCheckoutButton) {
+    els.paypalCheckoutButton.hidden = !paypalEnabled;
+    els.paypalCheckoutButton.disabled = isLoading || !checkoutReady || !paypalEnabled || isPickup;
+  }
   if (label) els.whatsappCheckoutButton.textContent = label;
   if (!isLoading) {
     els.whatsappCheckoutButton.textContent = getWhatsappCheckoutLabel();
@@ -821,6 +933,13 @@ function saveCart() {
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: state.config.currency || "USD" }).format(Number(value || 0));
+}
+
+function formatProductName(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const lower = text.toLocaleLowerCase("es-EC");
+  return lower.replace(/\p{L}/u, (letter) => letter.toLocaleUpperCase("es-EC"));
 }
 
 function showToast(message) {
