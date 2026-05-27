@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-discount-visible">
-  <link rel="stylesheet" href="css/admin.css?v=20260526-discount-visible">
+  <link rel="stylesheet" href="css/styles.css?v=20260526-speed-lite">
+  <link rel="stylesheet" href="css/admin.css?v=20260526-speed-lite">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="reports">
   <main class="admin-shell">
@@ -23,7 +23,7 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imÃ¡genes, categorÃ­as y pedidos en un panel hecho para operar sin tocar cÃ³digo.</p>
+          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electrÃ³nico
+            Correo electrónico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,18 +59,18 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="NavegaciÃ³n del panel">
+        <nav aria-label="Navegación del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">CategorÃ­as</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
         </nav>
         <div class="sidebar-status">
-          <span>OperaciÃ³n</span>
+          <span>Operación</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÃ³n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesión</button>
       </aside>
 
       <div class="admin-content">
@@ -88,7 +88,7 @@
         <section class="reports-hero" aria-label="Resumen de reportes">
           <div>
             <span class="eyebrow">Lectura del negocio</span>
-            <h2>DÃ³nde se vende, dÃ³nde se gana y quÃ© conviene mover.</h2>
+            <h2>Dónde se vende, dónde se gana y qué conviene mover.</h2>
             <p id="reportsSummaryText">Calculando ventas, margen y valor del inventario.</p>
           </div>
           <div class="reports-hero-metrics">
@@ -126,17 +126,17 @@
           </article>
         </section>
 
-        <section class="reports-grid" aria-label="GrÃ¡ficas de reportes">
+        <section class="reports-grid" aria-label="Gráficas de reportes">
           <article class="chart-panel chart-panel-wide">
             <div class="chart-heading">
               <div>
-                <span class="eyebrow">Ãšltimos 7 dÃ­as</span>
+                <span class="eyebrow">Últimos 7 días</span>
                 <h2>Ventas contra ganancia</h2>
               </div>
-              <p>Una subida de ventas no siempre significa mÃ¡s utilidad. Esta grÃ¡fica compara ambos datos.</p>
+              <p>Una subida de ventas no siempre significa más utilidad. Esta gráfica compara ambos datos.</p>
             </div>
             <div class="chart-wrap">
-              <canvas id="reportSalesChart" aria-label="Ventas y ganancia de los Ãºltimos siete dÃ­as"></canvas>
+              <canvas id="reportSalesChart" aria-label="Ventas y ganancia de los últimos siete días"></canvas>
             </div>
           </article>
 
@@ -144,11 +144,11 @@
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Inventario</span>
-                <h2>Utilidad por categorÃ­a</h2>
+                <h2>Utilidad por categoría</h2>
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="reportCategoryChart" aria-label="Ganancia potencial por categorÃ­a"></canvas>
+              <canvas id="reportCategoryChart" aria-label="Ganancia potencial por categoría"></canvas>
             </div>
           </article>
 
@@ -156,7 +156,7 @@
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Pedidos</span>
-                <h2>Estado de operaciÃ³n</h2>
+                <h2>Estado de operación</h2>
               </div>
             </div>
             <div class="chart-wrap compact">
@@ -170,7 +170,7 @@
             <div class="report-panel-heading">
               <div>
                 <span class="eyebrow">Productos</span>
-                <h2>Lo que mÃ¡s deja</h2>
+                <h2>Lo que más deja</h2>
               </div>
               <a class="small-button" href="/admin-productos">Editar stock</a>
             </div>
@@ -180,7 +180,7 @@
           <article class="report-panel">
             <div class="report-panel-heading">
               <div>
-                <span class="eyebrow">CategorÃ­as</span>
+                <span class="eyebrow">Categorías</span>
                 <h2>Inventario y utilidad</h2>
               </div>
             </div>
@@ -204,6 +204,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260526-discount-visible" defer></script>
+  <script src="js/admin.js?v=20260526-speed-lite" defer></script>
 </body>
 </html>

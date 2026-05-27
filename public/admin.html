@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-discount-visible">
-  <link rel="stylesheet" href="css/admin.css?v=20260526-discount-visible">
+  <link rel="stylesheet" href="css/styles.css?v=20260526-speed-lite">
+  <link rel="stylesheet" href="css/admin.css?v=20260526-speed-lite">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="dashboard">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imÃ¡genes, categorÃ­as y pedidos en un panel hecho para operar sin tocar cÃ³digo.</p>
+          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>ImÃ¡genes listas para Cloudinary</span>
+            <span>Imágenes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -38,7 +38,7 @@
               <p>Usa el correo autorizado y la clave del panel.</p>
             </div>
             <label>
-              Correo electrÃ³nico
+              Correo electrónico
               <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
             </label>
             <label>
@@ -46,13 +46,13 @@
               <input name="password" type="password" autocomplete="current-password" required placeholder="Escribe la clave">
             </label>
             <button class="button primary" type="submit">Entrar</button>
-            <button class="login-link-button" id="forgotPasswordButton" type="button">OlvidÃ© mi clave</button>
+            <button class="login-link-button" id="forgotPasswordButton" type="button">Olvidé mi clave</button>
             <p class="form-message" id="loginMessage"></p>
           </form>
 
           <form class="login-panel-form reset-panel" id="resetRequestForm" hidden>
             <div>
-              <span class="eyebrow">RecuperaciÃ³n</span>
+              <span class="eyebrow">Recuperación</span>
               <h2>Enviar enlace</h2>
               <p>Te enviaremos un enlace temporal al correo autorizado del panel.</p>
             </div>
@@ -60,7 +60,7 @@
               Correo autorizado
               <input name="email" type="email" autocomplete="email" required placeholder="correo del admin">
             </label>
-            <button class="button primary" type="submit">Enviar recuperaciÃ³n</button>
+            <button class="button primary" type="submit">Enviar recuperación</button>
             <button class="login-link-button" data-show-login type="button">Volver al acceso</button>
             <p class="form-message" id="resetRequestMessage"></p>
           </form>
@@ -69,12 +69,12 @@
             <div>
               <span class="eyebrow">Nueva clave</span>
               <h2>Cambiar acceso</h2>
-              <p>Escribe una clave nueva de mÃ­nimo 12 caracteres.</p>
+              <p>Escribe una clave nueva de mínimo 12 caracteres.</p>
             </div>
             <input name="token" type="hidden">
             <label>
               Nueva clave
-              <input name="password" type="password" autocomplete="new-password" minlength="12" required placeholder="MÃ­nimo 12 caracteres">
+              <input name="password" type="password" autocomplete="new-password" minlength="12" required placeholder="Mínimo 12 caracteres">
             </label>
             <label>
               Confirmar clave
@@ -97,18 +97,18 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="NavegaciÃ³n del panel">
+        <nav aria-label="Navegación del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">CategorÃ­as</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
         </nav>
         <div class="sidebar-status">
-          <span>OperaciÃ³n</span>
+          <span>Operación</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÃ³n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesión</button>
       </aside>
 
       <div class="admin-content">
@@ -128,7 +128,7 @@
             <span class="eyebrow">Panel de trabajo</span>
             <h2>Lo importante primero.</h2>
             <p id="profitSummaryText">Calculando utilidad del negocio.</p>
-            <div class="brief-actions" aria-label="Acciones rÃ¡pidas">
+            <div class="brief-actions" aria-label="Acciones rápidas">
               <a class="button primary" href="/admin-pedidos">Revisar pedidos</a>
               <a class="button ghost" href="/admin-reportes">Ver reportes</a>
             </div>
@@ -147,9 +147,9 @@
           </div>
         </section>
 
-        <section class="summary-grid dashboard-summary-grid" aria-label="MÃ©tricas del negocio">
+        <section class="summary-grid dashboard-summary-grid" aria-label="Métricas del negocio">
           <article class="summary-card summary-card-catalog">
-            <span>CatÃ¡logo</span>
+            <span>Catálogo</span>
             <strong id="summaryProducts">0</strong>
             <small><b id="summaryActive">0</b> productos activos</small>
           </article>
@@ -175,6 +175,57 @@
           </article>
         </section>
 
+        <section class="store-banner-admin" aria-label="Banners publicitarios de la tienda">
+          <div class="banner-admin-head">
+            <div>
+              <span class="eyebrow">Cabecera de tienda</span>
+              <h2>Banners publicitarios</h2>
+            </div>
+            <span id="bannerCountText">0 activos</span>
+          </div>
+
+          <div class="banner-admin-grid">
+            <form id="bannerForm" class="banner-form" novalidate>
+              <input type="hidden" name="id">
+              <input type="hidden" name="image_url">
+              <label>
+                Etiqueta
+                <input name="kicker" maxlength="42" placeholder="Oferta, nuevo, promo...">
+              </label>
+              <label>
+                Título
+                <input name="title" maxlength="80" required placeholder="Nueva colección disponible">
+              </label>
+              <label class="full">
+                Texto corto
+                <input name="text" maxlength="150" placeholder="Usa este espacio para una promo breve.">
+              </label>
+              <label class="full">
+                Enlace opcional
+                <input name="link_url" maxlength="260" placeholder="#catalogo o https://...">
+              </label>
+              <label class="banner-file full">
+                <span>Subir imagen del banner</span>
+                <input name="imageFile" type="file" accept="image/*">
+              </label>
+              <div class="banner-preview full" id="bannerPreview">
+                <span>Vista previa del banner</span>
+              </div>
+              <label class="check-inline full">
+                <input name="active" type="checkbox" checked>
+                Visible en la tienda
+              </label>
+              <p class="form-message full" id="bannerMessage"></p>
+              <div class="banner-form-actions full">
+                <button class="button primary" type="submit">Guardar banner</button>
+                <button class="button ghost" id="resetBannerForm" type="button">Limpiar</button>
+              </div>
+            </form>
+
+            <div class="banner-admin-list" id="bannerAdminList" aria-live="polite"></div>
+          </div>
+        </section>
+
         <section class="dashboard-focus-grid" aria-label="Lectura principal">
           <article class="chart-panel dashboard-chart-primary">
             <div class="chart-heading">
@@ -182,41 +233,41 @@
                 <span class="eyebrow">Finanzas</span>
                 <h2>Ventas y utilidad de la semana</h2>
               </div>
-              <p>La barra marca venta y la lÃ­nea muestra la utilidad estimada.</p>
+              <p>La barra marca venta y la línea muestra la utilidad estimada.</p>
             </div>
             <div class="chart-wrap">
-              <canvas id="salesProfitChart" aria-label="Ventas y ganancia por dÃ­a"></canvas>
+              <canvas id="salesProfitChart" aria-label="Ventas y ganancia por día"></canvas>
             </div>
           </article>
 
-          <aside class="dashboard-decisions" aria-label="PrÃ³ximas decisiones">
+          <aside class="dashboard-decisions" aria-label="Próximas decisiones">
             <article class="decision-card">
               <span class="eyebrow">Inventario</span>
-              <h3>AtenciÃ³n de stock</h3>
-              <p id="insightLowStock">Sin productos crÃ­ticos.</p>
+              <h3>Atención de stock</h3>
+              <p id="insightLowStock">Sin productos críticos.</p>
               <a class="button ghost" href="/admin-productos">Ajustar stock</a>
             </article>
             <article class="decision-card">
-              <span class="eyebrow">CatÃ¡logo</span>
-              <h3>CategorÃ­as y destacados</h3>
-              <p id="insightActiveCategories">0 categorÃ­as activas.</p>
-              <a class="button ghost" href="/admin-categorias">Ordenar catÃ¡logo</a>
+              <span class="eyebrow">Catálogo</span>
+              <h3>Categorías y destacados</h3>
+              <p id="insightActiveCategories">0 categorías activas.</p>
+              <a class="button ghost" href="/admin-categorias">Ordenar catálogo</a>
             </article>
             <article class="decision-card">
               <span class="eyebrow">Pedido reciente</span>
-              <h3 id="insightLatestOrderTitle">Sin pedidos aÃºn</h3>
-              <p id="insightLatestOrder">Cuando entre una orden aparecerÃ¡ aquÃ­.</p>
+              <h3 id="insightLatestOrderTitle">Sin pedidos aún</h3>
+              <p id="insightLatestOrder">Cuando entre una orden aparecerá aquí.</p>
               <a class="button ghost" href="/admin-pedidos">Gestionar pedidos</a>
             </article>
           </aside>
         </section>
 
-        <section class="dashboard-mini-grid" aria-label="Lectura rÃ¡pida">
+        <section class="dashboard-mini-grid" aria-label="Lectura rápida">
           <article class="chart-panel dashboard-mini-chart">
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Productos</span>
-                <h2>Lo que mÃ¡s deja</h2>
+                <h2>Lo que más deja</h2>
               </div>
             </div>
             <div class="chart-wrap">
@@ -232,7 +283,7 @@
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="categoryProfitChart" aria-label="Ganancia potencial por categorÃ­a"></canvas>
+              <canvas id="categoryProfitChart" aria-label="Ganancia potencial por categoría"></canvas>
             </div>
           </article>
 
@@ -254,6 +305,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260526-discount-visible" defer></script>
+  <script src="js/admin.js?v=20260526-speed-lite" defer></script>
 </body>
 </html>

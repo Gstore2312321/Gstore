@@ -47,6 +47,8 @@ const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const LOCAL_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const IMAGE_WIDTHS = [96, 140, 180, 220, 260, 320, 360, 420, 520, 640, 720, 820, 960, 1100, 1200, 1400];
 const IMAGE_CACHE_DIR = path.join(UPLOAD_DIR, "_image-cache");
+const STORE_BANNERS_SETTING_KEY = "store_banners";
+const MAX_STORE_BANNERS = 6;
 const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
 let db;
 
@@ -459,6 +461,10 @@ function productFromRow(row, options = {}) {
     stock: row.stock,
     sku: row.sku || "",
     image_url: row.image_url || "/assets/product-placeholder.svg",
+    image_fit: normalizeImageFit(row.image_fit),
+    image_position_x: clampImagePercent(row.image_position_x, 50),
+    image_position_y: clampImagePercent(row.image_position_y, 50),
+    image_zoom: clampImageZoom(row.image_zoom),
     sizes: parseJsonList(row.sizes_json),
     colors: parseJsonList(row.colors_json),
     active: Boolean(row.active),
@@ -477,6 +483,24 @@ function productFromRow(row, options = {}) {
     product.cost_price = row.cost_price || 0;
   }
   return product;
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function clampImagePercent(value, fallback = 50) {
+  return clampNumber(value, 0, 100, fallback);
+}
+
+function clampImageZoom(value) {
+  return clampNumber(value, 1, 1.8, 1);
+}
+
+function normalizeImageFit(value) {
+  return cleanText(value).toLowerCase() === "contain" ? "contain" : "cover";
 }
 
 function normalizePromoType(value) {
@@ -540,6 +564,77 @@ async function setAppSetting(key, value) {
     VALUES (?, ?, ?)
     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)
   `, [key, value, now()]);
+}
+
+function cleanBannerLink(value) {
+  const link = cleanText(value);
+  if (!link) return "";
+  if (link.startsWith("/") || link.startsWith("#")) return link.slice(0, 260);
+  try {
+    const parsed = new URL(link);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString().slice(0, 260) : "";
+  } catch {
+    return "";
+  }
+}
+
+function bannerFromInput(body = {}, existing = {}) {
+  const imageUrl = cleanText(body.image_url || existing.image_url);
+  if (!imageUrl || imageUrl.includes("product-placeholder.svg")) {
+    throw httpError(400, "Sube una imagen real para el banner.");
+  }
+  const title = cleanText(body.title || existing.title).slice(0, 80);
+  if (title.length < 2) throw httpError(400, "El banner necesita un título corto.");
+  const kicker = cleanText(body.kicker || existing.kicker || "Promo").slice(0, 42);
+  const text = cleanText(body.text || existing.text).slice(0, 150);
+  return {
+    id: existing.id || crypto.randomUUID(),
+    kicker,
+    title,
+    text,
+    image_url: imageUrl,
+    link_url: cleanBannerLink(body.link_url || existing.link_url),
+    active: body.active === undefined ? Boolean(existing.active ?? true) : boolToInt(body.active) === 1,
+    created_at: existing.created_at || now(),
+    updated_at: now()
+  };
+}
+
+function normalizeBannerList(value, { includeInactive = false } = {}) {
+  let parsed = [];
+  if (Array.isArray(value)) parsed = value;
+  else {
+    try {
+      parsed = JSON.parse(value || "[]");
+    } catch {
+      parsed = [];
+    }
+  }
+  return parsed
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: cleanText(item.id) || crypto.randomUUID(),
+      kicker: cleanText(item.kicker || "Promo").slice(0, 42),
+      title: cleanText(item.title).slice(0, 80),
+      text: cleanText(item.text).slice(0, 150),
+      image_url: cleanText(item.image_url),
+      link_url: cleanBannerLink(item.link_url),
+      active: Boolean(item.active),
+      created_at: cleanText(item.created_at),
+      updated_at: cleanText(item.updated_at)
+    }))
+    .filter((item) => item.title && item.image_url && (includeInactive || item.active))
+    .slice(0, MAX_STORE_BANNERS);
+}
+
+async function getStoreBanners(options = {}) {
+  return normalizeBannerList(await getAppSetting(STORE_BANNERS_SETTING_KEY), options);
+}
+
+async function saveStoreBanners(banners) {
+  const normalized = normalizeBannerList(banners, { includeInactive: true }).slice(0, MAX_STORE_BANNERS);
+  await setAppSetting(STORE_BANNERS_SETTING_KEY, JSON.stringify(normalized));
+  return normalized;
 }
 
 function hashResetToken(token) {
@@ -639,6 +734,10 @@ async function ensureSchema() {
       stock INT NOT NULL DEFAULT 0,
       sku VARCHAR(90) DEFAULT '',
       image_url TEXT,
+      image_fit VARCHAR(16) DEFAULT 'cover',
+      image_position_x DECIMAL(5,2) NOT NULL DEFAULT 50,
+      image_position_y DECIMAL(5,2) NOT NULL DEFAULT 50,
+      image_zoom DECIMAL(4,2) NOT NULL DEFAULT 1,
       sizes_json TEXT,
       colors_json TEXT,
       promo_type VARCHAR(40) DEFAULT 'none',
@@ -735,6 +834,10 @@ async function ensureSchema() {
   await ensureColumn("products", "promo_type", "promo_type VARCHAR(40) DEFAULT 'none'");
   await ensureColumn("products", "promo_label", "promo_label VARCHAR(160) DEFAULT ''");
   await ensureColumn("products", "featured", "featured TINYINT(1) NOT NULL DEFAULT 0");
+  await ensureColumn("products", "image_fit", "image_fit VARCHAR(16) DEFAULT 'cover'");
+  await ensureColumn("products", "image_position_x", "image_position_x DECIMAL(5,2) NOT NULL DEFAULT 50");
+  await ensureColumn("products", "image_position_y", "image_position_y DECIMAL(5,2) NOT NULL DEFAULT 50");
+  await ensureColumn("products", "image_zoom", "image_zoom DECIMAL(4,2) NOT NULL DEFAULT 1");
 
   const promoCount = await dbGet(`
     SELECT COUNT(*) AS count
@@ -819,9 +922,10 @@ async function seedProductList(products) {
     await dbRun(`
       INSERT INTO products (
         category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+        image_fit, image_position_x, image_position_y, image_zoom,
         sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       category ? category.id : null,
       name,
@@ -833,6 +937,10 @@ async function seedProductList(products) {
       Number.isInteger(Number(product.stock)) ? Number(product.stock) : 0,
       sku,
       image,
+      "cover",
+      50,
+      50,
+      1,
       JSON.stringify(Array.isArray(product.sizes) ? product.sizes : []),
       JSON.stringify(Array.isArray(product.colors) ? product.colors : []),
       normalizePromoType(product.promoType),
@@ -954,9 +1062,10 @@ async function seedData() {
       await dbRun(`
         INSERT INTO products (
           category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+          image_fit, image_position_x, image_position_y, image_zoom,
           sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
       `, [
         category ? category.id : null,
         product.name,
@@ -968,6 +1077,10 @@ async function seedData() {
         product.stock,
         product.sku,
         product.image,
+        "cover",
+        50,
+        50,
+        1,
         JSON.stringify(product.sizes),
         JSON.stringify(product.colors),
         product.promoType,
@@ -1800,6 +1913,10 @@ app.get("/api/config", (req, res) => {
   });
 });
 
+app.get("/api/banners", asyncHandler(async (req, res) => {
+  res.json({ banners: await getStoreBanners() });
+}));
+
 app.get("/api/image", asyncHandler(serveOptimizedLocalImage));
 
 app.get("/api/categories", asyncHandler(async (req, res) => {
@@ -2041,6 +2158,60 @@ app.get("/api/admin/summary", requireAdmin, asyncHandler(async (req, res) => {
   });
 }));
 
+app.get("/api/admin/banners", requireAdmin, asyncHandler(async (req, res) => {
+  res.json({ banners: await getStoreBanners({ includeInactive: true }) });
+}));
+
+app.post("/api/admin/banners", requireAdmin, asyncHandler(async (req, res) => {
+  const current = await getStoreBanners({ includeInactive: true });
+  if (current.length >= MAX_STORE_BANNERS) {
+    throw httpError(400, `Solo puedes tener hasta ${MAX_STORE_BANNERS} banners.`);
+  }
+  const banner = bannerFromInput(req.body);
+  const banners = await saveStoreBanners([banner, ...current]);
+  await auditLog(req, {
+    action: "banner.create",
+    entityType: "banner",
+    entityId: banner.id,
+    summary: `Banner creado: ${banner.title}`,
+    metadata: { banner }
+  });
+  res.status(201).json({ banner, banners });
+}));
+
+app.put("/api/admin/banners/:id", requireAdmin, asyncHandler(async (req, res, next) => {
+  const id = cleanText(req.params.id);
+  const current = await getStoreBanners({ includeInactive: true });
+  const existing = current.find((banner) => banner.id === id);
+  if (!existing) return next(httpError(404, "Banner no encontrado."));
+  const updated = bannerFromInput(req.body, existing);
+  const banners = await saveStoreBanners(current.map((banner) => (banner.id === id ? updated : banner)));
+  await auditLog(req, {
+    action: "banner.update",
+    entityType: "banner",
+    entityId: updated.id,
+    summary: `Banner actualizado: ${updated.title}`,
+    metadata: { before: existing, after: updated }
+  });
+  res.json({ banner: updated, banners });
+}));
+
+app.delete("/api/admin/banners/:id", requireAdmin, asyncHandler(async (req, res, next) => {
+  const id = cleanText(req.params.id);
+  const current = await getStoreBanners({ includeInactive: true });
+  const existing = current.find((banner) => banner.id === id);
+  if (!existing) return next(httpError(404, "Banner no encontrado."));
+  const banners = await saveStoreBanners(current.filter((banner) => banner.id !== id));
+  await auditLog(req, {
+    action: "banner.delete",
+    entityType: "banner",
+    entityId: id,
+    summary: `Banner eliminado: ${existing.title}`,
+    metadata: { before: existing }
+  });
+  res.json({ ok: true, banners });
+}));
+
 app.get("/api/admin/analytics", requireAdmin, asyncHandler(async (req, res) => {
   const statusLabels = {
     new: "Nuevo",
@@ -2255,6 +2426,10 @@ async function validateAdminProductInput(body) {
   if (!imageUrl || imageUrl.includes("product-placeholder.svg")) {
     throw httpError(400, "Sube una foto real del producto.");
   }
+  const imageFit = normalizeImageFit(body.image_fit);
+  const imagePositionX = clampImagePercent(body.image_position_x, 50);
+  const imagePositionY = clampImagePercent(body.image_position_y, 50);
+  const imageZoom = clampImageZoom(body.image_zoom);
 
   const promoType = normalizePromoType(body.promo_type);
   const comparePrice = promoType === "discount" ? money(body.compare_price) : 0;
@@ -2262,7 +2437,20 @@ async function validateAdminProductInput(body) {
     throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
   }
 
-  return { name, categoryId, price, costPrice, comparePrice, stock, imageUrl, promoType };
+  return {
+    name,
+    categoryId,
+    price,
+    costPrice,
+    comparePrice,
+    stock,
+    imageUrl,
+    imageFit,
+    imagePositionX,
+    imagePositionY,
+    imageZoom,
+    promoType
+  };
 }
 
 app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
@@ -2270,14 +2458,28 @@ app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
-  const { name, categoryId, price, costPrice, comparePrice, stock, imageUrl, promoType } = await validateAdminProductInput(req.body);
+  const {
+    name,
+    categoryId,
+    price,
+    costPrice,
+    comparePrice,
+    stock,
+    imageUrl,
+    imageFit,
+    imagePositionX,
+    imagePositionY,
+    imageZoom,
+    promoType
+  } = await validateAdminProductInput(req.body);
   const slug = await ensureUniqueSlug("products", name);
   const result = await dbRun(`
     INSERT INTO products (
       category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+      image_fit, image_position_x, image_position_y, image_zoom,
       sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     categoryId,
     name,
@@ -2289,6 +2491,10 @@ app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
     stock,
     cleanText(req.body.sku),
     imageUrl,
+    imageFit,
+    imagePositionX,
+    imagePositionY,
+    imageZoom,
     JSON.stringify(incomingList(req.body.sizes)),
     JSON.stringify(incomingList(req.body.colors)),
     promoType,
@@ -2313,12 +2519,26 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
   const id = Number(req.params.id);
   const current = await getProductById(id);
   if (!current) return next(httpError(404, "Producto no encontrado."));
-  const { name, categoryId, price, costPrice, comparePrice, stock, imageUrl, promoType } = await validateAdminProductInput(req.body);
+  const {
+    name,
+    categoryId,
+    price,
+    costPrice,
+    comparePrice,
+    stock,
+    imageUrl,
+    imageFit,
+    imagePositionX,
+    imagePositionY,
+    imageZoom,
+    promoType
+  } = await validateAdminProductInput(req.body);
   const slug = await ensureUniqueSlug("products", name, id);
   await dbRun(`
     UPDATE products
     SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
-        image_url = ?, sizes_json = ?, colors_json = ?, promo_type = ?, promo_label = ?, active = ?, featured = ?, updated_at = ?
+        image_url = ?, image_fit = ?, image_position_x = ?, image_position_y = ?, image_zoom = ?,
+        sizes_json = ?, colors_json = ?, promo_type = ?, promo_label = ?, active = ?, featured = ?, updated_at = ?
     WHERE id = ?
   `, [
     categoryId,
@@ -2331,6 +2551,10 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
     stock,
     cleanText(req.body.sku),
     imageUrl,
+    imageFit,
+    imagePositionX,
+    imagePositionY,
+    imageZoom,
     JSON.stringify(incomingList(req.body.sizes)),
     JSON.stringify(incomingList(req.body.colors)),
     promoType,

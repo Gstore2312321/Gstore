@@ -109,6 +109,7 @@ async function mockRoutes(page) {
   await page.route("**/api/config", (route) => json(route, { storeName: "GStore", currency: "USD", paypalEnabled: false }));
   await page.route("**/api/categories", (route) => json(route, { categories }));
   await page.route("**/api/products", (route) => json(route, { products }));
+  await page.route("**/api/banners", (route) => json(route, { banners: [] }));
   await page.route("**/api/admin/session", (route) => json(route, { csrfToken: "visual-csrf" }));
   await page.route("**/api/admin/summary", (route) => json(route, {
     productCount: products.length,
@@ -119,6 +120,7 @@ async function mockRoutes(page) {
   await page.route("**/api/admin/analytics", (route) => json(route, analytics));
   await page.route("**/api/admin/categories", (route) => json(route, { categories }));
   await page.route("**/api/admin/products", (route) => json(route, { products }));
+  await page.route("**/api/admin/banners", (route) => json(route, { banners: [] }));
   await page.route("**/api/admin/orders", (route) => json(route, { orders }));
 }
 

@@ -2,11 +2,13 @@ const state = {
   config: { storeName: "GStore", currency: "USD", paypalEnabled: false },
   categories: [],
   products: [],
+  banners: [],
   cart: loadCart(),
   activeCategory: "all",
   search: "",
   detail: null,
-  checkoutStage: "review"
+  checkoutStage: "review",
+  productsRenderedOnce: false
 };
 
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" : "";
@@ -16,6 +18,7 @@ const CART_IMAGE_WIDTHS = [96, 140, 180];
 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
+  storeBanners: document.querySelector("#storeBanners"),
   productGrid: document.querySelector("#productGrid"),
   emptyState: document.querySelector("#emptyState"),
   searchInput: document.querySelector("#searchInput"),
@@ -120,14 +123,17 @@ function handleInternalScroll(event) {
 
 async function loadData() {
   try {
-    const [config, categories, products] = await Promise.all([
+    const [config, categories, products, banners] = await Promise.all([
       api("/api/config"),
       api("/api/categories"),
-      api("/api/products")
+      api("/api/products"),
+      api("/api/banners")
     ]);
     state.config = config;
     state.categories = categories.categories || [];
     state.products = products.products || [];
+    state.banners = banners.banners || [];
+    renderStoreBanners();
     renderCategories();
     renderProducts();
     renderCheckoutState();
@@ -223,6 +229,72 @@ function imageAttrs(value, options = {}) {
   ].filter(Boolean).join(" ");
 }
 
+function clampFrameNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function normalizedImageFrame(source = {}) {
+  return {
+    fit: source.image_fit === "contain" ? "contain" : "cover",
+    x: clampFrameNumber(source.image_position_x, 0, 100, 50),
+    y: clampFrameNumber(source.image_position_y, 0, 100, 50),
+    zoom: clampFrameNumber(source.image_zoom, 1, 1.8, 1)
+  };
+}
+
+function imageFrameStyle(source = {}, options = {}) {
+  const frame = normalizedImageFrame(source);
+  const declarations = [
+    `object-fit:${frame.fit}`,
+    `object-position:${frame.x}% ${frame.y}%`,
+    `transform-origin:${frame.x}% ${frame.y}%`
+  ];
+  if (options.includeZoom !== false) declarations.push(`transform:scale(${frame.zoom})`);
+  return declarations.join(";");
+}
+
+function imageFrameAttrs(source = {}, options = {}) {
+  return `style="${escapeAttr(imageFrameStyle(source, options))}"`;
+}
+
+function bannerLinkExtraAttrs(url) {
+  const link = String(url || "");
+  return /^https?:\/\//i.test(link) ? ' target="_blank" rel="noreferrer"' : "";
+}
+
+function renderStoreBanners() {
+  if (!els.storeBanners) return;
+  const banners = state.banners.filter((banner) => banner?.image_url && banner?.title).slice(0, 6);
+  els.storeBanners.hidden = banners.length === 0;
+  if (!banners.length) {
+    els.storeBanners.innerHTML = "";
+    return;
+  }
+  els.storeBanners.innerHTML = banners.map((banner, index) => {
+    const tag = banner.link_url ? "a" : "article";
+    const href = banner.link_url ? ` href="${escapeAttr(banner.link_url)}"${bannerLinkExtraAttrs(banner.link_url)}` : "";
+    return `
+      <${tag} class="store-banner ${index === 0 ? "is-featured" : ""}"${href}>
+        <img ${imageAttrs(banner.image_url, {
+          width: index === 0 ? 960 : 520,
+          widths: index === 0 ? DETAIL_IMAGE_WIDTHS : CARD_IMAGE_WIDTHS,
+          sizes: index === 0 ? "(max-width: 760px) 88vw, 720px" : "(max-width: 760px) 78vw, 320px",
+          loading: index === 0 ? "eager" : "lazy",
+          fetchPriority: index === 0 ? "high" : "low"
+        })} alt="${escapeAttr(banner.title)}">
+        <span class="store-banner-shade" aria-hidden="true"></span>
+        <span class="store-banner-copy">
+          <small>${escapeHtml(banner.kicker || "Promo")}</small>
+          <strong>${escapeHtml(banner.title)}</strong>
+          ${banner.text ? `<em>${escapeHtml(banner.text)}</em>` : ""}
+        </span>
+      </${tag}>
+    `;
+  }).join("");
+}
+
 function renderCategories() {
   els.categoryFilters.innerHTML = [
     `<button class="filter-chip is-active" data-category-filter="all" type="button">Todo</button>`,
@@ -258,13 +330,16 @@ function renderProducts() {
   els.productGrid.innerHTML = products.map(productCard).join("");
   els.emptyState.hidden = products.length > 0;
 
-  if (window.gsap && !prefersReducedMotion()) {
+  const shouldAnimateCards = !state.productsRenderedOnce && products.length > 0 && products.length <= 12;
+  state.productsRenderedOnce = true;
+
+  if (shouldAnimateCards && window.gsap && !prefersReducedMotion()) {
     gsap.fromTo(".product-card", { y: 18, opacity: 0 }, {
       y: 0,
       opacity: 1,
-      duration: 0.42,
+      duration: 0.24,
       ease: "power3.out",
-      stagger: 0.035
+      stagger: 0.018
     });
   }
 }
@@ -285,7 +360,7 @@ function productCard(product, index = 0) {
         <img ${imageAttrs(product.image_url, {
           loading: index < 4 ? "eager" : "lazy",
           fetchPriority: index < 2 ? "high" : "low"
-        })} alt="${escapeAttr(product.name)}">
+        })} ${imageFrameAttrs(product)} alt="${escapeAttr(product.name)}">
         <span class="stock-pill">${soldOut ? "Agotado" : `${product.stock} disponible${product.stock === 1 ? "" : "s"}`}</span>
         ${promoLabel ? `<span class="promo-pill">${escapeHtml(promoLabel)}</span>` : ""}
       </button>
@@ -328,7 +403,9 @@ function renderProductDetail() {
   const soldOut = product.stock <= 0;
 
   els.productDetail.innerHTML = `
-    <img ${imageAttrs(product.image_url, { width: 820, widths: DETAIL_IMAGE_WIDTHS, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} alt="${escapeAttr(product.name)}">
+    <div class="product-detail-media">
+      <img ${imageAttrs(product.image_url, { width: 820, widths: DETAIL_IMAGE_WIDTHS, sizes: "(max-width: 640px) 92vw, 520px", loading: "eager", fetchPriority: "high" })} ${imageFrameAttrs(product)} alt="${escapeAttr(product.name)}">
+    </div>
     <div class="detail-content">
       <div class="detail-copy">
         <span class="eyebrow">${escapeHtml(product.category?.name || "Producto")}</span>
@@ -410,6 +487,10 @@ function addToCart(product, options, quantity, settings = {}) {
       name: product.name,
       price: product.price,
       image: assetUrl(product.image_url),
+      image_fit: product.image_fit || "cover",
+      image_position_x: product.image_position_x ?? 50,
+      image_position_y: product.image_position_y ?? 50,
+      image_zoom: product.image_zoom ?? 1,
       stock: product.stock,
       size: options.size || "",
       color: options.color || "",
@@ -473,7 +554,7 @@ function renderCart() {
 
   els.cartLines.innerHTML = state.cart.map((line) => `
     <article class="cart-line">
-      <img ${imageAttrs(line.image, { width: 180, widths: CART_IMAGE_WIDTHS, sizes: "64px" })} alt="${escapeAttr(line.name)}">
+      <img ${imageAttrs(line.image, { width: 180, widths: CART_IMAGE_WIDTHS, sizes: "64px" })} ${imageFrameAttrs(line, { includeZoom: false })} alt="${escapeAttr(line.name)}">
       <div class="cart-line-main">
         <h3>${escapeHtml(line.name)}</h3>
         <p>${escapeHtml([line.size && `Talla ${line.size}`, line.color && `Color ${line.color}`].filter(Boolean).join(" · ") || "Producto")}</p>
@@ -702,14 +783,6 @@ function openDrawer(drawer) {
   drawer.setAttribute("aria-hidden", "false");
   els.drawerBackdrop.hidden = false;
   document.body.style.overflow = "hidden";
-  if (window.gsap && !prefersReducedMotion()) {
-    const panel = drawer.querySelector(".drawer-panel");
-    if (drawer.id === "productDrawer") {
-      gsap.fromTo(panel, { y: 18, opacity: 0, scale: 0.98 }, { y: 0, opacity: 1, scale: 1, duration: 0.24, ease: "power3.out" });
-    } else {
-      gsap.fromTo(panel, { x: "104%" }, { x: "0%", duration: 0.34, ease: "power3.out" });
-    }
-  }
 }
 
 function closeDrawer(drawer) {

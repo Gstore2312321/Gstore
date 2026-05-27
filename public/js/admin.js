@@ -11,6 +11,7 @@ const adminState = {
   products: [],
   categories: [],
   orders: [],
+  banners: [],
   analytics: null,
   charts: {},
   productSearch: "",
@@ -50,6 +51,12 @@ const adminEls = {
   stockActionText: document.querySelector("#stockActionText"),
   dashboardPendingText: document.querySelector("#dashboardPendingText"),
   profitSummaryText: document.querySelector("#profitSummaryText"),
+  bannerForm: document.querySelector("#bannerForm"),
+  bannerMessage: document.querySelector("#bannerMessage"),
+  bannerPreview: document.querySelector("#bannerPreview"),
+  bannerAdminList: document.querySelector("#bannerAdminList"),
+  bannerCountText: document.querySelector("#bannerCountText"),
+  resetBannerForm: document.querySelector("#resetBannerForm"),
   salesProfitChart: document.querySelector("#salesProfitChart"),
   productProfitChart: document.querySelector("#productProfitChart"),
   categoryProfitChart: document.querySelector("#categoryProfitChart"),
@@ -70,6 +77,7 @@ const adminEls = {
   productDrawerTitle: document.querySelector("#productDrawerTitle"),
   productDrawerKicker: document.querySelector("#productDrawerKicker"),
   productImagePreview: document.querySelector("#productImagePreview"),
+  resetImageFrame: document.querySelector("#resetImageFrame"),
   discountPriceWrap: document.querySelector("#discountPriceWrap"),
   discountPercentWrap: document.querySelector("#discountPercentWrap"),
   discountSummary: document.querySelector("#discountSummary"),
@@ -154,6 +162,13 @@ function bindAdminEvents() {
   on(adminEls.resetCategoryForm, "click", () => resetCategoryForm());
   on(adminEls.refreshOrdersButton, "click", () => refreshOrders().catch(showErrorToast));
   on(adminEls.refreshReportsButton, "click", () => refreshAll().catch(showErrorToast));
+  on(adminEls.bannerForm, "submit", saveBanner);
+  on(adminEls.resetBannerForm, "click", () => resetBannerForm());
+  on(adminEls.bannerForm?.elements.imageFile, "change", previewSelectedBannerImage);
+  on(adminEls.bannerForm?.elements.image_url, "input", () => {
+    const value = adminEls.bannerForm.elements.image_url.value.trim();
+    renderBannerPreview(value);
+  });
 
   [adminEls.newProductButton, adminEls.quickProductButton, adminEls.productCreateButton].forEach((button) => {
     on(button, "click", () => openProductDrawer());
@@ -187,6 +202,13 @@ function bindAdminEvents() {
       const value = adminEls.productForm.elements.image_url.value.trim();
       if (value) setProductPreview(value);
     });
+    ["image_fit", "image_zoom", "image_position_x", "image_position_y"].forEach((name) => {
+      const field = adminEls.productForm.elements[name];
+      if (!field) return;
+      on(field, "input", applyProductImageFrame);
+      on(field, "change", applyProductImageFrame);
+    });
+    on(adminEls.resetImageFrame, "click", resetProductImageFrame);
     on(adminEls.productForm.elements.has_discount, "change", renderDiscountState);
     on(adminEls.productForm.elements.compare_price, "input", () => applyDiscountCalculator("compare"));
     on(adminEls.productForm.elements.discount_percent, "input", () => applyDiscountCalculator("percent"));
@@ -332,6 +354,24 @@ function handleDocumentClick(event) {
     return;
   }
 
+  const editBanner = event.target.closest("[data-edit-banner]");
+  if (editBanner) {
+    editBannerForm(editBanner.dataset.editBanner);
+    return;
+  }
+
+  const toggleBanner = event.target.closest("[data-toggle-banner]");
+  if (toggleBanner) {
+    toggleBannerVisibility(toggleBanner.dataset.toggleBanner);
+    return;
+  }
+
+  const deleteBanner = event.target.closest("[data-delete-banner]");
+  if (deleteBanner) {
+    removeBanner(deleteBanner.dataset.deleteBanner);
+    return;
+  }
+
   const whatsappOrder = event.target.closest("[data-order-whatsapp]");
   if (whatsappOrder) {
     openOrderWhatsapp(Number(whatsappOrder.dataset.orderWhatsapp));
@@ -414,9 +454,6 @@ function showDashboard() {
   document.body.classList.remove("is-auth-checking");
   if (adminEls.loginView) adminEls.loginView.hidden = true;
   if (adminEls.dashboardView) adminEls.dashboardView.hidden = false;
-  if (window.gsap && !prefersReducedMotion() && !["dashboard", "reports"].includes(adminState.page)) {
-    gsap.fromTo(".admin-section", { y: 8, opacity: 0.96 }, { y: 0, opacity: 1, duration: 0.16, ease: "power2.out" });
-  }
 }
 
 function initPasswordResetFromUrl() {
@@ -508,6 +545,7 @@ async function refreshAll() {
   const tasks = [];
   if (["dashboard", "reports"].includes(adminState.page)) tasks.push(refreshSummary());
   if (["dashboard", "reports"].includes(adminState.page)) tasks.push(refreshAnalytics());
+  if (adminState.page === "dashboard") tasks.push(refreshBanners());
   if (["dashboard", "products", "categories"].includes(adminState.page)) tasks.push(refreshCategories());
   if (["dashboard", "products"].includes(adminState.page)) tasks.push(refreshProducts());
   if (["dashboard", "reports", "orders"].includes(adminState.page)) tasks.push(refreshOrders(false));
@@ -548,6 +586,13 @@ async function refreshProducts() {
   renderProductsTable();
   renderProductShelfNotes();
   renderInsights();
+}
+
+async function refreshBanners() {
+  if (adminState.page !== "dashboard") return;
+  const data = await adminApi("/api/admin/banners");
+  adminState.banners = data.banners || [];
+  renderBannerAdmin();
 }
 
 async function refreshOrders(updateSummary = true) {
@@ -1064,7 +1109,7 @@ function renderProductsTable() {
     <tr class="product-admin-card">
       <td data-label="Producto">
         <div class="table-product">
-          <img ${imageAttrs(product.image_url, { width: 180, sizes: "68px" })} alt="${escapeAttr(product.name)}">
+          <img ${imageAttrs(product.image_url, { width: 180, sizes: "68px" })} ${imageFrameAttrs(product, { includeZoom: false })} alt="${escapeAttr(product.name)}">
           <div>
             <strong>${escapeHtml(product.name)}</strong>
             <span>${escapeHtml(product.sku || "Sin SKU")}</span>
@@ -1090,6 +1135,84 @@ function renderProductsTable() {
       </td>
     </tr>
   `).join("") || `<tr><td colspan="8">${emptyAdminState("No hay productos para este filtro.", "Ajusta la búsqueda o agrega una pieza nueva.")}</td></tr>`;
+}
+
+function renderBannerAdmin() {
+  if (!adminEls.bannerAdminList) return;
+  const activeCount = adminState.banners.filter((banner) => banner.active).length;
+  setText(adminEls.bannerCountText, `${activeCount} activo${activeCount === 1 ? "" : "s"}`);
+
+  adminEls.bannerAdminList.innerHTML = adminState.banners.map((banner) => `
+    <article class="banner-admin-card ${banner.active ? "" : "is-hidden-banner"}">
+      <img ${imageAttrs(banner.image_url, { width: 520, widths: ADMIN_PREVIEW_WIDTHS, sizes: "(max-width: 760px) 100vw, 320px" })} alt="${escapeAttr(banner.title)}">
+      <div class="banner-admin-card-copy">
+        <span>${escapeHtml(banner.kicker || "Promo")}</span>
+        <strong>${escapeHtml(banner.title)}</strong>
+        <small>${escapeHtml(banner.text || (banner.active ? "Visible en la tienda." : "Oculto de la tienda."))}</small>
+      </div>
+      <div class="row-actions">
+        <button class="small-button" data-edit-banner="${escapeAttr(banner.id)}" type="button">Editar</button>
+        <button class="small-button" data-toggle-banner="${escapeAttr(banner.id)}" type="button">${banner.active ? "Ocultar" : "Activar"}</button>
+        <button class="small-button danger" data-delete-banner="${escapeAttr(banner.id)}" type="button">Eliminar</button>
+      </div>
+    </article>
+  `).join("") || emptyAdminState("No hay banners todavía.", "Sube una imagen y se verá en la cabecera de la tienda.");
+}
+
+function editBannerForm(id) {
+  const banner = adminState.banners.find((item) => item.id === id);
+  const form = adminEls.bannerForm;
+  if (!banner || !form) return;
+  form.elements.id.value = banner.id;
+  form.elements.kicker.value = banner.kicker || "";
+  form.elements.title.value = banner.title || "";
+  form.elements.text.value = banner.text || "";
+  form.elements.link_url.value = banner.link_url || "";
+  form.elements.image_url.value = banner.image_url || "";
+  form.elements.active.checked = Boolean(banner.active);
+  renderBannerPreview(banner.image_url, banner);
+  setMessage(adminEls.bannerMessage, "Editando banner existente.");
+  form.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  setTimeout(() => form.elements.title?.focus({ preventScroll: true }), 180);
+}
+
+function resetBannerForm(options = {}) {
+  const form = adminEls.bannerForm;
+  if (!form) return;
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.image_url.value = "";
+  form.elements.active.checked = true;
+  renderBannerPreview("");
+  if (!options.silent) setMessage(adminEls.bannerMessage, "");
+}
+
+function renderBannerPreview(src, banner = {}) {
+  if (!adminEls.bannerPreview) return;
+  const imageUrl = src || banner.image_url || "";
+  if (!imageUrl) {
+    adminEls.bannerPreview.innerHTML = "<span>Vista previa del banner</span>";
+    return;
+  }
+  adminEls.bannerPreview.innerHTML = `
+    <img ${imageAttrs(imageUrl, { width: 720, widths: ADMIN_PREVIEW_WIDTHS, sizes: "360px", loading: "eager", fetchPriority: "high" })} alt="${escapeAttr(banner.title || "Banner de tienda")}">
+    <div>
+      <span>${escapeHtml(banner.kicker || "Promo")}</span>
+      <strong>${escapeHtml(banner.title || "Banner de tienda")}</strong>
+    </div>
+  `;
+}
+
+function previewSelectedBannerImage() {
+  const file = adminEls.bannerForm?.elements.imageFile.files[0];
+  if (!file) return;
+  const objectUrl = URL.createObjectURL(file);
+  renderBannerPreview(objectUrl, {
+    kicker: adminEls.bannerForm.elements.kicker.value,
+    title: adminEls.bannerForm.elements.title.value
+  });
+  const img = adminEls.bannerPreview?.querySelector("img");
+  if (img) img.onload = () => URL.revokeObjectURL(objectUrl);
 }
 
 function filteredProducts() {
@@ -1316,6 +1439,7 @@ function openProductDrawer(id) {
     form.elements.stock.value = product.stock;
     form.elements.sku.value = product.sku || "";
     form.elements.image_url.value = product.image_url || "";
+    setProductImageFrame(product);
     setProductOptions("sizes", product.sizes);
     setProductOptions("colors", product.colors);
     form.elements.promo_type.value = product.promo_type || "none";
@@ -1354,6 +1478,7 @@ function resetProductForm(options = {}) {
   adminEls.productForm.elements.compare_price.value = "";
   adminEls.productForm.elements.discount_percent.value = "";
   adminEls.productForm.elements.promo_label.value = "";
+  setProductImageFrame();
   renderDiscountState();
   setProductOptions("sizes", []);
   setProductOptions("colors", []);
@@ -1610,6 +1735,10 @@ async function saveProduct(event) {
       stock: formData.get("stock"),
       sku: formData.get("sku"),
       image_url: imageUrl || "/assets/product-placeholder.svg",
+      image_fit: formData.get("image_fit") || "cover",
+      image_position_x: formData.get("image_position_x") || "50",
+      image_position_y: formData.get("image_position_y") || "50",
+      image_zoom: formData.get("image_zoom") || "1",
       sizes: formData.get("sizes"),
       colors: formData.get("colors"),
       promo_type: hasDiscount ? "discount" : formData.get("promo_type"),
@@ -1643,6 +1772,110 @@ async function saveProduct(event) {
   } catch (refreshError) {
     console.warn(refreshError);
     showToast(`${savedProductWasEdit || savedProductId ? "Producto guardado" : "Producto creado"}. Recarga el panel para ver los datos actualizados.`);
+  }
+}
+
+async function saveBanner(event) {
+  event.preventDefault();
+  const form = adminEls.bannerForm;
+  if (!form) return;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const formData = new FormData(form);
+  const title = String(formData.get("title") || "").trim();
+  const imageFile = form.elements.imageFile?.files?.[0];
+  let imageUrl = String(formData.get("image_url") || "").trim();
+
+  if (title.length < 2) {
+    setMessage(adminEls.bannerMessage, "Escribe un título corto para el banner.", true);
+    form.elements.title?.focus();
+    return;
+  }
+  if (!imageFile && !imageUrl) {
+    setMessage(adminEls.bannerMessage, "Sube una imagen para el banner.", true);
+    form.elements.imageFile?.focus();
+    return;
+  }
+  if (imageFile && !["image/jpeg", "image/png", "image/webp"].includes(imageFile.type)) {
+    setMessage(adminEls.bannerMessage, "Usa una imagen JPG, PNG o WebP.", true);
+    return;
+  }
+  if (imageFile && imageFile.size > 8 * 1024 * 1024) {
+    setMessage(adminEls.bannerMessage, "La imagen debe pesar máximo 8 MB.", true);
+    return;
+  }
+
+  setMessage(adminEls.bannerMessage, "Guardando banner...");
+  setButtonLoading(submitButton, true);
+  try {
+    if (imageFile) {
+      const uploadForm = new FormData();
+      uploadForm.append("image", imageFile);
+      const uploaded = await adminApi("/api/admin/upload", {
+        method: "POST",
+        body: uploadForm
+      });
+      if (!uploaded?.url) throw new Error("No se pudo obtener la URL de la imagen.");
+      imageUrl = uploaded.url;
+    }
+
+    const id = String(formData.get("id") || "").trim();
+    const payload = {
+      kicker: formData.get("kicker") || "Promo",
+      title,
+      text: formData.get("text") || "",
+      link_url: formData.get("link_url") || "",
+      image_url: imageUrl,
+      active: form.elements.active.checked
+    };
+    const data = await adminApi(id ? `/api/admin/banners/${encodeURIComponent(id)}` : "/api/admin/banners", {
+      method: id ? "PUT" : "POST",
+      body: payload
+    });
+    adminState.banners = data.banners || [];
+    renderBannerAdmin();
+    resetBannerForm({ silent: true });
+    setMessage(adminEls.bannerMessage, id ? "Banner actualizado." : "Banner creado.", false, true);
+    showToast(id ? "Banner actualizado." : "Banner creado.");
+  } catch (error) {
+    setMessage(adminEls.bannerMessage, error.message, true);
+  } finally {
+    setButtonLoading(submitButton, false);
+  }
+}
+
+async function toggleBannerVisibility(id) {
+  const banner = adminState.banners.find((item) => item.id === id);
+  if (!banner) return;
+  try {
+    const data = await adminApi(`/api/admin/banners/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: { ...banner, active: !banner.active }
+    });
+    adminState.banners = data.banners || [];
+    renderBannerAdmin();
+    showToast(banner.active ? "Banner oculto." : "Banner activado.");
+  } catch (error) {
+    showErrorToast(error);
+  }
+}
+
+async function removeBanner(id) {
+  const banner = adminState.banners.find((item) => item.id === id);
+  if (!banner) return;
+  const ok = await askConfirm({
+    title: "Eliminar banner",
+    message: `Se quitará "${banner.title}" de la cabecera de la tienda.`,
+    actionLabel: "Eliminar"
+  });
+  if (!ok) return;
+  try {
+    const data = await adminApi(`/api/admin/banners/${encodeURIComponent(id)}`, { method: "DELETE" });
+    adminState.banners = data.banners || [];
+    renderBannerAdmin();
+    resetBannerForm({ silent: true });
+    showToast("Banner eliminado.");
+  } catch (error) {
+    showErrorToast(error);
   }
 }
 
@@ -1776,18 +2009,11 @@ function openDrawer(drawer, focusTarget) {
   document.body.classList.add("drawer-open");
   const panel = drawer.querySelector(".drawer-panel");
   if (panel) {
-    panel.style.transform = "none";
-    panel.style.opacity = "1";
-  }
-  const isMobile = window.innerWidth <= 760;
-  if (panel && isMobile) {
+    if (window.gsap) gsap.killTweensOf(panel);
     panel.style.transform = "translate3d(0, 0, 0)";
     panel.style.opacity = "1";
-  } else if (panel && window.gsap && !prefersReducedMotion()) {
-    gsap.killTweensOf(panel);
-    gsap.fromTo(panel, { x: 36, opacity: 0.9 }, { x: 0, opacity: 1, duration: 0.22, ease: "power3.out" });
   }
-  setTimeout(() => focusTarget?.focus(), 40);
+  requestAnimationFrame(() => focusTarget?.focus({ preventScroll: true }));
 }
 
 function closeDrawer(drawer) {
@@ -1806,9 +2032,60 @@ function previewSelectedImage() {
   if (adminState.productValidationStarted) validateProductForm({ focus: false });
 }
 
+function currentProductImageFrame() {
+  const form = adminEls.productForm;
+  if (!form) return normalizedImageFrame();
+  return normalizedImageFrame({
+    image_fit: form.elements.image_fit?.value,
+    image_position_x: form.elements.image_position_x?.value,
+    image_position_y: form.elements.image_position_y?.value,
+    image_zoom: form.elements.image_zoom?.value
+  });
+}
+
+function setProductImageFrame(source = {}) {
+  const form = adminEls.productForm;
+  if (!form) return;
+  const frame = normalizedImageFrame(source);
+  if (form.elements.image_fit) form.elements.image_fit.value = frame.fit;
+  if (form.elements.image_position_x) form.elements.image_position_x.value = String(Math.round(frame.x));
+  if (form.elements.image_position_y) form.elements.image_position_y.value = String(Math.round(frame.y));
+  if (form.elements.image_zoom) form.elements.image_zoom.value = String(frame.zoom);
+  applyProductImageFrame();
+}
+
+function resetProductImageFrame() {
+  setProductImageFrame();
+}
+
+function updateProductImageFrameReadouts(frame) {
+  const form = adminEls.productForm;
+  if (!form) return;
+  const readouts = {
+    image_zoom: `${frame.zoom.toFixed(2)}x`,
+    image_position_x: `${Math.round(frame.x)}%`,
+    image_position_y: `${Math.round(frame.y)}%`
+  };
+  Object.entries(readouts).forEach(([name, value]) => {
+    const readout = form.querySelector(`[data-frame-readout="${name}"]`);
+    if (readout) readout.textContent = value;
+  });
+}
+
+function applyProductImageFrame() {
+  const frame = currentProductImageFrame();
+  updateProductImageFrameReadouts(frame);
+  if (!adminEls.productImagePreview) return;
+  adminEls.productImagePreview.style.objectFit = frame.fit;
+  adminEls.productImagePreview.style.objectPosition = `${frame.x}% ${frame.y}%`;
+  adminEls.productImagePreview.style.transform = `scale(${frame.zoom})`;
+  adminEls.productImagePreview.style.transformOrigin = `${frame.x}% ${frame.y}%`;
+}
+
 function setProductPreview(src, revokeLater = false) {
   if (!adminEls.productImagePreview) return;
-  adminEls.productImagePreview.src = optimizedImageUrl(src || "/assets/product-placeholder.svg", 520);
+  adminEls.productImagePreview.src = optimizedImageUrl(src || "/assets/product-placeholder.svg", 420);
+  applyProductImageFrame();
   if (revokeLater) {
     adminEls.productImagePreview.onload = () => URL.revokeObjectURL(src);
   }
@@ -2045,6 +2322,36 @@ function imageAttrs(value, options = {}) {
     `decoding="async"`,
     `fetchpriority="${escapeAttr(fetchPriority)}"`
   ].filter(Boolean).join(" ");
+}
+
+function clampFrameNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function normalizedImageFrame(source = {}) {
+  return {
+    fit: source.image_fit === "contain" ? "contain" : "cover",
+    x: clampFrameNumber(source.image_position_x, 0, 100, 50),
+    y: clampFrameNumber(source.image_position_y, 0, 100, 50),
+    zoom: clampFrameNumber(source.image_zoom, 1, 1.8, 1)
+  };
+}
+
+function imageFrameStyle(source = {}, options = {}) {
+  const frame = normalizedImageFrame(source);
+  const declarations = [
+    `object-fit:${frame.fit}`,
+    `object-position:${frame.x}% ${frame.y}%`,
+    `transform-origin:${frame.x}% ${frame.y}%`
+  ];
+  if (options.includeZoom !== false) declarations.push(`transform:scale(${frame.zoom})`);
+  return declarations.join(";");
+}
+
+function imageFrameAttrs(source = {}, options = {}) {
+  return `style="${escapeAttr(imageFrameStyle(source, options))}"`;
 }
 
 function setText(element, value) {

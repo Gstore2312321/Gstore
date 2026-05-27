@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-discount-visible">
-  <link rel="stylesheet" href="css/admin.css?v=20260526-discount-visible">
+  <link rel="stylesheet" href="css/styles.css?v=20260526-speed-lite">
+  <link rel="stylesheet" href="css/admin.css?v=20260526-speed-lite">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imÃ¡genes, categorÃ­as y pedidos en un panel hecho para operar sin tocar cÃ³digo.</p>
+          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>ImÃ¡genes listas para Cloudinary</span>
+            <span>Imágenes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electrÃ³nico
+            Correo electrónico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,24 +59,24 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="NavegaciÃ³n del panel">
+        <nav aria-label="Navegación del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">CategorÃ­as</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
         </nav>
         <div class="sidebar-status">
-          <span>OperaciÃ³n</span>
+          <span>Operación</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÃ³n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesión</button>
       </aside>
 
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">MercaderÃ­a</span>
+            <span class="eyebrow">Mercadería</span>
             <h1>Productos</h1>
           </div>
           <div class="topbar-actions">
@@ -85,29 +85,29 @@
           </div>
         </header>
 
-        <section class="admin-page-brief" aria-label="GuÃ­a de productos">
+        <section class="admin-page-brief" aria-label="Guía de productos">
           <div>
             <span class="eyebrow">Vitrina</span>
-            <h2>Sube mercaderÃ­a sin perder el control.</h2>
-            <p>Cada ficha separa lo pÃºblico de lo privado: precio de venta, costo, stock, promo, tallas, colores e imagen.</p>
+            <h2>Sube mercadería sin perder el control.</h2>
+            <p>Cada ficha separa lo público de lo privado: precio de venta, costo, stock, promo, tallas, colores e imagen.</p>
           </div>
           <div class="admin-brief-stack">
-            <span><strong>01</strong> Completa datos bÃ¡sicos</span>
+            <span><strong>01</strong> Completa datos básicos</span>
             <span><strong>02</strong> Sube foto o conserva la actual</span>
-            <span><strong>03</strong> Activa promo si conviene vender rÃ¡pido</span>
+            <span><strong>03</strong> Activa promo si conviene vender rápido</span>
           </div>
         </section>
 
         <section class="admin-section products-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">CatÃ¡logo</span>
+              <span class="eyebrow">Catálogo</span>
               <h2>Inventario visible</h2>
             </div>
             <div class="section-actions">
               <label class="search-control">
                 <span class="sr-only">Buscar productos</span>
-                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU o categorÃ­a">
+                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU o categoría">
               </label>
               <select id="productStatusFilter" aria-label="Filtrar productos">
                 <option value="all">Todos</option>
@@ -124,7 +124,7 @@
               <thead>
                 <tr>
                   <th>Producto</th>
-                  <th>CategorÃ­a</th>
+                  <th>Categoría</th>
                   <th>Precio</th>
                   <th>Compra</th>
                   <th>Ganancia</th>
@@ -155,8 +155,8 @@
         </header>
 
         <div class="product-form-guide" id="productFormGuide" role="status" aria-live="polite">
-          <strong>Completa lo bÃ¡sico</strong>
-          <span>Nombre, categorÃ­a, precio, stock e imagen.</span>
+          <strong>Completa lo básico</strong>
+          <span>Nombre, categoría, precio, stock e imagen.</span>
         </div>
 
         <div class="drawer-body product-form-body">
@@ -164,8 +164,8 @@
             <div class="form-panel-heading">
               <span>01</span>
               <div>
-                <h3>Datos bÃ¡sicos</h3>
-                <p>Nombre, categorÃ­a y SKU para ubicarlo rÃ¡pido.</p>
+                <h3>Datos básicos</h3>
+                <p>Nombre, categoría y SKU para ubicarlo rápido.</p>
               </div>
             </div>
             <div class="form-grid">
@@ -175,7 +175,7 @@
                 <span class="field-error" id="productNameError" data-error-for="name"></span>
               </label>
               <label class="field-required" data-field-wrap="category_id">
-                CategorÃ­a
+                Categoría
                 <select name="category_id" id="productCategorySelect" required aria-describedby="productCategoryError"></select>
                 <span class="field-error" id="productCategoryError" data-error-for="category_id"></span>
               </label>
@@ -214,8 +214,8 @@
                 <label class="discount-toggle">
                   <input name="has_discount" type="checkbox">
                   <span>
-                    <strong>Â¿Quieres poner esto en descuento?</strong>
-                    <small>ActÃ­valo solo si quieres mostrar un precio anterior en la tienda.</small>
+                    <strong>¿Quieres poner esto en descuento?</strong>
+                    <small>Actívalo solo si quieres mostrar un precio anterior en la tienda.</small>
                   </span>
                 </label>
                 <label class="discount-field" id="discountPriceWrap" data-field-wrap="compare_price" hidden>
@@ -256,6 +256,28 @@
                   <input name="imageFile" type="file" accept="image/*">
                 </label>
                 <p class="image-help">Si no subes una foto nueva, se conserva la imagen actual.</p>
+                <div class="image-frame-controls" aria-label="Ajuste visual de la foto">
+                  <label>
+                    Encuadre
+                    <select name="image_fit">
+                      <option value="cover">Llenar cuadro</option>
+                      <option value="contain">Mostrar completa</option>
+                    </select>
+                  </label>
+                  <label>
+                    Zoom <span data-frame-readout="image_zoom">1.00x</span>
+                    <input name="image_zoom" type="range" min="1" max="1.8" step="0.05" value="1">
+                  </label>
+                  <label>
+                    Horizontal <span data-frame-readout="image_position_x">50%</span>
+                    <input name="image_position_x" type="range" min="0" max="100" step="1" value="50">
+                  </label>
+                  <label>
+                    Vertical <span data-frame-readout="image_position_y">50%</span>
+                    <input name="image_position_y" type="range" min="0" max="100" step="1" value="50">
+                  </label>
+                  <button class="small-button" id="resetImageFrame" type="button">Centrar foto</button>
+                </div>
                 <span class="field-error" id="productImageError" data-error-for="image"></span>
               </div>
             </div>
@@ -274,13 +296,13 @@
                 Promo
                 <select name="promo_type">
                   <option value="none">Sin promo</option>
-                  <option value="last_units">Ãšltimas unidades</option>
-                  <option value="new_arrival">ReciÃ©n llegado</option>
+                  <option value="last_units">Últimas unidades</option>
+                  <option value="new_arrival">Recién llegado</option>
                 </select>
               </label>
               <label>
                 Texto de promo
-                <input name="promo_label" maxlength="42" placeholder="Precio especial, Ãºltimas unidades...">
+                <input name="promo_label" maxlength="42" placeholder="Precio especial, últimas unidades...">
               </label>
               <div class="option-picker full" data-option-picker="sizes">
                 <input type="hidden" name="sizes">
@@ -319,7 +341,7 @@
                   <button type="button" data-option-kind="colors" data-option-value="Nude">Nude</button>
                   <button type="button" data-option-kind="colors" data-option-value="Dorado">Dorado</button>
                   <button type="button" data-option-kind="colors" data-option-value="Champagne">Champagne</button>
-                  <button type="button" data-option-kind="colors" data-option-value="CafÃ©">CafÃ©</button>
+                  <button type="button" data-option-kind="colors" data-option-value="Café">Café</button>
                   <button type="button" data-option-kind="colors" data-option-value="Beige">Beige</button>
                   <button type="button" data-option-kind="colors" data-option-value="Rosa">Rosa</button>
                   <button type="button" data-option-kind="colors" data-option-value="Arena">Arena</button>
@@ -354,9 +376,9 @@
 
   <div class="confirm-overlay" id="confirmOverlay" hidden>
     <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <span class="eyebrow">ConfirmaciÃ³n</span>
-      <h2 id="confirmTitle">Confirmar acciÃ³n</h2>
-      <p id="confirmMessage">Esta acciÃ³n necesita confirmaciÃ³n.</p>
+      <span class="eyebrow">Confirmación</span>
+      <h2 id="confirmTitle">Confirmar acción</h2>
+      <p id="confirmMessage">Esta acción necesita confirmación.</p>
       <div class="confirm-actions">
         <button class="button ghost" id="confirmCancel" type="button">Cancelar</button>
         <button class="button danger" id="confirmAccept" type="button">Eliminar</button>
@@ -366,6 +388,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260526-discount-visible" defer></script>
+  <script src="js/admin.js?v=20260526-speed-lite" defer></script>
 </body>
 </html>
