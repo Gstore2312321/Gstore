@@ -71,6 +71,10 @@ const adminEls = {
   productDrawerKicker: document.querySelector("#productDrawerKicker"),
   productImagePreview: document.querySelector("#productImagePreview"),
   discountPriceWrap: document.querySelector("#discountPriceWrap"),
+  discountPercentWrap: document.querySelector("#discountPercentWrap"),
+  discountSummary: document.querySelector("#discountSummary"),
+  discountFinalPrice: document.querySelector("#discountFinalPrice"),
+  discountSavingsText: document.querySelector("#discountSavingsText"),
   resetProductForm: document.querySelector("#resetProductForm"),
   newProductButton: document.querySelector("#newProductButton"),
   quickProductButton: document.querySelector("#quickProductButton"),
@@ -184,10 +188,15 @@ function bindAdminEvents() {
       if (value) setProductPreview(value);
     });
     on(adminEls.productForm.elements.has_discount, "change", renderDiscountState);
+    on(adminEls.productForm.elements.compare_price, "input", () => applyDiscountCalculator("compare"));
+    on(adminEls.productForm.elements.discount_percent, "input", () => applyDiscountCalculator("percent"));
+    on(adminEls.productForm.elements.price, "input", () => renderDiscountState());
     on(adminEls.productForm, "input", () => {
+      renderDiscountSummary();
       if (adminState.productValidationStarted) validateProductForm({ focus: false });
     });
     on(adminEls.productForm, "change", () => {
+      renderDiscountSummary();
       if (adminState.productValidationStarted) validateProductForm({ focus: false });
     });
   }
@@ -267,7 +276,7 @@ async function restoreSession() {
 
 function markActiveNav() {
   let activeLink = null;
-  const activePage = adminState.page === "reports" ? "dashboard" : adminState.page;
+  const activePage = adminState.page;
   document.querySelectorAll("[data-nav-page]").forEach((link) => {
     const isActive = link.dataset.navPage === activePage;
     link.classList.toggle("is-active", isActive);
@@ -1303,6 +1312,7 @@ function openProductDrawer(id) {
     form.elements.cost_price.value = product.cost_price || "";
     form.elements.compare_price.value = product.compare_price || "";
     form.elements.has_discount.checked = Number(product.compare_price || 0) > Number(product.price || 0) || product.promo_type === "discount";
+    form.elements.discount_percent.value = discountPercentFromPrices(product.compare_price, product.price) || "";
     form.elements.stock.value = product.stock;
     form.elements.sku.value = product.sku || "";
     form.elements.image_url.value = product.image_url || "";
@@ -1342,6 +1352,7 @@ function resetProductForm(options = {}) {
   adminEls.productForm.elements.cost_price.value = "";
   adminEls.productForm.elements.has_discount.checked = false;
   adminEls.productForm.elements.compare_price.value = "";
+  adminEls.productForm.elements.discount_percent.value = "";
   adminEls.productForm.elements.promo_label.value = "";
   renderDiscountState();
   setProductOptions("sizes", []);
@@ -1357,15 +1368,70 @@ function renderDiscountState() {
   if (!adminEls.productForm) return;
   const isDiscount = Boolean(adminEls.productForm.elements.has_discount?.checked);
   if (adminEls.discountPriceWrap) adminEls.discountPriceWrap.hidden = !isDiscount;
+  if (adminEls.discountPercentWrap) adminEls.discountPercentWrap.hidden = !isDiscount;
+  if (adminEls.discountSummary) adminEls.discountSummary.hidden = !isDiscount;
   if (adminEls.productForm.elements.compare_price) {
     adminEls.productForm.elements.compare_price.required = isDiscount;
-    if (!isDiscount) adminEls.productForm.elements.compare_price.value = "";
+    if (!isDiscount) {
+      adminEls.productForm.elements.compare_price.value = "";
+      if (adminEls.productForm.elements.discount_percent) adminEls.productForm.elements.discount_percent.value = "";
+    }
   }
   if (adminEls.productForm.elements.promo_type) {
     adminEls.productForm.elements.promo_type.disabled = isDiscount;
     if (isDiscount) adminEls.productForm.elements.promo_type.value = "none";
   }
+  renderDiscountSummary();
   if (adminState.productValidationStarted) validateProductForm({ focus: false });
+}
+
+function applyDiscountCalculator(source = "") {
+  const form = adminEls.productForm;
+  if (!form || !form.elements.has_discount?.checked) return;
+  const comparePrice = Number(form.elements.compare_price?.value || 0);
+  const percent = Number(form.elements.discount_percent?.value || 0);
+  if (["compare", "percent"].includes(source) && comparePrice > 0 && percent > 0 && percent < 100) {
+    form.elements.price.value = formatMoneyInput(comparePrice * (1 - percent / 100));
+  }
+  renderDiscountSummary();
+}
+
+function renderDiscountSummary() {
+  const form = adminEls.productForm;
+  if (!form || !adminEls.discountSummary) return;
+  const enabled = Boolean(form.elements.has_discount?.checked);
+  adminEls.discountSummary.hidden = !enabled;
+  if (!enabled) return;
+
+  const comparePrice = Number(form.elements.compare_price?.value || 0);
+  const salePrice = Number(form.elements.price?.value || 0);
+  const savings = comparePrice - salePrice;
+  const percent = discountPercentFromPrices(comparePrice, salePrice);
+
+  if (adminEls.discountFinalPrice) {
+    setText(adminEls.discountFinalPrice, salePrice > 0 ? formatCurrency(salePrice) : "$0.00");
+  }
+
+  if (!comparePrice || !salePrice || savings <= 0 || !percent) {
+    setText(adminEls.discountSavingsText, "Agrega precio anterior y descuento para ver el ahorro.");
+    adminEls.discountSummary.classList.remove("is-ready");
+    return;
+  }
+
+  setText(adminEls.discountSavingsText, `La clienta ahorra ${formatCurrency(savings)} · ${percent}% menos.`);
+  adminEls.discountSummary.classList.add("is-ready");
+}
+
+function discountPercentFromPrices(comparePrice, salePrice) {
+  const compare = Number(comparePrice || 0);
+  const sale = Number(salePrice || 0);
+  if (!compare || !sale || compare <= sale) return 0;
+  return Math.round(((compare - sale) / compare) * 100);
+}
+
+function formatMoneyInput(value) {
+  const amount = Math.max(0, Number(value) || 0);
+  return (Math.round(amount * 100) / 100).toFixed(2);
 }
 
 function validateProductForm({ focus = false } = {}) {
@@ -1385,8 +1451,10 @@ function validateProductForm({ focus = false } = {}) {
   const costRaw = String(form.elements.cost_price?.value || "").trim();
   const stockRaw = String(form.elements.stock?.value || "").trim();
   const compareRaw = String(form.elements.compare_price?.value || "").trim();
+  const discountPercentRaw = String(form.elements.discount_percent?.value || "").trim();
   const salePrice = Number(priceRaw);
   const comparePrice = Number(compareRaw);
+  const discountPercent = Number(discountPercentRaw);
   const stock = Number(stockRaw);
   const imageFile = form.elements.imageFile?.files?.[0];
   const imageUrl = String(form.elements.image_url?.value || "").trim();
@@ -1425,6 +1493,9 @@ function validateProductForm({ focus = false } = {}) {
   if (form.elements.has_discount?.checked) {
     if (!compareRaw || !Number.isFinite(comparePrice) || comparePrice <= salePrice) {
       addError("compare_price", "El precio anterior debe ser mayor al precio de venta.");
+    }
+    if (discountPercentRaw && (!Number.isFinite(discountPercent) || discountPercent <= 0 || discountPercent > 95)) {
+      addError("discount_percent", "Usa un descuento entre 1% y 95%.");
     }
   }
 

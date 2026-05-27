@@ -595,7 +595,7 @@ a {
   line-height: 1;
 }
 
-.price-stack small {
+.price-stack .was-price {
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 800;
@@ -607,12 +607,32 @@ a {
   white-space: nowrap;
 }
 
+.saving-price {
+  display: inline-flex;
+  justify-self: end;
+  width: max-content;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 0.18rem 0.42rem;
+  background: rgba(223, 232, 221, 0.78);
+  color: #2f5d34;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .detail-price {
   justify-items: start;
 }
 
 .detail-price strong {
   font-size: 1.8rem;
+}
+
+.detail-price .saving-price {
+  justify-self: start;
+  font-size: 0.78rem;
 }
 
 .product-content {
@@ -2560,6 +2580,12 @@ body {
     font-size: 0.62rem;
   }
 
+  .catalog-only .saving-price {
+    padding: 0.14rem 0.3rem;
+    font-size: 0.56rem;
+    line-height: 1.05;
+  }
+
   .catalog-only .price-stack strong {
     font-size: 0.88rem;
   }
@@ -2600,4 +2626,12 @@ body {
     padding: 0.42rem 0.25rem;
     font-size: 0.72rem;
   }
+}
+
+/* 2026 catalog polish: filtros sin comportamiento pegajoso para no perseguir al usuario. */
+.catalog-tools,
+.catalog-only .catalog-tools {
+  position: relative;
+  top: auto;
+  z-index: 1;
 }

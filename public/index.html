@@ -1,36 +1,36 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="GStore es una tienda familiar de moda importada con catálogo, carrito y checkout por WhatsApp o PayPal.">
-  <meta property="og:title" content="GStore | Catálogo">
+  <meta name="description" content="GStore es una tienda familiar de moda importada con catÃ¡logo, carrito y checkout por WhatsApp o PayPal.">
+  <meta property="og:title" content="GStore | CatÃ¡logo">
   <meta property="og:description" content="Busca piezas disponibles, elige talla o color y prepara tu pedido.">
   <meta property="og:image" content="assets/og-gstore.svg">
   <meta property="og:type" content="website">
-  <title>GStore | Catálogo</title>
+  <title>GStore | CatÃ¡logo</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=20260526-discount-visible">
 </head>
 <body class="catalog-only">
-  <a class="skip-link" href="#catalogo">Saltar al catálogo</a>
+  <a class="skip-link" href="#catalogo">Saltar al catÃ¡logo</a>
 
   <header class="site-header" data-animate="header">
-    <a class="brand" href="#catalogo" data-scroll-target="catalogo" aria-label="Catálogo GStore">
+    <a class="brand" href="#catalogo" data-scroll-target="catalogo" aria-label="CatÃ¡logo GStore">
       <span class="brand-mark">G</span>
       <span>
         <strong>GStore</strong>
-        <small>Catálogo</small>
+        <small>CatÃ¡logo</small>
       </span>
     </a>
 
-    <nav class="desktop-nav" aria-label="Navegación principal">
-      <a class="header-link is-active" href="#catalogo" data-scroll-target="catalogo">Catálogo</a>
+    <nav class="desktop-nav" aria-label="NavegaciÃ³n principal">
+      <a class="header-link is-active" href="#catalogo" data-scroll-target="catalogo">CatÃ¡logo</a>
     </nav>
 
     <button class="cart-button" id="openCartButton" type="button" aria-label="Abrir carrito">
@@ -46,7 +46,7 @@
     <section class="catalog-section catalog-first" id="catalogo" aria-labelledby="catalogTitle">
       <div class="section-heading catalog-heading">
         <div>
-          <span class="eyebrow">Catálogo GStore</span>
+          <span class="eyebrow">CatÃ¡logo GStore</span>
           <h1 id="catalogTitle">Elige tu pieza.</h1>
         </div>
         <p>Busca, filtra y agrega al carrito. El detalle se abre solo cuando necesitas talla, color o cantidad.</p>
@@ -64,7 +64,7 @@
       <div class="product-grid" id="productGrid" aria-live="polite"></div>
       <div class="empty-state" id="emptyState" hidden>
         <strong>No encontramos productos con ese filtro.</strong>
-        <span>Prueba otra categoría o borra la búsqueda.</span>
+        <span>Prueba otra categorÃ­a o borra la bÃºsqueda.</span>
       </div>
     </section>
   </main>
@@ -101,7 +101,7 @@
           </div>
           <div class="cart-lines" id="cartLines"></div>
           <div class="cart-empty" id="cartEmpty">
-            <strong>Tu carrito está vacío.</strong>
+            <strong>Tu carrito estÃ¡ vacÃ­o.</strong>
             <span>Agrega una pieza para preparar el pedido.</span>
           </div>
           <div class="cart-review-footer" id="cartReviewFooter" hidden>
@@ -109,8 +109,8 @@
               <span>Total</span>
               <strong id="cartTotal">$0.00</strong>
             </div>
-            <button class="button primary" id="continueCheckoutButton" type="button">Ya terminé de elegir</button>
-            <small>Después completas entrega y datos para confirmar el pedido.</small>
+            <button class="button primary" id="continueCheckoutButton" type="button">Ya terminÃ© de elegir</button>
+            <small>DespuÃ©s completas entrega y datos para confirmar el pedido.</small>
           </div>
         </section>
 
@@ -119,7 +119,7 @@
             <div class="step-heading">
               <span>02</span>
               <div>
-                <strong>Confirmación</strong>
+                <strong>ConfirmaciÃ³n</strong>
                 <small>Si falta algo, vuelve al pedido y ajusta cantidades.</small>
               </div>
             </div>
@@ -134,15 +134,15 @@
               <span>03</span>
               <div>
                 <strong>Entrega</strong>
-                <small id="checkoutModeText">Envío a domicilio o retiro coordinado.</small>
+                <small id="checkoutModeText">EnvÃ­o a domicilio o retiro coordinado.</small>
               </div>
             </div>
-            <div class="delivery-options" role="radiogroup" aria-label="Método de entrega">
+            <div class="delivery-options" role="radiogroup" aria-label="MÃ©todo de entrega">
               <label class="delivery-option">
                 <input name="delivery_method" type="radio" value="delivery" checked>
                 <span>
-                  <strong>Envío</strong>
-                  <small>La dirección queda guardada en el pedido.</small>
+                  <strong>EnvÃ­o</strong>
+                  <small>La direcciÃ³n queda guardada en el pedido.</small>
                 </span>
               </label>
               <label class="delivery-option">
@@ -153,7 +153,7 @@
                 </span>
               </label>
             </div>
-            <p class="pickup-note" id="pickupWhatsappNote" hidden>Al confirmar un retiro se abrirá WhatsApp para coordinar hora y punto de entrega.</p>
+            <p class="pickup-note" id="pickupWhatsappNote" hidden>Al confirmar un retiro se abrirÃ¡ WhatsApp para coordinar hora y punto de entrega.</p>
           </section>
 
           <section class="checkout-step">
@@ -170,20 +170,20 @@
                 <input name="name" autocomplete="name" required placeholder="Nombre de quien recibe">
               </label>
               <label>
-                Teléfono
-                <input name="phone" autocomplete="tel" inputmode="tel" required placeholder="Tu teléfono">
+                TelÃ©fono
+                <input name="phone" autocomplete="tel" inputmode="tel" required placeholder="Tu telÃ©fono">
               </label>
               <label>
                 Ciudad
                 <input name="city" autocomplete="address-level2" value="Guayaquil">
               </label>
               <label>
-                Correo electrónico
+                Correo electrÃ³nico
                 <input name="email" type="email" autocomplete="email" required placeholder="Para confirmar tu pedido">
               </label>
               <label class="full" id="deliveryAddressWrap">
-                Dirección o referencia
-                <input name="address" autocomplete="street-address" required placeholder="Sector, referencia o dirección">
+                DirecciÃ³n o referencia
+                <input name="address" autocomplete="street-address" required placeholder="Sector, referencia o direcciÃ³n">
               </label>
               <label class="full">
                 Nota
@@ -231,6 +231,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/store.js" defer></script>
+  <script src="js/store.js?v=20260526-discount-visible" defer></script>
 </body>
 </html>

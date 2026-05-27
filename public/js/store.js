@@ -432,6 +432,13 @@ function getDiscountPercent(product) {
   return Math.round(((compare - price) / compare) * 100);
 }
 
+function getDiscountSavings(product) {
+  const compare = Number(product.compare_price || 0);
+  const price = Number(product.price || 0);
+  if (!compare || compare <= price || !price) return 0;
+  return Math.max(0, compare - price);
+}
+
 function getProductPromoLabel(product) {
   if (product.promo_label) return product.promo_label;
   if (getDiscountPercent(product) > 0 || product.promo_type === "discount") return "Oferta limitada";
@@ -442,10 +449,13 @@ function getProductPromoLabel(product) {
 
 function renderPriceStack(product, className = "") {
   const hasDiscount = Number(product.compare_price || 0) > Number(product.price || 0);
+  const discountPercent = getDiscountPercent(product);
+  const savings = getDiscountSavings(product);
   return `
     <span class="price-stack ${className}">
-      ${hasDiscount ? `<small>Antes ${formatCurrency(product.compare_price)}</small>` : ""}
+      ${hasDiscount ? `<small class="was-price">Antes ${formatCurrency(product.compare_price)}</small>` : ""}
       <strong>${formatCurrency(product.price)}</strong>
+      ${hasDiscount ? `<span class="saving-price">Ahorras ${formatCurrency(savings)} · ${discountPercent}% menos</span>` : ""}
     </span>
   `;
 }
