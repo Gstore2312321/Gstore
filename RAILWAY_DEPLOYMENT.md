@@ -21,14 +21,14 @@ npm run railway:check
 6. Railway usa `railway.json` con `RAILPACK` y arranca con `npm start`.
 7. Verifica que el start command sea `npm start`.
 8. Configura las variables de entorno del admin.
-9. Agrega tu dominio o subdominio en Railway.
+9. Agrega tu dominio principal en Railway.
 
 ## Variables minimas
 
 ```text
 NODE_ENV=production
-PUBLIC_BASE_URL=https://tu-subdominio.tudominio.com
-ALLOWED_ORIGINS=https://tu-subdominio.tudominio.com
+PUBLIC_BASE_URL=https://tu-dominio.com
+ALLOWED_ORIGINS=https://tu-dominio.com
 
 MYSQL_URL=mysql://usuario:clave@host:3306/base
 
@@ -147,11 +147,11 @@ Para producción, verifica un dominio en Resend y usa un remitente propio:
 RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
 ```
 
-La recuperación de clave solo envía enlace si el correo escrito coincide con `ADMIN_EMAIL` o `STORE_OWNER_EMAIL`. El enlace usa `PUBLIC_BASE_URL`, por eso debe estar puesto con el dominio real de Railway o tu subdominio.
+La recuperación de clave solo envía enlace si el correo escrito coincide con `ADMIN_EMAIL` o `STORE_OWNER_EMAIL`. El enlace usa `PUBLIC_BASE_URL`, por eso debe estar puesto con el dominio principal real.
 
 ## Dominio
 
-Railway permite agregar dominios y subdominios desde el panel del servicio. Para un subdominio como `gstore.tudominio.com`, agregalo en Railway y apunta el DNS segun lo indique Railway.
+Railway permite agregar el dominio desde el panel del servicio. Para esta tienda usa el dominio principal y entra al panel en `https://tu-dominio.com/admin`; no hace falta crear un subdominio de admin.
 
 ## Antes de entregar
 

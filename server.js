@@ -96,6 +96,12 @@ app.get(Array.from(CLEAN_PAGE_PATHS.keys()), (req, res) => {
   res.redirect(301, `${cleanPath}${query}`);
 });
 
+app.get(/^\/admin(?:-[a-z]+)?\/$/, (req, res) => {
+  const queryIndex = req.originalUrl.indexOf("?");
+  const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
+  res.redirect(301, `${req.path.replace(/\/$/, "")}${query}`);
+});
+
 app.get(/^\/admin(?:-[a-z]+)?$/, (req, res, next) => {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   next();
@@ -209,7 +215,7 @@ function applySecurityHeaders(req, res) {
 }
 
 function isAdminPagePath(pathname) {
-  return /^\/admin(?:-[a-z]+)?(?:\.html)?$/.test(pathname);
+  return /^\/admin(?:-[a-z]+)?(?:\.html|\/)?$/.test(pathname);
 }
 
 function createRateLimiter({ windowMs, max, message }) {

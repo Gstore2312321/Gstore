@@ -42,8 +42,8 @@ El archivo `.env` local ya deja la tienda lista para pruebas. Para producción, 
 - `ADMIN_SECRET`
 - `ADMIN_PASSWORD_HASH` generado con `npm run hash:admin -- "tu-clave-larga"`
 - `ADMIN_SESSION_HOURS`
-- `ADMIN_COOKIE_DOMAIN` opcional si usarás subdominios compartiendo sesión
-- `ALLOWED_ORIGINS` con el dominio real y cualquier subdominio permitido
+- `ADMIN_COOKIE_DOMAIN` vacío si el panel vive en el mismo dominio
+- `ALLOWED_ORIGINS` con el dominio principal real
 - `MYSQL_URL` o las variables `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`
 - `UPLOAD_DIR` solo si usarás volumen para imágenes locales
 - Credenciales de `PAYPAL_CLIENT_ID` y `PAYPAL_CLIENT_SECRET`
@@ -114,7 +114,7 @@ Variables mínimas en Railway:
 ```text
 NODE_ENV=production
 PUBLIC_BASE_URL=https://tu-dominio.com
-ALLOWED_ORIGINS=https://tu-dominio.com,https://admin.tu-dominio.com
+ALLOWED_ORIGINS=https://tu-dominio.com
 MYSQL_URL=mysql://usuario:clave@host:3306/base
 STORE_NAME=GStore
 STORE_CURRENCY=USD
@@ -144,7 +144,7 @@ Si Cloudinary muestra `Invalid Signature`, revisa que el API key y API secret se
 
 La app crea sola las tablas `categories`, `products` y `orders` cuando arranca.
 Tambien crea `audit_logs`, `app_settings` y `password_reset_tokens`.
-La recuperacion de clave usa `ADMIN_EMAIL`, `PUBLIC_BASE_URL` y Resend. Mantén `ADMIN_PASSWORD_HASH` en Railway como clave inicial y fallback seguro.
+La recuperacion de clave usa `ADMIN_EMAIL`, `PUBLIC_BASE_URL` y Resend. El panel entra por `https://tu-dominio.com/admin`, no por subdominio. Mantén `ADMIN_PASSWORD_HASH` en Railway como clave inicial y fallback seguro.
 
 ## Seguridad operativa
 
