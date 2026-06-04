@@ -61,6 +61,16 @@ El archivo `.env` local ya deja la tienda lista para pruebas. Para producción, 
 - `PUBLIC_BASE_URL` por el dominio real
 - `STORE_TIME_ZONE` y `DEFAULT_SHIPPING` si cambian la zona horaria o el costo de envío
 
+Formato recomendado para Resend:
+
+```text
+RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
+RESEND_TO_EMAIL=correo-admin@tudominio.com
+RESEND_REPLY_TO_EMAIL=correo-admin@tudominio.com
+```
+
+`RESEND_REPLY_TO_EMAIL` debe ser solo `email@dominio.com` o `Nombre <email@dominio.com>`. No pongas telefono, nombre solo ni texto adicional. Para enviar a clientes reales, el remitente/dominio debe estar verificado en Resend; si la cuenta esta en modo prueba, Resend solo envia a correos autorizados de la cuenta.
+
 El correo privado y el número de WhatsApp viven solo en variables de entorno. No se imprimen en la tienda pública.
 
 ## Railway

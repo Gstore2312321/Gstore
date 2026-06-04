@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-clientes">
-  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-clientes">
+  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-correos">
+  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-product-filters">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
@@ -65,6 +65,7 @@
           <a href="/admin-productos" data-nav-page="products">Productos</a>
           <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
+          <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
@@ -97,19 +98,6 @@
                 <span class="sr-only">Buscar productos</span>
                 <input id="productSearch" type="search" placeholder="Nombre, SKU o marca">
               </label>
-              <select id="productCategoryFilter" aria-label="Filtrar por categoría">
-                <option value="all">Todas las categorías</option>
-              </select>
-              <select id="productBrandFilter" aria-label="Filtrar por marca">
-                <option value="all">Todas las marcas</option>
-              </select>
-              <select id="productStatusFilter" aria-label="Filtrar por estado">
-                <option value="all">Todos los productos</option>
-                <option value="active">Activos</option>
-                <option value="hidden">Ocultos</option>
-                <option value="no_stock">Sin stock</option>
-                <option value="promo">Con promo</option>
-              </select>
               <button class="button ghost" id="productPrintButton" type="button">Imprimir</button>
               <button class="button primary" id="productCreateButton" type="button">Nuevo producto</button>
             </div>
@@ -393,6 +381,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260604-admin-clientes" defer></script>
+  <script src="js/admin.js?v=20260604-admin-product-filters" defer></script>
 </body>
 </html>

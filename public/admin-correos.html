@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Panel privado de GStore para revisar clientes y datos de pedidos.">
-  <title>Clientes | Panel GStore</title>
+  <meta name="description" content="Panel privado de GStore para revisar el estado de correos de pedidos.">
+  <title>Correos | Panel GStore</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/styles.css?v=20260604-admin-correos">
   <link rel="stylesheet" href="css/admin.css?v=20260604-admin-product-filters">
 </head>
-<body class="admin-body is-auth-checking" data-admin-page="customers">
+<body class="admin-body is-auth-checking" data-admin-page="emails">
   <main class="admin-shell">
     <section class="login-view" id="loginView">
       <form class="login-card" id="loginForm">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, pedidos, clientes y reportes en un panel hecho para operar sin tocar codigo.</p>
+          <p>Inventario, pedidos, clientes y correos en un panel hecho para operar sin tocar codigo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
-            <span>Clientes guardados</span>
-            <span>Tabla de clientes</span>
-            <span>Exportacion CSV</span>
+            <span>Estado de correos</span>
+            <span>Reenvio de pedidos</span>
+            <span>Diagnostico Resend</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -78,65 +78,98 @@
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Marketing</span>
-            <h1>Clientes</h1>
+            <span class="eyebrow">Notificaciones</span>
+            <h1>Correos</h1>
           </div>
           <div class="topbar-actions">
-            <button class="button primary" id="refreshCustomersButton" type="button">Actualizar clientes</button>
-            <button class="button ghost" id="exportCustomersButton" type="button">Descargar CSV</button>
+            <button class="button primary" id="refreshEmailStatusButton" type="button">Actualizar correos</button>
+            <a class="button ghost" href="/admin-pedidos">Ver pedidos</a>
           </div>
         </header>
 
-        <section class="admin-section customers-section">
+        <section class="admin-section emails-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Lista privada</span>
-              <h2>Base de clientes</h2>
-              <p>Datos consolidados por cliente para seguimiento comercial.</p>
+              <span class="eyebrow">Configuracion</span>
+              <h2>Estado de Resend</h2>
+              <p id="emailHint"><strong>Correo</strong> Revisando configuracion</p>
             </div>
           </div>
 
-          <div class="customers-overview" aria-label="Resumen de clientes">
+          <div class="email-config-grid" aria-label="Configuracion de correos">
+            <article class="email-config-card">
+              <span>Estado</span>
+              <strong id="emailConfigured">Revisando</strong>
+              <small>Disponibilidad del servicio</small>
+            </article>
+            <article class="email-config-card">
+              <span>Remitente</span>
+              <strong id="emailFrom">Pendiente</strong>
+              <small>RESEND_FROM_EMAIL</small>
+            </article>
+            <article class="email-config-card">
+              <span>Destino admin</span>
+              <strong id="emailOwner">Pendiente</strong>
+              <small>RESEND_TO_EMAIL o STORE_OWNER_EMAIL</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="admin-section emails-section">
+          <div class="admin-section-heading">
+            <div>
+              <span class="eyebrow">Pedidos</span>
+              <h2>Registro de correos</h2>
+              <p>Consulta el estado de envío por pedido y reenvía solo cuando haga falta.</p>
+            </div>
+            <div class="section-actions order-toolbar">
+              <label class="search-control">
+                <span class="sr-only">Buscar correos</span>
+                <input id="emailSearch" type="search" placeholder="Pedido, cliente o correo">
+              </label>
+              <select id="emailStatusFilter" aria-label="Filtrar correos por estado">
+                <option value="all">Todos los estados</option>
+                <option value="failed">Fallidos</option>
+                <option value="pending">Pendientes</option>
+                <option value="sent">Enviados</option>
+                <option value="skipped">Omitidos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="orders-overview email-overview" aria-label="Resumen de correos">
             <article>
-              <span>Clientes</span>
-              <strong id="customersTotal">0</strong>
+              <span>Fallidos</span>
+              <strong id="emailFailedCount">0</strong>
             </article>
             <article>
-              <span>Con correo</span>
-              <strong id="customersWithEmail">0</strong>
+              <span>Pendientes</span>
+              <strong id="emailPendingCount">0</strong>
             </article>
             <article>
-              <span>Pedidos</span>
-              <strong id="customersOrdersTotal">0</strong>
+              <span>Enviados</span>
+              <strong id="emailSentCount">0</strong>
             </article>
             <article>
-              <span>Total comprado</span>
-              <strong id="customersTotalSpent">$0.00</strong>
+              <span>Total pedidos</span>
+              <strong id="emailTotalCount">0</strong>
             </article>
           </div>
 
-          <div class="customer-toolbar">
-            <label>
-              Buscar cliente
-              <input id="customerSearch" type="search" placeholder="Nombre, telefono, correo o ciudad">
-            </label>
-          </div>
-
-          <div class="table-wrap customer-table-wrap">
-            <table class="customers-table">
+          <div class="table-wrap email-table-wrap">
+            <table class="email-table">
               <thead>
                 <tr>
+                  <th>Pedido</th>
                   <th>Cliente</th>
-                  <th>Contacto</th>
-                  <th>Ciudad</th>
-                  <th>Direccion</th>
-                  <th>Pedidos</th>
-                  <th>Total</th>
-                  <th>Ultimo pedido</th>
+                  <th>Cliente email</th>
+                  <th>Admin</th>
+                  <th>Ultimo intento</th>
+                  <th>Detalle</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="customersList"></tbody>
+              <tbody id="emailsTable"></tbody>
             </table>
           </div>
         </section>

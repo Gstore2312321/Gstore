@@ -1580,14 +1580,67 @@ function getWhatsappUrl(order) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order))}`;
 }
 
+function extractEmailAddress(value) {
+  const text = cleanText(value);
+  const angleMatch = text.match(/<([^<>]+)>/);
+  return cleanText(angleMatch ? angleMatch[1] : text).toLowerCase();
+}
+
+function isValidEmailAddress(value) {
+  const email = extractEmailAddress(value);
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+}
+
+function normalizeResendEmailField(value) {
+  const text = cleanText(value);
+  if (!text) return "";
+
+  const angleMatch = text.match(/^(.+?)\s*<([^<>]+)>$/);
+  if (angleMatch) {
+    const name = cleanText(angleMatch[1]).replace(/[<>"]/g, "");
+    const email = cleanText(angleMatch[2]).toLowerCase();
+    if (!isValidEmailAddress(email)) return "";
+    return name ? `${name} <${email}>` : email;
+  }
+
+  const email = extractEmailAddress(text);
+  return isValidEmailAddress(email) ? email : "";
+}
+
+function friendlyEmailProviderError(rawMessage) {
+  const message = cleanText(rawMessage);
+  const lower = message.toLowerCase();
+
+  if (lower.includes("testing emails") && lower.includes("own email address")) {
+    return "Resend esta en modo prueba: verifica el dominio/remitente o agrega el correo del cliente como destinatario autorizado.";
+  }
+
+  if (lower.includes("reply_to") || lower.includes("email address needs to follow")) {
+    return "Reply-to invalido: revisa RESEND_REPLY_TO_EMAIL y el correo del cliente. Usa email@dominio.com o Nombre <email@dominio.com>.";
+  }
+
+  if (lower.includes("domain") && lower.includes("verified")) {
+    return "El dominio/remitente de Resend no esta verificado para enviar correos en produccion.";
+  }
+
+  return message ? `Resend rechazo el envio: ${message.slice(0, 220)}` : "Resend rechazo el envio del correo.";
+}
+
 function resendConfigured() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+  return Boolean(process.env.RESEND_API_KEY && normalizeResendEmailField(process.env.RESEND_FROM_EMAIL));
 }
 
 async function sendResendEmail({ to, subject, text, replyTo }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !to) return { skipped: true };
+  const apiKey = cleanText(process.env.RESEND_API_KEY);
+  const fromEmail = normalizeResendEmailField(process.env.RESEND_FROM_EMAIL);
+  const toEmail = normalizeResendEmailField(to);
+  const replyToEmail = normalizeResendEmailField(replyTo);
+  if (!apiKey) return { skipped: true, message: "Falta RESEND_API_KEY." };
+  if (!fromEmail) return { ok: false, message: "RESEND_FROM_EMAIL no tiene formato valido." };
+  if (!toEmail) return { ok: false, message: "El correo de destino no tiene formato valido." };
+  if (replyTo && !replyToEmail) {
+    console.warn("Resend reply_to omitido por formato invalido.");
+  }
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -1597,8 +1650,8 @@ async function sendResendEmail({ to, subject, text, replyTo }) {
     },
     body: JSON.stringify({
       from: fromEmail,
-      to,
-      reply_to: replyTo || undefined,
+      to: toEmail,
+      reply_to: replyToEmail || undefined,
       subject,
       text
     })
@@ -1607,7 +1660,7 @@ async function sendResendEmail({ to, subject, text, replyTo }) {
   if (!response.ok) {
     const message = await response.text();
     console.warn("Resend no pudo enviar la notificacion:", message);
-    return { ok: false, message };
+    return { ok: false, message: friendlyEmailProviderError(message), rawMessage: message };
   }
 
   return { ok: true, ...(await response.json()) };
@@ -1620,8 +1673,11 @@ function orderEmailLines(order) {
 }
 
 async function sendOrderEmail(order) {
-  const ownerEmail = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
-  const replyToEmail = cleanText(process.env.RESEND_REPLY_TO_EMAIL || order.customer_email);
+  const ownerEmailRaw = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
+  const customerEmailRaw = cleanText(order.customer_email);
+  const ownerEmail = normalizeResendEmailField(ownerEmailRaw);
+  const replyToEmail = normalizeResendEmailField(process.env.RESEND_REPLY_TO_EMAIL || customerEmailRaw);
+  const customerEmail = normalizeResendEmailField(order.customer_email);
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     const missing = [
       !process.env.RESEND_API_KEY ? "RESEND_API_KEY" : "",
@@ -1676,16 +1732,20 @@ async function sendOrderEmail(order) {
       subject: `${STORE_NAME}: nuevo pedido ${order.order_code}`,
       text: adminText
     });
+  } else if (ownerEmailRaw) {
+    results.admin = { ok: false, message: "El correo admin no tiene formato valido. Revisa RESEND_TO_EMAIL o STORE_OWNER_EMAIL." };
   } else {
     results.admin = { skipped: true, message: "Falta RESEND_TO_EMAIL o STORE_OWNER_EMAIL." };
   }
-  if (order.customer_email) {
+  if (customerEmail) {
     results.customer = await sendResendEmail({
-      to: order.customer_email,
+      to: customerEmail,
       replyTo: ownerEmail || undefined,
       subject: `Confirmación de pedido ${order.order_code}`,
       text: customerText
     });
+  } else if (customerEmailRaw) {
+    results.customer = { ok: false, message: "El correo del cliente no tiene formato valido." };
   } else {
     results.customer = { skipped: true, message: "El pedido no tiene correo de cliente." };
   }
@@ -1708,10 +1768,14 @@ function emailStatusFromResult(result) {
 }
 
 function emailErrorSummary(results) {
+  const labels = {
+    admin: "Admin",
+    customer: "Cliente"
+  };
   return Object.entries(results || {})
     .map(([kind, result]) => {
       if (!result || result.ok !== false) return "";
-      return `${kind}: ${cleanText(result.message).slice(0, 180)}`;
+      return `${labels[kind] || kind}: ${cleanText(result.message).slice(0, 220)}`;
     })
     .filter(Boolean)
     .join(" | ");
@@ -1742,7 +1806,7 @@ async function markOrderEmailFailed(orderId, error) {
   await updateOrderEmailStatus(orderId, {
     admin: "failed",
     customer: "failed",
-    error: cleanText(error?.message || error || "No se pudo enviar el correo.")
+    error: friendlyEmailProviderError(error?.message || error || "No se pudo enviar el correo.")
   });
 }
 
@@ -2141,6 +2205,11 @@ function validateProductionConfig() {
     missing.push("ADMIN_PASSWORD_HASH bcrypt valido");
   }
   if (!process.env.PUBLIC_BASE_URL || /localhost|127\.0\.0\.1/.test(process.env.PUBLIC_BASE_URL)) missing.push("PUBLIC_BASE_URL real");
+  if (process.env.RESEND_FROM_EMAIL && !normalizeResendEmailField(process.env.RESEND_FROM_EMAIL)) missing.push("RESEND_FROM_EMAIL valido");
+  if ((process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL) && !normalizeResendEmailField(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL)) {
+    missing.push("RESEND_TO_EMAIL o STORE_OWNER_EMAIL valido");
+  }
+  if (process.env.RESEND_REPLY_TO_EMAIL && !normalizeResendEmailField(process.env.RESEND_REPLY_TO_EMAIL)) missing.push("RESEND_REPLY_TO_EMAIL valido");
   if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imagenes persistentes");
   if (!MYSQL_CONNECTION_URL && !process.env.MYSQLHOST && !process.env.MYSQL_HOST) {
     missing.push("MYSQL_URL o variables MYSQL de Railway");
@@ -2900,13 +2969,21 @@ app.get("/api/admin/cloudinary/status", requireAdmin, (req, res) => {
 });
 
 app.get("/api/admin/email/status", requireAdmin, (req, res) => {
+  const fromRaw = cleanText(process.env.RESEND_FROM_EMAIL);
+  const ownerRaw = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
+  const replyToRaw = cleanText(process.env.RESEND_REPLY_TO_EMAIL);
   res.json({
     configured: resendConfigured(),
     apiKeyConfigured: Boolean(cleanText(process.env.RESEND_API_KEY)),
-    fromConfigured: Boolean(cleanText(process.env.RESEND_FROM_EMAIL)),
-    ownerConfigured: Boolean(cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL)),
-    fromEmail: maskValue(process.env.RESEND_FROM_EMAIL, 2, 10),
-    ownerEmail: maskValue(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL, 2, 10)
+    fromConfigured: Boolean(fromRaw),
+    ownerConfigured: Boolean(ownerRaw),
+    replyToConfigured: Boolean(replyToRaw),
+    fromValid: !fromRaw || Boolean(normalizeResendEmailField(fromRaw)),
+    ownerValid: !ownerRaw || Boolean(normalizeResendEmailField(ownerRaw)),
+    replyToValid: !replyToRaw || Boolean(normalizeResendEmailField(replyToRaw)),
+    fromEmail: maskValue(fromRaw, 2, 10),
+    ownerEmail: maskValue(ownerRaw, 2, 10),
+    replyToEmail: maskValue(replyToRaw, 2, 10)
   });
 });
 

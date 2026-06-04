@@ -25,6 +25,8 @@ const adminState = {
   orderStatusFilter: "all",
   orderPeriodFilter: "all",
   customerSearch: "",
+  emailSearch: "",
+  emailStatusFilter: "all",
   productOptions: {
     sizes: [],
     colors: []
@@ -128,6 +130,14 @@ const adminEls = {
   customerSearch: document.querySelector("#customerSearch"),
   refreshCustomersButton: document.querySelector("#refreshCustomersButton"),
   exportCustomersButton: document.querySelector("#exportCustomersButton"),
+  emailsTable: document.querySelector("#emailsTable"),
+  emailSearch: document.querySelector("#emailSearch"),
+  emailStatusFilter: document.querySelector("#emailStatusFilter"),
+  emailFailedCount: document.querySelector("#emailFailedCount"),
+  emailPendingCount: document.querySelector("#emailPendingCount"),
+  emailSentCount: document.querySelector("#emailSentCount"),
+  emailTotalCount: document.querySelector("#emailTotalCount"),
+  refreshEmailStatusButton: document.querySelector("#refreshEmailStatusButton"),
   emailConfigured: document.querySelector("#emailConfigured"),
   emailFrom: document.querySelector("#emailFrom"),
   emailOwner: document.querySelector("#emailOwner"),
@@ -193,6 +203,7 @@ function bindAdminEvents() {
   on(adminEls.refreshOrdersButton, "click", () => refreshOrders().catch(showErrorToast));
   on(adminEls.refreshCustomersButton, "click", () => refreshCustomers().catch(showErrorToast));
   on(adminEls.exportCustomersButton, "click", exportCustomers);
+  on(adminEls.refreshEmailStatusButton, "click", () => refreshEmailModule().catch(showErrorToast));
   on(adminEls.refreshReportsButton, "click", () => refreshAll().catch(showErrorToast));
   on(adminEls.reportPeriodFilter, "change", (event) => {
     adminState.reportPeriodFilter = event.target.value;
@@ -233,6 +244,7 @@ function bindAdminEvents() {
 
   on(adminEls.productSearch, "input", (event) => {
     adminState.productSearch = event.target.value.trim().toLowerCase();
+    renderProductShelfNotes();
     renderProductsTable();
   });
   on(adminEls.productCategoryFilter, "change", (event) => {
@@ -266,6 +278,14 @@ function bindAdminEvents() {
   on(adminEls.customerSearch, "input", (event) => {
     adminState.customerSearch = event.target.value.trim().toLowerCase();
     renderCustomers();
+  });
+  on(adminEls.emailSearch, "input", (event) => {
+    adminState.emailSearch = event.target.value.trim().toLowerCase();
+    renderEmailModule();
+  });
+  on(adminEls.emailStatusFilter, "change", (event) => {
+    adminState.emailStatusFilter = event.target.value;
+    renderEmailModule();
   });
 
   if (adminEls.productForm) {
@@ -626,9 +646,9 @@ async function refreshAll() {
   if (adminState.page === "dashboard") tasks.push(refreshBanners());
   if (["dashboard", "products", "categories"].includes(adminState.page)) tasks.push(refreshCategories());
   if (["dashboard", "products"].includes(adminState.page)) tasks.push(refreshProducts());
-  if (["dashboard", "reports", "orders"].includes(adminState.page)) tasks.push(refreshOrders(false));
+  if (["dashboard", "reports", "orders", "emails"].includes(adminState.page)) tasks.push(refreshOrders(false));
   if (adminState.page === "customers") tasks.push(refreshCustomers(false));
-  if (["orders", "customers"].includes(adminState.page)) tasks.push(refreshEmailStatus());
+  if (adminState.page === "emails") tasks.push(refreshEmailStatus());
   await Promise.all(tasks);
   renderInsights();
   renderReports();
@@ -681,6 +701,7 @@ async function refreshOrders(updateSummary = true) {
   const data = await adminApi("/api/admin/orders");
   adminState.orders = data.orders || [];
   renderOrders();
+  renderEmailModule();
   renderInsights();
   if (updateSummary) await refreshSummary();
 }
@@ -689,13 +710,21 @@ async function refreshCustomers(updateSummary = true) {
   const data = await adminApi("/api/admin/customers");
   adminState.customers = data.customers || [];
   renderCustomers();
-  if (updateSummary) await refreshEmailStatus();
+  if (updateSummary) renderCustomersOverview();
 }
 
 async function refreshEmailStatus() {
   const data = await adminApi("/api/admin/email/status");
   adminState.emailStatus = data;
   renderEmailStatus();
+  renderEmailModule();
+}
+
+async function refreshEmailModule() {
+  await Promise.all([
+    refreshOrders(false),
+    refreshEmailStatus()
+  ]);
 }
 
 function renderInsights() {
@@ -1242,6 +1271,13 @@ function renderProductShelfNotes() {
   const activeStatus = adminState.productStatusFilter;
   const activeCategory = adminState.productCategoryFilter;
   const activeBrand = adminState.productBrandFilter;
+  const visibleProducts = filteredProducts().length;
+  const activeLabels = [
+    adminState.productSearch ? `Búsqueda: ${adminState.productSearch}` : "",
+    activeStatus !== "all" ? `Estado: ${productStatusFilterLabel(activeStatus)}` : "",
+    activeCategory !== "all" ? `Categoría: ${productCategoryFilterLabel(activeCategory, categoryCounts)}` : "",
+    activeBrand !== "all" ? `Marca: ${productBrandFilterLabel(activeBrand, brandCounts)}` : ""
+  ].filter(Boolean);
   const filterButton = ({ kind, value, label, count, alert = false }) => {
     const active = (
       (kind === "status" && activeStatus === value) ||
@@ -1250,8 +1286,8 @@ function renderProductShelfNotes() {
     );
     return `
       <button class="shelf-note filter-chip ${active ? "is-active" : ""} ${alert ? "is-alert" : ""}" data-product-filter="${kind}" data-filter-value="${escapeAttr(value)}" type="button" aria-pressed="${active ? "true" : "false"}">
-        <span>${escapeHtml(label)}</span>
-        <b>${count}</b>
+        <span class="filter-chip-label">${escapeHtml(label)}</span>
+        <span class="filter-chip-count">${count}</span>
       </button>
     `;
   };
@@ -1274,16 +1310,23 @@ function renderProductShelfNotes() {
   ].join("");
 
   adminEls.productShelfNotes.innerHTML = `
+    <div class="product-filter-summary">
+      <div>
+        <strong>${visibleProducts}</strong>
+        <span>${visibleProducts === 1 ? "producto visible" : "productos visibles"}</span>
+      </div>
+      <small>${activeLabels.length ? escapeHtml(activeLabels.join(" · ")) : "Sin filtros activos"}</small>
+    </div>
     <div class="product-filter-group">
-      <span>Vista</span>
+      <span>Estado</span>
       <div>${statusFilters}</div>
     </div>
     <div class="product-filter-group">
-      <span>Categorías</span>
+      <span>Categoría</span>
       <div>${categoryFilters}</div>
     </div>
     <div class="product-filter-group">
-      <span>Marcas</span>
+      <span>Marca</span>
       <div>${brandFilters}</div>
     </div>
   `;
@@ -1322,6 +1365,26 @@ function syncProductFilterSelect(select, options, stateKey) {
     <option value="${escapeAttr(item.value)}">${escapeHtml(item.label)}</option>
   `).join("");
   select.value = adminState[stateKey] || "all";
+}
+
+function productStatusFilterLabel(value) {
+  return {
+    all: "Todos",
+    active: "Activos",
+    hidden: "Ocultos",
+    no_stock: "Sin stock",
+    promo: "Con promo"
+  }[value] || "Todos";
+}
+
+function productCategoryFilterLabel(value, counts = productCategoryCounts()) {
+  if (value === "all") return "Todas";
+  return counts.find((item) => item.value === value)?.label || "Sin categoría";
+}
+
+function productBrandFilterLabel(value, counts = productBrandCounts()) {
+  if (value === "all") return "Todas";
+  return counts.find((item) => item.value === value)?.label || "Sin marca";
 }
 
 function productCategoryCounts() {
@@ -1624,9 +1687,8 @@ function renderOrders() {
   if (!adminEls.ordersList) return;
   const orders = filteredOrders();
   renderOrdersOverview(orders);
-  adminEls.ordersList.innerHTML = orders.map((order) => `
-    ${renderOrderCard(order)}
-  `).join("") || emptyAdminState("Todavía no hay pedidos.", "Cuando una clienta complete checkout, la orden aparecerá aquí.");
+  adminEls.ordersList.innerHTML = orders.map(renderOrderRow).join("")
+    || `<tr><td colspan="8">${emptyAdminState("Todavía no hay pedidos.", "Cuando una clienta complete checkout, la orden aparecerá aquí.")}</td></tr>`;
 }
 
 function renderOrdersOverview(orders = filteredOrders()) {
@@ -1774,9 +1836,9 @@ function buildProductsPrintData() {
     subtitle: "Catalogo filtrado listo para revisar en papel.",
     filters: [
       ["Busqueda", adminState.productSearch || "Sin busqueda"],
-      ["Categoria", selectedText(adminEls.productCategoryFilter)],
-      ["Marca", selectedText(adminEls.productBrandFilter)],
-      ["Estado", selectedText(adminEls.productStatusFilter)],
+      ["Categoria", productCategoryFilterLabel(adminState.productCategoryFilter)],
+      ["Marca", productBrandFilterLabel(adminState.productBrandFilter)],
+      ["Estado", productStatusFilterLabel(adminState.productStatusFilter)],
       ["Generado", formatPrintDate(new Date())]
     ],
     metrics: [
@@ -1952,14 +2014,24 @@ function formatPrintDate(value) {
 function renderEmailStatus() {
   const status = adminState.emailStatus;
   if (!status) return;
-  const configured = Boolean(status.configured && status.ownerConfigured);
+  const formatValid = status.fromValid !== false && status.ownerValid !== false && status.replyToValid !== false;
+  const configured = Boolean(status.configured && status.ownerConfigured && formatValid);
   setText(adminEls.emailConfigured, configured ? "Activo" : "Falta configurar");
-  setText(adminEls.emailFrom, status.fromConfigured ? `Remitente: ${status.fromEmail || "configurado"}` : "Falta RESEND_FROM_EMAIL");
-  setText(adminEls.emailOwner, status.ownerConfigured ? `Admin: ${status.ownerEmail || "configurado"}` : "Falta RESEND_TO_EMAIL o STORE_OWNER_EMAIL");
+  setText(adminEls.emailFrom, status.fromConfigured
+    ? (status.fromValid === false ? "Formato invalido" : status.fromEmail || "Configurado")
+    : "Falta RESEND_FROM_EMAIL");
+  setText(adminEls.emailOwner, status.ownerConfigured
+    ? (status.ownerValid === false ? "Formato invalido" : status.ownerEmail || "Configurado")
+    : "Falta RESEND_TO_EMAIL o STORE_OWNER_EMAIL");
   if (adminEls.emailHint) {
+    const invalidFields = [
+      status.fromValid === false ? "remitente" : "",
+      status.ownerValid === false ? "admin" : "",
+      status.replyToValid === false ? "reply-to" : ""
+    ].filter(Boolean);
     adminEls.emailHint.innerHTML = configured
-      ? "<strong>Correo</strong> Resend listo para confirmaciones"
-      : "<strong>Correo</strong> Faltan variables de Resend";
+      ? "<strong>Correo</strong> Resend listo. Si falla con clientes externos, verifica el dominio en Resend."
+      : `<strong>Correo</strong> ${invalidFields.length ? `Formato invalido en ${invalidFields.join(", ")}` : "Faltan variables de Resend"}`;
   }
 }
 
@@ -1967,8 +2039,8 @@ function renderCustomers() {
   if (!adminEls.customersList) return;
   renderCustomersOverview();
   const customers = filteredCustomers();
-  adminEls.customersList.innerHTML = customers.map(renderCustomerCard).join("")
-    || emptyAdminState("Todavia no hay clientes guardados.", "Cuando entren pedidos con correo, la ficha del cliente aparecera aqui.");
+  adminEls.customersList.innerHTML = customers.map(renderCustomerRow).join("")
+    || `<tr><td colspan="8">${emptyAdminState("Todavia no hay clientes guardados.", "Cuando entren pedidos con correo, apareceran aqui.")}</td></tr>`;
 }
 
 function renderCustomersOverview() {
@@ -1996,141 +2068,100 @@ function filteredCustomers() {
   ].join(" ").toLowerCase().includes(query));
 }
 
-function renderCustomerCard(customer) {
+function renderCustomerRow(customer) {
   const whatsappPhone = String(customer.phone || "").replace(/[^\d]/g, "");
   const lastOrder = customer.last_order_code || "Sin codigo";
   const lastOrderDate = customer.last_order_at ? formatDate(customer.last_order_at) : "Sin fecha";
   return `
-    <article class="customer-card">
-      <div class="customer-card-head">
-        <div>
-          <span class="customer-kicker">${escapeHtml(customer.marketing_status || "cliente")}</span>
-          <h3>${escapeHtml(customer.name || "Cliente sin nombre")}</h3>
-          <p>${escapeHtml(customer.email || "Sin correo")} - ${escapeHtml(customer.phone || "Sin telefono")}</p>
+    <tr>
+      <td data-label="Cliente">
+        <strong>${escapeHtml(customer.name || "Cliente sin nombre")}</strong>
+        <small>${escapeHtml(customer.marketing_status || "cliente")}</small>
+      </td>
+      <td data-label="Contacto">
+        <strong>${escapeHtml(customer.email || "Sin correo")}</strong>
+        <small>${escapeHtml(customer.phone || "Sin telefono")}</small>
+      </td>
+      <td data-label="Ciudad">${escapeHtml(customer.city || "Sin ciudad")}</td>
+      <td data-label="Direccion">${escapeHtml(customer.address || "Sin direccion")}</td>
+      <td data-label="Pedidos">${Number(customer.order_count || 0)}</td>
+      <td data-label="Total"><strong>${formatCurrency(customer.total_spent)}</strong></td>
+      <td data-label="Ultimo pedido">
+        <strong>${escapeHtml(lastOrder)}</strong>
+        <small>${escapeHtml(lastOrderDate)}</small>
+      </td>
+      <td data-label="Acciones">
+        <div class="row-actions">
+          ${customer.email ? `<a class="small-button" href="mailto:${escapeAttr(customer.email)}">Email</a>` : ""}
+          ${whatsappPhone ? `<a class="small-button" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
         </div>
-        <div class="customer-value">
-          <strong>${formatCurrency(customer.total_spent)}</strong>
-          <small>${Number(customer.order_count || 0)} pedido${Number(customer.order_count || 0) === 1 ? "" : "s"}</small>
-        </div>
-      </div>
-
-      <div class="customer-contact-grid">
-        <div>
-          <span>Ciudad</span>
-          <strong>${escapeHtml(customer.city || "Sin ciudad")}</strong>
-        </div>
-        <div>
-          <span>Direccion</span>
-          <strong>${escapeHtml(customer.address || "Sin direccion")}</strong>
-        </div>
-        <div>
-          <span>Ultimo pedido</span>
-          <strong>${escapeHtml(lastOrder)}</strong>
-          <small>${escapeHtml(lastOrderDate)}</small>
-        </div>
-      </div>
-
-      ${customer.notes ? `
-        <div class="customer-note">
-          <span>Notas</span>
-          <p>${escapeHtml(customer.notes)}</p>
-        </div>
-      ` : ""}
-
-      <div class="customer-actions">
-        ${customer.email ? `<a class="small-button" href="mailto:${escapeAttr(customer.email)}">Enviar email</a>` : ""}
-        ${whatsappPhone ? `<a class="small-button" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
-      </div>
-    </article>
+      </td>
+    </tr>
   `;
 }
 
-function renderOrderCard(order) {
+function renderOrderRow(order) {
   const nextAction = orderNextAction(order);
-  const adminEmailStatus = emailStatusLabel(order.admin_email_status);
-  const customerEmailStatus = emailStatusLabel(order.customer_email_status);
-  const emailDetail = order.email_error
-    ? `Error: ${order.email_error}`
-    : order.email_sent_at
-      ? `Ultimo intento: ${formatDate(order.email_sent_at)}`
-      : "Sin intento registrado";
+  const itemCount = orderItemsUnitCount(order);
+  const deliveryDetail = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Sin dirección adicional";
   return `
-    <article class="order-card order-status-${escapeAttr(order.status || "new")}">
-      <div class="order-head">
-        <div class="order-title-block">
-          <span class="order-kicker">${escapeHtml(formatDate(order.created_at))}</span>
-          <h3>${escapeHtml(order.order_code)}</h3>
-          <p>${escapeHtml(order.customer_name)} · ${escapeHtml(order.customer_phone)}</p>
-        </div>
-        <div class="order-total">
-          <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
-          <strong>${formatCurrency(order.total)}</strong>
-          <small>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</small>
-        </div>
-      </div>
-
-      <div class="order-next-step">
-        <span>Siguiente paso</span>
-        <strong>${escapeHtml(nextAction.text)}</strong>
-      </div>
-
-      <div class="order-info-grid">
-        <div class="order-info-card">
-          <span>Cliente</span>
-          <strong>${escapeHtml(order.customer_name)}</strong>
-          <small>${escapeHtml(order.customer_email || "Sin correo registrado")}</small>
-        </div>
-        <div class="order-info-card">
-          <span>Entrega</span>
-          <strong>${escapeHtml(orderDeliveryLabel(order))}</strong>
-          <small>${escapeHtml([order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Sin dirección adicional")}</small>
-        </div>
-        <div class="order-info-card">
-          <span>Pago</span>
-          <strong>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</strong>
-          <small>${escapeHtml(order.payment_status === "paid" ? "Pago confirmado" : "Pendiente de confirmación")}</small>
-        </div>
-        <div class="order-info-card email-info-card">
-          <span>Correos</span>
-          <strong>
-            <span class="status-pill ${emailStatusClass(order.customer_email_status)}">Cliente: ${escapeHtml(customerEmailStatus)}</span>
-          </strong>
-          <small>Admin: ${escapeHtml(adminEmailStatus)} - ${escapeHtml(emailDetail)}</small>
-        </div>
-      </div>
-
-      <div class="order-items-panel">
-        <div class="order-items-heading">
-          <span>Productos</span>
-          <strong>${order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0)} unidad${order.items.length === 1 ? "" : "es"}</strong>
-        </div>
-        <div class="order-items-list">
-          ${order.items.map((item) => renderOrderItem(item)).join("")}
-        </div>
-      </div>
-
-      ${order.notes ? `
-        <div class="order-note">
-          <span>Nota</span>
-          <p>${escapeHtml(order.notes)}</p>
-        </div>
-      ` : ""}
-
-      <div class="order-actions">
-        <label class="order-status-control">
-          Estado del pedido
-          <select data-order-status="${order.id}">
+    <tr class="order-table-row order-status-${escapeAttr(order.status || "new")}">
+      <td data-label="Pedido">
+        <strong>${escapeHtml(order.order_code)}</strong>
+        <small>${escapeHtml(formatDate(order.created_at))}</small>
+      </td>
+      <td data-label="Cliente">
+        <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
+        <small>${escapeHtml([order.customer_phone, order.customer_email].filter(Boolean).join(" · ") || "Sin contacto")}</small>
+      </td>
+      <td data-label="Entrega">
+        <strong>${escapeHtml(orderDeliveryLabel(order))}</strong>
+        <small>${escapeHtml(deliveryDetail)}</small>
+      </td>
+      <td data-label="Productos">
+        <strong>${itemCount} unidad${itemCount === 1 ? "" : "es"}</strong>
+        <small>${escapeHtml(orderItemsTableSummary(order))}</small>
+        ${order.notes ? `<small class="order-note-inline">Nota: ${escapeHtml(order.notes)}</small>` : ""}
+      </td>
+      <td data-label="Pago">
+        <strong>${formatCurrency(order.total)}</strong>
+        <small>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</small>
+      </td>
+      <td data-label="Estado">
+        <select class="table-status-select ${orderStatusClass(order.status)}" data-order-status="${order.id}" aria-label="Estado de ${escapeAttr(order.order_code)}">
             ${Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${order.status === value ? "selected" : ""}>${label}</option>`).join("")}
-          </select>
-        </label>
-        <div class="order-action-buttons">
-          ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
-          <button class="button ghost" data-order-email="${order.id}" type="button">Reenviar correo</button>
-          <button class="button primary" data-order-whatsapp="${order.id}" type="button">Coordinar por WhatsApp</button>
+        </select>
+      </td>
+      <td data-label="Siguiente paso">
+        <strong>${escapeHtml(nextAction.text)}</strong>
+        ${nextAction.status ? `<button class="small-button" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
+      </td>
+      <td data-label="Acciones">
+        <div class="row-actions">
+          <button class="small-button" data-order-whatsapp="${order.id}" type="button">WhatsApp</button>
         </div>
-      </div>
-    </article>
+      </td>
+    </tr>
   `;
+}
+
+function orderItemsUnitCount(order) {
+  return (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+}
+
+function orderItemsTableSummary(order) {
+  const items = order.items || [];
+  const summary = items
+    .slice(0, 2)
+    .map((item) => {
+      const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`]
+        .filter(Boolean)
+        .join(", ");
+      return `${Number(item.quantity || 0)} x ${item.name}${variants ? ` (${variants})` : ""}`;
+    })
+    .join(" · ");
+  const extra = items.length > 2 ? ` · +${items.length - 2} más` : "";
+  return summary ? `${summary}${extra}` : "Sin productos";
 }
 
 function renderOrderItem(item) {
@@ -2173,6 +2204,117 @@ function emailStatusClass(status) {
   if (status === "failed") return "email-failed";
   if (status === "skipped") return "warning";
   return "off";
+}
+
+function emailStatusDetail(order) {
+  if (order.email_error) return friendlyEmailErrorText(order.email_error);
+  if (order.email_sent_at) return `Ultimo intento: ${formatDate(order.email_sent_at)}`;
+  return "Sin intento registrado";
+}
+
+function friendlyEmailErrorText(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const lower = text.toLowerCase();
+  const reasons = [];
+
+  if (lower.includes("reply_to") || lower.includes("email address needs to follow")) {
+    reasons.push("Reply-to invalido. Revisa RESEND_REPLY_TO_EMAIL y el correo del cliente.");
+  }
+
+  if (lower.includes("testing emails") && lower.includes("own email address")) {
+    reasons.push("Resend esta en modo prueba. Verifica el dominio/remitente o autoriza el correo del cliente.");
+  }
+
+  if (lower.includes("domain") && lower.includes("verified")) {
+    reasons.push("Dominio/remitente de Resend pendiente de verificacion.");
+  }
+
+  if (reasons.length) return reasons.join(" ");
+  return text.length > 180 ? `${text.slice(0, 177)}...` : text || "No se pudo enviar el correo.";
+}
+
+function renderEmailModule() {
+  if (!adminEls.emailsTable) return;
+  renderEmailOverview();
+  const orders = filteredEmailOrders();
+  adminEls.emailsTable.innerHTML = orders.map(renderEmailRow).join("")
+    || `<tr><td colspan="7">${emptyAdminState("No hay correos para este filtro.", "Ajusta la busqueda o revisa los pedidos recientes.")}</td></tr>`;
+}
+
+function renderEmailOverview() {
+  const orders = adminState.orders || [];
+  const states = orders.map(emailOrderState);
+  setText(adminEls.emailFailedCount, states.filter((state) => state === "failed").length);
+  setText(adminEls.emailPendingCount, states.filter((state) => state === "pending").length);
+  setText(adminEls.emailSentCount, states.filter((state) => state === "sent").length);
+  setText(adminEls.emailTotalCount, orders.length);
+}
+
+function filteredEmailOrders() {
+  const orders = adminState.orders || [];
+  const query = adminState.emailSearch;
+  const filter = adminState.emailStatusFilter || "all";
+  return orders.filter((order) => {
+    const state = emailOrderState(order);
+    const matchesStatus = filter === "all" || state === filter;
+    const text = [
+      order.order_code,
+      order.customer_name,
+      order.customer_phone,
+      order.customer_email,
+      emailStatusDetail(order),
+      emailStatusLabel(order.admin_email_status),
+      emailStatusLabel(order.customer_email_status)
+    ].join(" ").toLowerCase();
+    const matchesQuery = !query || text.includes(query);
+    return matchesStatus && matchesQuery;
+  });
+}
+
+function emailOrderState(order) {
+  const statuses = [
+    order.admin_email_status || "pending",
+    order.customer_email_status || "pending"
+  ];
+  if (statuses.includes("failed")) return "failed";
+  if (statuses.includes("pending")) return "pending";
+  if (statuses.includes("sent")) return "sent";
+  if (statuses.includes("skipped")) return "skipped";
+  return "pending";
+}
+
+function renderEmailRow(order) {
+  const customerStatus = emailStatusLabel(order.customer_email_status);
+  const adminStatus = emailStatusLabel(order.admin_email_status);
+  const detail = emailStatusDetail(order);
+  const lastAttempt = order.email_sent_at ? formatDate(order.email_sent_at) : "Sin intento";
+  return `
+    <tr class="email-row email-row-${escapeAttr(emailOrderState(order))}">
+      <td data-label="Pedido">
+        <strong>${escapeHtml(order.order_code)}</strong>
+        <small>${escapeHtml(formatDate(order.created_at))}</small>
+      </td>
+      <td data-label="Cliente">
+        <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
+        <small>${escapeHtml(order.customer_phone || "Sin telefono")}</small>
+      </td>
+      <td data-label="Cliente email">
+        <span class="status-pill ${emailStatusClass(order.customer_email_status)}">${escapeHtml(customerStatus)}</span>
+        <small>${escapeHtml(order.customer_email || "Sin correo")}</small>
+      </td>
+      <td data-label="Admin">
+        <span class="status-pill ${emailStatusClass(order.admin_email_status)}">${escapeHtml(adminStatus)}</span>
+      </td>
+      <td data-label="Ultimo intento">${escapeHtml(lastAttempt)}</td>
+      <td data-label="Detalle" class="email-detail-cell">${escapeHtml(detail)}</td>
+      <td data-label="Acciones">
+        <div class="row-actions">
+          <button class="small-button" data-order-email="${order.id}" type="button">Reenviar</button>
+          <a class="small-button" href="/admin-pedidos">Pedidos</a>
+        </div>
+      </td>
+    </tr>
+  `;
 }
 
 function orderNextAction(order) {
@@ -2787,6 +2929,7 @@ async function resendOrderEmail(id) {
       Number(order.id) === Number(id) ? data.order : order
     ));
     renderOrders();
+    renderEmailModule();
     showToast(data.email?.ok === false ? "Correo fallido. Revisa el estado del pedido." : "Correo procesado.");
   } catch (error) {
     showErrorToast(error);
