@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-catalog-filters">
-  <link rel="stylesheet" href="css/admin.css?v=20260526-catalog-filters">
+  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-clientes">
+  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-clientes">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="orders">
   <main class="admin-shell">
@@ -65,6 +65,7 @@
           <a href="/admin-productos" data-nav-page="products">Productos</a>
           <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
+          <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
           <span>Operación</span>
@@ -80,23 +81,11 @@
             <h1>Pedidos</h1>
           </div>
           <div class="topbar-actions">
+            <button class="button ghost" id="orderPrintButton" type="button">Imprimir pedidos</button>
             <button class="button primary" id="refreshOrdersButton" type="button">Actualizar pedidos</button>
             <a class="button ghost" href="/admin-productos">Ver productos</a>
           </div>
         </header>
-
-        <section class="admin-page-brief compact" aria-label="Guía de pedidos">
-          <div>
-            <span class="eyebrow">Atención</span>
-            <h2>Primero confirma, luego prepara y cierra.</h2>
-            <p>Cada pedido muestra siguiente paso, datos de cliente, entrega, pago, productos y acción directa a WhatsApp.</p>
-          </div>
-          <div class="admin-brief-stack">
-            <span><strong>Nuevo</strong> Confirmar con la clienta</span>
-            <span><strong>Preparando</strong> Separar productos</span>
-            <span><strong>Listo</strong> Coordinar envío o retiro</span>
-          </div>
-        </section>
 
         <section class="admin-section orders-section">
           <div class="admin-section-heading">
@@ -104,6 +93,29 @@
               <span class="eyebrow">Seguimiento</span>
               <h2>Órdenes recibidas</h2>
               <p>Confirma, prepara y cierra pedidos sin perder de vista pago, entrega y productos.</p>
+            </div>
+            <div class="section-actions order-toolbar">
+              <label class="search-control">
+                <span class="sr-only">Buscar pedidos</span>
+                <input id="orderSearch" type="search" placeholder="Cliente, teléfono o código">
+              </label>
+              <select id="orderPeriodFilter" aria-label="Filtrar pedidos por periodo">
+                <option value="all">Todo el historial</option>
+                <option value="today">Hoy</option>
+                <option value="7d">Últimos 7 días</option>
+                <option value="30d">Últimos 30 días</option>
+              </select>
+              <select id="orderStatusFilter" aria-label="Filtrar pedidos por estado">
+                <option value="all">Todos los estados</option>
+                <option value="new">Nuevos</option>
+                <option value="waiting_payment">Esperando pago</option>
+                <option value="paid">Pagados</option>
+                <option value="preparing">Preparando</option>
+                <option value="ready">Listos</option>
+                <option value="sent">Enviados</option>
+                <option value="completed">Completados</option>
+                <option value="cancelled">Cancelados</option>
+              </select>
             </div>
           </div>
           <div class="orders-overview" aria-label="Resumen de pedidos">
@@ -132,6 +144,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260526-catalog-filters" defer></script>
+  <script src="js/admin.js?v=20260604-admin-clientes" defer></script>
 </body>
 </html>

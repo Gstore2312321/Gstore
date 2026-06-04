@@ -59,7 +59,8 @@ const CLEAN_PAGE_PATHS = new Map([
   ["/admin-reportes.html", "/admin-reportes"],
   ["/admin-productos.html", "/admin-productos"],
   ["/admin-categorias.html", "/admin-categorias"],
-  ["/admin-pedidos.html", "/admin-pedidos"]
+  ["/admin-pedidos.html", "/admin-pedidos"],
+  ["/admin-clientes.html", "/admin-clientes"]
 ]);
 
 app.set("trust proxy", 1);
@@ -419,7 +420,11 @@ function normalizePhone(value) {
   return String(value || "").replace(/[^\d+]/g, "").trim();
 }
 
-function publicOrder(order) {
+function normalizeEmail(value) {
+  return cleanText(value).toLowerCase();
+}
+
+function publicOrder(order, options = {}) {
   if (!order) return null;
   const publicItems = parseJsonList(order.items_json).map((item) => ({
     product_id: item.product_id,
@@ -432,7 +437,7 @@ function publicOrder(order) {
     color: item.color,
     line_total: item.line_total
   }));
-  return {
+  const output = {
     id: order.id,
     order_code: order.order_code,
     customer_name: order.customer_name,
@@ -453,6 +458,71 @@ function publicOrder(order) {
     created_at: order.created_at,
     updated_at: order.updated_at
   };
+  if (options.includeAdmin) {
+    output.admin_email_status = order.admin_email_status || "pending";
+    output.customer_email_status = order.customer_email_status || "pending";
+    output.email_error = order.email_error || "";
+    output.email_sent_at = order.email_sent_at || "";
+  }
+  return output;
+}
+
+function publicCustomer(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    email: row.email,
+    city: row.city || "",
+    address: row.address || "",
+    notes: row.notes || "",
+    marketing_status: row.marketing_status || "cliente",
+    order_count: Number(row.order_count || 0),
+    total_spent: money(row.total_spent || 0),
+    last_order_code: row.last_order_code || "",
+    first_order_at: row.first_order_at || "",
+    last_order_at: row.last_order_at || "",
+    created_at: row.created_at || "",
+    updated_at: row.updated_at || ""
+  };
+}
+
+function csvCell(value) {
+  const text = String(value ?? "").replace(/\r?\n/g, " ").replace(/"/g, '""');
+  return `"${text}"`;
+}
+
+function customersToCsv(customers) {
+  const headers = [
+    "Nombre",
+    "Telefono",
+    "Correo",
+    "Ciudad",
+    "Direccion",
+    "Notas",
+    "Estado marketing",
+    "Pedidos",
+    "Total comprado",
+    "Ultimo pedido",
+    "Primera compra",
+    "Ultima compra"
+  ];
+  const rows = customers.map((customer) => [
+    customer.name,
+    customer.phone,
+    customer.email,
+    customer.city,
+    customer.address,
+    customer.notes,
+    customer.marketing_status,
+    customer.order_count,
+    formatMoney(customer.total_spent),
+    customer.last_order_code,
+    customer.first_order_at,
+    customer.last_order_at
+  ]);
+  return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
 
 function productFromRow(row, options = {}) {
@@ -460,6 +530,7 @@ function productFromRow(row, options = {}) {
   const product = {
     id: row.id,
     name: row.name,
+    brand_name: row.brand_name || "",
     slug: row.slug,
     description: row.description || "",
     price: row.price,
@@ -732,6 +803,7 @@ async function ensureSchema() {
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       category_id INT UNSIGNED NULL,
       name VARCHAR(220) NOT NULL,
+      brand_name VARCHAR(120) DEFAULT '',
       slug VARCHAR(240) NOT NULL,
       description TEXT,
       price DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -780,6 +852,10 @@ async function ensureSchema() {
       status VARCHAR(40) NOT NULL DEFAULT 'new',
       source VARCHAR(80) DEFAULT 'storefront',
       paypal_order_id VARCHAR(160) DEFAULT '',
+      admin_email_status VARCHAR(40) DEFAULT 'pending',
+      customer_email_status VARCHAR(40) DEFAULT 'pending',
+      email_error TEXT,
+      email_sent_at VARCHAR(32) DEFAULT '',
       created_at VARCHAR(32) NOT NULL,
       updated_at VARCHAR(32) NOT NULL,
       PRIMARY KEY (id),
@@ -787,6 +863,30 @@ async function ensureSchema() {
       KEY orders_status_index (status),
       KEY orders_payment_status_index (payment_status),
       KEY orders_paypal_order_id_index (paypal_order_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(180) NOT NULL,
+      phone VARCHAR(60) NOT NULL,
+      email VARCHAR(180) NOT NULL,
+      city VARCHAR(120) DEFAULT '',
+      address TEXT,
+      notes TEXT,
+      marketing_status VARCHAR(80) DEFAULT 'cliente',
+      order_count INT UNSIGNED NOT NULL DEFAULT 0,
+      total_spent DECIMAL(10,2) NOT NULL DEFAULT 0,
+      last_order_code VARCHAR(60) DEFAULT '',
+      first_order_at VARCHAR(32) DEFAULT '',
+      last_order_at VARCHAR(32) DEFAULT '',
+      created_at VARCHAR(32) NOT NULL,
+      updated_at VARCHAR(32) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY customers_email_unique (email),
+      KEY customers_phone_index (phone),
+      KEY customers_last_order_index (last_order_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
@@ -835,6 +935,7 @@ async function ensureSchema() {
   `);
 
   await ensureColumn("orders", "delivery_method", "delivery_method VARCHAR(30) DEFAULT 'delivery'");
+  await ensureColumn("products", "brand_name", "brand_name VARCHAR(120) DEFAULT ''");
   await ensureColumn("products", "cost_price", "cost_price DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ensureColumn("products", "compare_price", "compare_price DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ensureColumn("products", "promo_type", "promo_type VARCHAR(40) DEFAULT 'none'");
@@ -844,6 +945,11 @@ async function ensureSchema() {
   await ensureColumn("products", "image_position_x", "image_position_x DECIMAL(5,2) NOT NULL DEFAULT 50");
   await ensureColumn("products", "image_position_y", "image_position_y DECIMAL(5,2) NOT NULL DEFAULT 50");
   await ensureColumn("products", "image_zoom", "image_zoom DECIMAL(4,2) NOT NULL DEFAULT 1");
+  await ensureColumn("orders", "admin_email_status", "admin_email_status VARCHAR(40) DEFAULT 'pending'");
+  await ensureColumn("orders", "customer_email_status", "customer_email_status VARCHAR(40) DEFAULT 'pending'");
+  await ensureColumn("orders", "email_error", "email_error TEXT");
+  await ensureColumn("orders", "email_sent_at", "email_sent_at VARCHAR(32) DEFAULT ''");
+  await rebuildCustomersFromOrders();
 
   const promoCount = await dbGet(`
     SELECT COUNT(*) AS count
@@ -927,14 +1033,15 @@ async function seedProductList(products) {
     const category = await dbGet("SELECT id FROM categories WHERE slug = ?", [categorySlug]);
     await dbRun(`
       INSERT INTO products (
-        category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+        category_id, name, brand_name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
         image_fit, image_position_x, image_position_y, image_zoom,
         sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       category ? category.id : null,
       name,
+      cleanText(product.brand || product.brandName || ""),
       await ensureUniqueSlug("products", name),
       cleanText(product.description),
       money(product.price),
@@ -1067,14 +1174,15 @@ async function seedData() {
       const category = await dbGet("SELECT id FROM categories WHERE slug = ?", [product.category]);
       await dbRun(`
         INSERT INTO products (
-          category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+          category_id, name, brand_name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
           image_fit, image_position_x, image_position_y, image_zoom,
           sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
       `, [
         category ? category.id : null,
         product.name,
+        cleanText(product.brand || product.brandName || ""),
         await ensureUniqueSlug("products", product.name),
         product.description,
         product.price,
@@ -1236,7 +1344,7 @@ function validateCustomer(input, deliveryMethod = "delivery") {
   const customer = {
     name: cleanText(input.name),
     phone: normalizePhone(input.phone),
-    email: cleanText(input.email),
+    email: normalizeEmail(input.email),
     address: cleanText(input.address),
     city: cleanText(input.city || "Guayaquil"),
     notes: cleanText(input.notes)
@@ -1362,6 +1470,80 @@ async function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paym
   return getOrderById(result.insertId);
 }
 
+async function syncCustomerFromOrder(order) {
+  if (!order) return null;
+  const email = normalizeEmail(order.customer_email);
+  if (!email) return null;
+
+  const latest = await dbGet(`
+    SELECT *
+    FROM orders
+    WHERE LOWER(customer_email) = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `, [email]);
+  const totals = await dbGet(`
+    SELECT
+      COUNT(*) AS order_count,
+      COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS total_spent,
+      MIN(created_at) AS first_order_at,
+      MAX(created_at) AS last_order_at
+    FROM orders
+    WHERE LOWER(customer_email) = ?
+  `, [email]);
+
+  if (!latest) return null;
+  await dbRun(`
+    INSERT INTO customers (
+      name, phone, email, city, address, notes, marketing_status, order_count, total_spent,
+      last_order_code, first_order_at, last_order_at, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      name = VALUES(name),
+      phone = VALUES(phone),
+      city = VALUES(city),
+      address = VALUES(address),
+      notes = VALUES(notes),
+      marketing_status = VALUES(marketing_status),
+      order_count = VALUES(order_count),
+      total_spent = VALUES(total_spent),
+      last_order_code = VALUES(last_order_code),
+      first_order_at = VALUES(first_order_at),
+      last_order_at = VALUES(last_order_at),
+      updated_at = VALUES(updated_at)
+  `, [
+    cleanText(latest.customer_name),
+    normalizePhone(latest.customer_phone),
+    email,
+    cleanText(latest.customer_city),
+    cleanText(latest.customer_address),
+    cleanText(latest.notes),
+    "cliente con pedido",
+    Number(totals?.order_count || 0),
+    money(totals?.total_spent || 0),
+    cleanText(latest.order_code),
+    cleanText(totals?.first_order_at),
+    cleanText(totals?.last_order_at),
+    now(),
+    now()
+  ]);
+
+  return dbGet("SELECT * FROM customers WHERE email = ?", [email]);
+}
+
+async function rebuildCustomersFromOrders() {
+  const rows = await dbAll(`
+    SELECT MIN(customer_email) AS customer_email
+    FROM orders
+    WHERE customer_email IS NOT NULL AND customer_email != ''
+    GROUP BY LOWER(customer_email)
+  `);
+  for (const row of rows) {
+    await syncCustomerFromOrder({ customer_email: row.customer_email });
+  }
+}
+
 function buildWhatsappMessage(order) {
   const deliveryMethod = normalizeDeliveryMethod(order.delivery_method);
   const items = parseJsonList(order.items_json)
@@ -1404,7 +1586,7 @@ function resendConfigured() {
 
 async function sendResendEmail({ to, subject, text, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "GStore <onboarding@resend.dev>";
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !to) return { skipped: true };
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -1428,7 +1610,7 @@ async function sendResendEmail({ to, subject, text, replyTo }) {
     return { ok: false, message };
   }
 
-  return response.json();
+  return { ok: true, ...(await response.json()) };
 }
 
 function orderEmailLines(order) {
@@ -1440,7 +1622,18 @@ function orderEmailLines(order) {
 async function sendOrderEmail(order) {
   const ownerEmail = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
   const replyToEmail = cleanText(process.env.RESEND_REPLY_TO_EMAIL || order.customer_email);
-  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    const missing = [
+      !process.env.RESEND_API_KEY ? "RESEND_API_KEY" : "",
+      !process.env.RESEND_FROM_EMAIL ? "RESEND_FROM_EMAIL" : ""
+    ].filter(Boolean).join(", ");
+    await updateOrderEmailStatus(order.id, {
+      admin: "skipped",
+      customer: "skipped",
+      error: `Correo no configurado: falta ${missing}.`
+    });
+    return { skipped: true, reason: missing };
+  }
 
   const items = orderEmailLines(order);
 
@@ -1475,25 +1668,82 @@ async function sendOrderEmail(order) {
     "Te contactaremos para confirmar los detalles."
   ].filter(Boolean).join("\n");
 
-  const results = [];
+  const results = { admin: null, customer: null };
   if (ownerEmail) {
-    results.push(await sendResendEmail({
+    results.admin = await sendResendEmail({
       to: ownerEmail,
       replyTo: replyToEmail || undefined,
       subject: `${STORE_NAME}: nuevo pedido ${order.order_code}`,
       text: adminText
-    }));
+    });
+  } else {
+    results.admin = { skipped: true, message: "Falta RESEND_TO_EMAIL o STORE_OWNER_EMAIL." };
   }
   if (order.customer_email) {
-    results.push(await sendResendEmail({
+    results.customer = await sendResendEmail({
       to: order.customer_email,
       replyTo: ownerEmail || undefined,
       subject: `Confirmación de pedido ${order.order_code}`,
       text: customerText
-    }));
+    });
+  } else {
+    results.customer = { skipped: true, message: "El pedido no tiene correo de cliente." };
   }
 
-  return { ok: true, results };
+  const adminStatus = emailStatusFromResult(results.admin);
+  const customerStatus = emailStatusFromResult(results.customer);
+  await updateOrderEmailStatus(order.id, {
+    admin: adminStatus,
+    customer: customerStatus,
+    error: emailErrorSummary(results)
+  });
+
+  return { ok: adminStatus !== "failed" && customerStatus !== "failed", results };
+}
+
+function emailStatusFromResult(result) {
+  if (!result || result.skipped) return "skipped";
+  if (result.ok === false) return "failed";
+  return "sent";
+}
+
+function emailErrorSummary(results) {
+  return Object.entries(results || {})
+    .map(([kind, result]) => {
+      if (!result || result.ok !== false) return "";
+      return `${kind}: ${cleanText(result.message).slice(0, 180)}`;
+    })
+    .filter(Boolean)
+    .join(" | ");
+}
+
+async function updateOrderEmailStatus(orderId, { admin = "pending", customer = "pending", error = "" } = {}) {
+  if (!orderId) return;
+  const sentAt = admin === "sent" || customer === "sent" ? now() : "";
+  await dbRun(`
+    UPDATE orders
+    SET admin_email_status = ?,
+        customer_email_status = ?,
+        email_error = ?,
+        email_sent_at = ?,
+        updated_at = ?
+    WHERE id = ?
+  `, [
+    cleanText(admin),
+    cleanText(customer),
+    cleanText(error).slice(0, 1000),
+    sentAt,
+    now(),
+    orderId
+  ]);
+}
+
+async function markOrderEmailFailed(orderId, error) {
+  await updateOrderEmailStatus(orderId, {
+    admin: "failed",
+    customer: "failed",
+    error: cleanText(error?.message || error || "No se pudo enviar el correo.")
+  });
 }
 
 function paypalConfigured() {
@@ -1967,7 +2217,11 @@ app.post("/api/orders/whatsapp", checkoutLimiter, asyncHandler(async (req, res) 
   });
 
   await decrementStock(cart.items);
-  sendOrderEmail(order).catch((error) => console.warn(error.message));
+  await syncCustomerFromOrder(order);
+  sendOrderEmail(order).catch((error) => {
+    console.warn(error.message);
+    return markOrderEmailFailed(order.id, error);
+  });
   res.status(201).json({
     order: publicOrder(order),
     whatsappUrl: getWhatsappUrl(order)
@@ -2001,9 +2255,11 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
   });
 
   await dbRun("UPDATE orders SET order_code = ?, updated_at = ? WHERE id = ?", [draftOrder.order_code, now(), order.id]);
+  const finalOrder = await getOrderById(order.id);
+  await syncCustomerFromOrder(finalOrder);
 
   res.status(201).json({
-    order: publicOrder(await getOrderById(order.id)),
+    order: publicOrder(finalOrder),
     paypalOrderId: paypalOrder.paypalOrderId,
     approvalUrl: paypalOrder.approvalUrl
   });
@@ -2031,7 +2287,12 @@ app.post("/api/paypal/capture", checkoutLimiter, asyncHandler(async (req, res) =
 
   if (status === "paid") {
     await decrementStock(parseJsonList(order.items_json));
-    sendOrderEmail(await getOrderById(order.id)).catch((error) => console.warn(error.message));
+    const paidOrder = await getOrderById(order.id);
+    await syncCustomerFromOrder(paidOrder);
+    sendOrderEmail(paidOrder).catch((error) => {
+      console.warn(error.message);
+      return markOrderEmailFailed(order.id, error);
+    });
   }
 
   res.json({ order: publicOrder(await getOrderById(order.id)), capture });
@@ -2404,6 +2665,8 @@ app.delete("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, r
 async function validateAdminProductInput(body) {
   const name = cleanText(body.name);
   if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
+  const brandName = cleanText(body.brand_name || body.brand || "");
+  if (brandName.length > 120) throw httpError(400, "La marca debe tener máximo 120 caracteres.");
 
   const categoryId = Number(body.category_id || 0);
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
@@ -2445,6 +2708,7 @@ async function validateAdminProductInput(body) {
 
   return {
     name,
+    brandName,
     categoryId,
     price,
     costPrice,
@@ -2466,6 +2730,7 @@ app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
 app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
   const {
     name,
+    brandName,
     categoryId,
     price,
     costPrice,
@@ -2481,14 +2746,15 @@ app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
   const slug = await ensureUniqueSlug("products", name);
   const result = await dbRun(`
     INSERT INTO products (
-      category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+      category_id, name, brand_name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
       image_fit, image_position_x, image_position_y, image_zoom,
       sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     categoryId,
     name,
+    brandName,
     slug,
     cleanText(req.body.description),
     price,
@@ -2527,6 +2793,7 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
   if (!current) return next(httpError(404, "Producto no encontrado."));
   const {
     name,
+    brandName,
     categoryId,
     price,
     costPrice,
@@ -2542,13 +2809,14 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
   const slug = await ensureUniqueSlug("products", name, id);
   await dbRun(`
     UPDATE products
-    SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
+    SET category_id = ?, name = ?, brand_name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
         image_url = ?, image_fit = ?, image_position_x = ?, image_position_y = ?, image_zoom = ?,
         sizes_json = ?, colors_json = ?, promo_type = ?, promo_label = ?, active = ?, featured = ?, updated_at = ?
     WHERE id = ?
   `, [
     categoryId,
     name,
+    brandName,
     slug,
     cleanText(req.body.description),
     price,
@@ -2631,8 +2899,41 @@ app.get("/api/admin/cloudinary/status", requireAdmin, (req, res) => {
   });
 });
 
+app.get("/api/admin/email/status", requireAdmin, (req, res) => {
+  res.json({
+    configured: resendConfigured(),
+    apiKeyConfigured: Boolean(cleanText(process.env.RESEND_API_KEY)),
+    fromConfigured: Boolean(cleanText(process.env.RESEND_FROM_EMAIL)),
+    ownerConfigured: Boolean(cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL)),
+    fromEmail: maskValue(process.env.RESEND_FROM_EMAIL, 2, 10),
+    ownerEmail: maskValue(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL, 2, 10)
+  });
+});
+
+app.get("/api/admin/customers", requireAdmin, asyncHandler(async (req, res) => {
+  const customers = (await dbAll(`
+    SELECT *
+    FROM customers
+    ORDER BY last_order_at DESC, updated_at DESC
+  `)).map(publicCustomer);
+  res.json({ customers });
+}));
+
+app.get("/api/admin/customers/export", requireAdmin, asyncHandler(async (req, res) => {
+  const customers = (await dbAll(`
+    SELECT *
+    FROM customers
+    ORDER BY last_order_at DESC, updated_at DESC
+  `)).map(publicCustomer);
+  const filename = `gstore-clientes-${new Date().toISOString().slice(0, 10)}.csv`;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(customersToCsv(customers));
+}));
+
 app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
-  const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC")).map(publicOrder);
+  const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC"))
+    .map((order) => publicOrder(order, { includeAdmin: true }));
   res.json({ orders });
 }));
 
@@ -2661,6 +2962,7 @@ app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req,
   if (!order) return next(httpError(404, "Pedido no encontrado."));
   await dbRun("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?", [status, now(), id]);
   const updatedOrder = await getOrderById(id);
+  await syncCustomerFromOrder(updatedOrder);
   await auditLog(req, {
     action: "order.status_update",
     entityType: "order",
@@ -2672,7 +2974,27 @@ app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req,
       after: { status: updatedOrder.status, payment_status: updatedOrder.payment_status }
     }
   });
-  res.json({ order: publicOrder(updatedOrder) });
+  res.json({ order: publicOrder(updatedOrder, { includeAdmin: true }) });
+}));
+
+app.post("/api/admin/orders/:id/email", requireAdmin, asyncHandler(async (req, res, next) => {
+  const order = await getOrderById(Number(req.params.id));
+  if (!order) return next(httpError(404, "Pedido no encontrado."));
+  const email = await sendOrderEmail(order);
+  const updatedOrder = await getOrderById(order.id);
+  await auditLog(req, {
+    action: "order.email_resend",
+    entityType: "order",
+    entityId: String(order.id),
+    summary: `Correo reenviado para ${order.order_code}`,
+    metadata: {
+      order_code: order.order_code,
+      admin_email_status: updatedOrder.admin_email_status,
+      customer_email_status: updatedOrder.customer_email_status,
+      email_error: updatedOrder.email_error || ""
+    }
+  });
+  res.json({ order: publicOrder(updatedOrder, { includeAdmin: true }), email });
 }));
 
 app.get("/api/admin/orders/:id/whatsapp", requireAdmin, asyncHandler(async (req, res, next) => {

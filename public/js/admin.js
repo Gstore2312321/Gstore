@@ -11,11 +11,20 @@ const adminState = {
   products: [],
   categories: [],
   orders: [],
+  customers: [],
   banners: [],
+  emailStatus: null,
   analytics: null,
   charts: {},
   productSearch: "",
   productStatusFilter: "all",
+  productCategoryFilter: "all",
+  productBrandFilter: "all",
+  reportPeriodFilter: "all",
+  orderSearch: "",
+  orderStatusFilter: "all",
+  orderPeriodFilter: "all",
+  customerSearch: "",
   productOptions: {
     sizes: [],
     colors: []
@@ -73,6 +82,8 @@ const adminEls = {
   productShelfNotes: document.querySelector("#productShelfNotes"),
   productSearch: document.querySelector("#productSearch"),
   productStatusFilter: document.querySelector("#productStatusFilter"),
+  productCategoryFilter: document.querySelector("#productCategoryFilter"),
+  productBrandFilter: document.querySelector("#productBrandFilter"),
   productDrawer: document.querySelector("#productDrawer"),
   productDrawerTitle: document.querySelector("#productDrawerTitle"),
   productDrawerKicker: document.querySelector("#productDrawerKicker"),
@@ -87,6 +98,7 @@ const adminEls = {
   newProductButton: document.querySelector("#newProductButton"),
   quickProductButton: document.querySelector("#quickProductButton"),
   productCreateButton: document.querySelector("#productCreateButton"),
+  productPrintButton: document.querySelector("#productPrintButton"),
   closeProductDrawer: document.querySelector("#closeProductDrawer"),
   categoryForm: document.querySelector("#categoryForm"),
   categoryMessage: document.querySelector("#categoryMessage"),
@@ -104,7 +116,25 @@ const adminEls = {
   ordersDoneCount: document.querySelector("#ordersDoneCount"),
   ordersVisibleTotal: document.querySelector("#ordersVisibleTotal"),
   refreshOrdersButton: document.querySelector("#refreshOrdersButton"),
+  orderSearch: document.querySelector("#orderSearch"),
+  orderStatusFilter: document.querySelector("#orderStatusFilter"),
+  orderPeriodFilter: document.querySelector("#orderPeriodFilter"),
+  orderPrintButton: document.querySelector("#orderPrintButton"),
+  customersList: document.querySelector("#customersList"),
+  customersTotal: document.querySelector("#customersTotal"),
+  customersWithEmail: document.querySelector("#customersWithEmail"),
+  customersOrdersTotal: document.querySelector("#customersOrdersTotal"),
+  customersTotalSpent: document.querySelector("#customersTotalSpent"),
+  customerSearch: document.querySelector("#customerSearch"),
+  refreshCustomersButton: document.querySelector("#refreshCustomersButton"),
+  exportCustomersButton: document.querySelector("#exportCustomersButton"),
+  emailConfigured: document.querySelector("#emailConfigured"),
+  emailFrom: document.querySelector("#emailFrom"),
+  emailOwner: document.querySelector("#emailOwner"),
+  emailHint: document.querySelector("#emailHint"),
   refreshReportsButton: document.querySelector("#refreshReportsButton"),
+  reportPeriodFilter: document.querySelector("#reportPeriodFilter"),
+  reportPrintButton: document.querySelector("#reportPrintButton"),
   reportsSummaryText: document.querySelector("#reportsSummaryText"),
   reportAverageOrder: document.querySelector("#reportAverageOrder"),
   reportPaidProfit: document.querySelector("#reportPaidProfit"),
@@ -161,13 +191,27 @@ function bindAdminEvents() {
   on(adminEls.resetProductForm, "click", () => resetProductForm());
   on(adminEls.resetCategoryForm, "click", () => resetCategoryForm());
   on(adminEls.refreshOrdersButton, "click", () => refreshOrders().catch(showErrorToast));
+  on(adminEls.refreshCustomersButton, "click", () => refreshCustomers().catch(showErrorToast));
+  on(adminEls.exportCustomersButton, "click", exportCustomers);
   on(adminEls.refreshReportsButton, "click", () => refreshAll().catch(showErrorToast));
+  on(adminEls.reportPeriodFilter, "change", (event) => {
+    adminState.reportPeriodFilter = event.target.value;
+    renderReports();
+  });
+  on(adminEls.reportPrintButton, "click", () => printAdminView("reports"));
+  on(adminEls.productPrintButton, "click", () => printAdminView("products"));
+  on(adminEls.orderPrintButton, "click", () => printAdminView("orders"));
   on(adminEls.bannerForm, "submit", saveBanner);
   on(adminEls.resetBannerForm, "click", () => resetBannerForm());
   on(adminEls.bannerForm?.elements.imageFile, "change", previewSelectedBannerImage);
   on(adminEls.bannerForm?.elements.image_url, "input", () => {
     const value = adminEls.bannerForm.elements.image_url.value.trim();
-    renderBannerPreview(value);
+    renderBannerPreview(value, currentBannerDraft());
+  });
+  ["kicker", "title", "text"].forEach((name) => {
+    on(adminEls.bannerForm?.elements[name], "input", () => {
+      renderBannerPreview(adminEls.bannerPreview?.dataset.previewSrc || adminEls.bannerForm.elements.image_url.value.trim(), currentBannerDraft());
+    });
   });
 
   [adminEls.newProductButton, adminEls.quickProductButton, adminEls.productCreateButton].forEach((button) => {
@@ -191,9 +235,37 @@ function bindAdminEvents() {
     adminState.productSearch = event.target.value.trim().toLowerCase();
     renderProductsTable();
   });
+  on(adminEls.productCategoryFilter, "change", (event) => {
+    adminState.productCategoryFilter = event.target.value;
+    renderProductShelfNotes();
+    renderProductsTable();
+  });
+  on(adminEls.productBrandFilter, "change", (event) => {
+    adminState.productBrandFilter = event.target.value;
+    renderProductShelfNotes();
+    renderProductsTable();
+  });
   on(adminEls.productStatusFilter, "change", (event) => {
     adminState.productStatusFilter = event.target.value;
+    renderProductShelfNotes();
     renderProductsTable();
+  });
+  on(adminEls.productShelfNotes, "click", handleProductFilterClick);
+  on(adminEls.orderSearch, "input", (event) => {
+    adminState.orderSearch = event.target.value.trim().toLowerCase();
+    renderOrders();
+  });
+  on(adminEls.orderStatusFilter, "change", (event) => {
+    adminState.orderStatusFilter = event.target.value;
+    renderOrders();
+  });
+  on(adminEls.orderPeriodFilter, "change", (event) => {
+    adminState.orderPeriodFilter = event.target.value;
+    renderOrders();
+  });
+  on(adminEls.customerSearch, "input", (event) => {
+    adminState.customerSearch = event.target.value.trim().toLowerCase();
+    renderCustomers();
   });
 
   if (adminEls.productForm) {
@@ -378,6 +450,12 @@ function handleDocumentClick(event) {
     return;
   }
 
+  const emailOrder = event.target.closest("[data-order-email]");
+  if (emailOrder) {
+    resendOrderEmail(Number(emailOrder.dataset.orderEmail));
+    return;
+  }
+
   const nextOrderStatus = event.target.closest("[data-order-next-status]");
   if (nextOrderStatus) {
     updateOrderStatus(Number(nextOrderStatus.dataset.orderId), nextOrderStatus.dataset.orderNextStatus);
@@ -549,6 +627,8 @@ async function refreshAll() {
   if (["dashboard", "products", "categories"].includes(adminState.page)) tasks.push(refreshCategories());
   if (["dashboard", "products"].includes(adminState.page)) tasks.push(refreshProducts());
   if (["dashboard", "reports", "orders"].includes(adminState.page)) tasks.push(refreshOrders(false));
+  if (adminState.page === "customers") tasks.push(refreshCustomers(false));
+  if (["orders", "customers"].includes(adminState.page)) tasks.push(refreshEmailStatus());
   await Promise.all(tasks);
   renderInsights();
   renderReports();
@@ -576,6 +656,7 @@ async function refreshCategories() {
   const data = await adminApi("/api/admin/categories");
   adminState.categories = data.categories || [];
   renderCategorySelect();
+  renderProductFilterControls();
   renderCategories();
   renderInsights();
 }
@@ -583,6 +664,7 @@ async function refreshCategories() {
 async function refreshProducts() {
   const data = await adminApi("/api/admin/products");
   adminState.products = data.products || [];
+  renderProductFilterControls();
   renderProductsTable();
   renderProductShelfNotes();
   renderInsights();
@@ -603,22 +685,35 @@ async function refreshOrders(updateSummary = true) {
   if (updateSummary) await refreshSummary();
 }
 
+async function refreshCustomers(updateSummary = true) {
+  const data = await adminApi("/api/admin/customers");
+  adminState.customers = data.customers || [];
+  renderCustomers();
+  if (updateSummary) await refreshEmailStatus();
+}
+
+async function refreshEmailStatus() {
+  const data = await adminApi("/api/admin/email/status");
+  adminState.emailStatus = data;
+  renderEmailStatus();
+}
+
 function renderInsights() {
   const activeCategories = adminState.categories.filter((category) => category.active).length;
-  const lowStock = adminState.products.filter((product) => Number(product.stock || 0) <= 2);
+  const noStock = adminState.products.filter((product) => Number(product.stock || 0) <= 0);
   const featured = adminState.products.filter((product) => product.featured).length;
   const latestOrder = adminState.orders[0];
-  const lowStockText = lowStock.length
-    ? `${lowStock.length} producto${lowStock.length === 1 ? "" : "s"} con 2 unidades o menos: ${lowStock.slice(0, 3).map((product) => product.name).join(", ")}.`
-    : "Sin productos críticos. El inventario está tranquilo.";
+  const noStockText = noStock.length
+    ? `${noStock.length} producto${noStock.length === 1 ? "" : "s"} sin stock: ${noStock.slice(0, 3).map((product) => product.name).join(", ")}.`
+    : "Sin productos agotados.";
 
-  setText(adminEls.insightLowStock, lowStockText);
-  setText(adminEls.summaryLowStock, lowStock.length);
+  setText(adminEls.insightLowStock, noStockText);
+  setText(adminEls.summaryLowStock, noStock.length);
   setText(
     adminEls.stockActionText,
-    lowStock.length
-      ? `${lowStock.slice(0, 2).map((product) => product.name).join(", ")}`
-      : "Inventario bajo control"
+    noStock.length
+      ? `${noStock.slice(0, 2).map((product) => product.name).join(", ")}`
+      : "Sin alertas"
   );
 
   setText(adminEls.insightActiveCategories, `${activeCategories} activa${activeCategories === 1 ? "" : "s"} de ${adminState.categories.length || 0}. ${featured} producto${featured === 1 ? "" : "s"} destacado${featured === 1 ? "" : "s"}.`);
@@ -631,7 +726,7 @@ function renderInsights() {
     setText(adminEls.insightLatestOrder, "Cuando entre una orden aparecerá aquí.");
   }
 
-  setText(adminEls.sidebarStatus, lowStock.length ? `${lowStock.length} stock bajo` : "Lista");
+  setText(adminEls.sidebarStatus, noStock.length ? `${noStock.length} sin stock` : "Lista");
 }
 
 function renderDashboardAnalytics() {
@@ -650,8 +745,8 @@ function renderDashboardAnalytics() {
   setText(
     adminEls.profitSummaryText,
     sales > 0
-      ? `${formatCurrency(sales)} en ventas, ${formatCurrency(profit)} de ganancia estimada y ${formatCurrency(pendingProfit)} pendiente por cobrar.`
-      : "Aún no hay ventas registradas. Cuando entren pedidos, aquí verás utilidad, margen y tendencia."
+      ? `${formatCurrency(sales)} en ventas netas, ${formatCurrency(profit)} de utilidad bruta estimada y ${formatCurrency(pendingProfit)} pendiente por cobrar.`
+      : "Sin ventas activas todavía. Cuando entren pedidos, aquí verás utilidad, margen y tendencia."
   );
 
   renderDashboardCharts(analytics);
@@ -689,7 +784,7 @@ function renderDashboardCharts(analytics) {
         },
         {
           type: "line",
-          label: "Ganancia",
+          label: "Utilidad",
           data: days.map((item) => item.profit),
           borderColor: ink,
           backgroundColor: "rgba(23, 19, 10, 0.08)",
@@ -708,7 +803,7 @@ function renderDashboardCharts(analytics) {
     data: {
       labels: (products.length ? products : [{ name: "Sin ventas" }]).map((item) => item.name),
       datasets: [{
-        label: "Ganancia",
+        label: "Utilidad",
         data: (products.length ? products : [{ profit: 0 }]).map((item) => item.profit),
         backgroundColor: "rgba(120, 146, 118, 0.42)",
         borderColor: green,
@@ -724,7 +819,7 @@ function renderDashboardCharts(analytics) {
     data: {
       labels: (categories.length ? categories : [{ category: "Sin inventario" }]).map((item) => item.category),
       datasets: [{
-        label: "Ganancia potencial",
+        label: "Utilidad potencial",
         data: (categories.length ? categories : [{ potentialProfit: 0 }]).map((item) => item.potentialProfit),
         backgroundColor: ["rgba(199, 150, 47, 0.42)", "rgba(120, 146, 118, 0.36)", "rgba(23, 19, 10, 0.16)", "rgba(163, 58, 45, 0.18)"],
         borderColor: [gold, green, ink, red],
@@ -795,8 +890,8 @@ function renderReports() {
   setText(
     adminEls.reportsSummaryText,
     orderCount
-      ? `${orderCount} pedido${orderCount === 1 ? "" : "s"} activo${orderCount === 1 ? "" : "s"}, ${formatCurrency(profit)} de ganancia estimada y ${formatPercent(margin)} de margen.`
-      : "Aún no hay pedidos activos. Cuando entren ventas, este panel mostrará utilidad, margen y movimiento."
+      ? `Lectura actual: ${orderCount} pedido${orderCount === 1 ? "" : "s"} activo${orderCount === 1 ? "" : "s"}, ${formatCurrency(sales)} en ventas netas, ${formatCurrency(profit)} de utilidad bruta y ${formatPercent(margin)} de margen.`
+      : "Sin ventas activas todavía. El reporte ya puede leer inventario, inversión privada y utilidad potencial por categoría."
   );
 
   renderReportCharts(analytics);
@@ -836,7 +931,7 @@ function renderReportCharts(analytics) {
         },
         {
           type: "line",
-          label: "Ganancia",
+          label: "Utilidad",
           data: days.map((item) => item.profit),
           borderColor: ink,
           pointBackgroundColor: gold,
@@ -854,7 +949,7 @@ function renderReportCharts(analytics) {
     data: {
       labels: (categories.length ? categories : [{ category: "Sin inventario" }]).map((item) => item.category),
       datasets: [{
-        label: "Ganancia potencial",
+        label: "Utilidad potencial",
         data: (categories.length ? categories : [{ potentialProfit: 0 }]).map((item) => item.potentialProfit),
         backgroundColor: ["rgba(199, 150, 47, 0.42)", "rgba(120, 146, 118, 0.36)", "rgba(23, 19, 10, 0.16)", "rgba(163, 58, 45, 0.18)"],
         borderColor: [gold, green, ink, red],
@@ -888,41 +983,88 @@ function renderReportCharts(analytics) {
 
 function renderReportProducts(products) {
   if (!adminEls.reportProductsList) return;
-  adminEls.reportProductsList.innerHTML = products.slice(0, 6).map((product, index) => `
-    <div class="report-row">
+  adminEls.reportProductsList.innerHTML = products.slice(0, 6).map((product, index) => {
+    const sales = Number(product.sales || 0);
+    const profit = Number(product.profit || 0);
+    const margin = sales > 0 ? (profit / sales) * 100 : 0;
+    const quantity = Number(product.quantity || 0);
+
+    return `
+    <div class="report-row report-product-row">
       <span class="report-rank">${index + 1}</span>
-      <div>
+      <div class="report-row-main">
         <strong>${escapeHtml(product.name)}</strong>
-        <small>${escapeHtml(product.sku || "Sin SKU")} · ${product.quantity} vendido${product.quantity === 1 ? "" : "s"}</small>
+        <small>SKU: ${escapeHtml(product.sku || "no registrado")}</small>
+        <div class="report-row-meta">
+          <span>${quantity} unidad${quantity === 1 ? "" : "es"} vendida${quantity === 1 ? "" : "s"}</span>
+          <span>${formatPercent(margin)} margen</span>
+        </div>
       </div>
       <div class="report-row-number">
+        <small>Utilidad</small>
         <strong>${formatCurrency(product.profit)}</strong>
-        <small>${formatCurrency(product.sales)} venta</small>
+        <span>Venta ${formatCurrency(product.sales)}</span>
       </div>
     </div>
-  `).join("") || emptyAdminState("Sin productos vendidos.", "Cuando existan pedidos, verás aquí las piezas que más utilidad dejan.");
+  `;
+  }).join("") || emptyAdminState("Sin ventas por producto.", "Cuando entren pedidos activos, este ranking mostrará producto, unidades, venta y utilidad.");
 }
 
 function renderReportCategories(categories) {
   if (!adminEls.reportCategoriesList) return;
-  adminEls.reportCategoriesList.innerHTML = categories.map((category) => `
-    <div class="report-row">
-      <span class="report-rank">${Number(category.stock || 0)}</span>
-      <div>
-        <strong>${escapeHtml(category.category)}</strong>
-        <small>${formatCurrency(category.inventoryCost)} costo privado · ${formatCurrency(category.inventoryValue)} venta potencial</small>
+  adminEls.reportCategoriesList.innerHTML = categories.map((category) => {
+    const stock = Number(category.stock || 0);
+    const inventoryCost = Number(category.inventoryCost || 0);
+    const inventoryValue = Number(category.inventoryValue || 0);
+    const potentialProfit = Number(category.potentialProfit || 0);
+    const margin = inventoryValue > 0 ? (potentialProfit / inventoryValue) * 100 : 0;
+    const progress = Math.max(0, Math.min(100, margin));
+    const rowClass = potentialProfit < 0 ? " is-negative" : "";
+
+    return `
+    <div class="report-row report-category-row${rowClass}">
+      <div class="report-category-header">
+        <span class="report-rank">${stock}</span>
+        <div class="report-row-main">
+          <strong>${escapeHtml(category.category)}</strong>
+          <small>${stock} unidad${stock === 1 ? "" : "es"} en inventario</small>
+        </div>
+        <div class="report-row-number">
+          <small>Utilidad potencial</small>
+          <strong>${formatCurrency(potentialProfit)}</strong>
+          <span>${formatPercent(margin)} margen</span>
+        </div>
       </div>
-      <div class="report-row-number">
-        <strong>${formatCurrency(category.potentialProfit)}</strong>
-        <small>ganancia posible</small>
+      <div class="report-money-grid">
+        <div>
+          <span>Costo privado</span>
+          <strong>${formatCurrency(inventoryCost)}</strong>
+        </div>
+        <div>
+          <span>Venta potencial</span>
+          <strong>${formatCurrency(inventoryValue)}</strong>
+        </div>
+        <div>
+          <span>Utilidad</span>
+          <strong>${formatCurrency(potentialProfit)}</strong>
+        </div>
+        <div>
+          <span>Margen</span>
+          <strong>${formatPercent(margin)}</strong>
+        </div>
+      </div>
+      <div class="report-progress" aria-label="Margen estimado">
+        <span style="--progress: ${escapeAttr(progress)}%"></span>
       </div>
     </div>
-  `).join("") || emptyAdminState("Sin categorías con inventario.", "Agrega productos con precio y costo para medir utilidad.");
+  `;
+  }).join("") || emptyAdminState("Sin inventario medible.", "Agrega productos con stock, precio de venta y costo privado para calcular utilidad por categoría.");
 }
 
 function renderReportRecentOrders() {
   if (!adminEls.reportRecentOrders) return;
-  adminEls.reportRecentOrders.innerHTML = adminState.orders.slice(0, 5).map((order) => `
+  const orders = filteredReportOrders();
+  adminEls.reportRecentOrders.innerHTML = orders.slice(0, 8).map((order) => `
     <div class="report-row">
       <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
       <div>
@@ -1091,15 +1233,172 @@ function renderCategories() {
 
 function renderProductShelfNotes() {
   if (!adminEls.productShelfNotes) return;
-  const lowStock = adminState.products.filter((product) => Number(product.stock || 0) <= 2).length;
+  const total = adminState.products.length;
+  const noStock = adminState.products.filter((product) => Number(product.stock || 0) <= 0).length;
   const hidden = adminState.products.filter((product) => !product.active).length;
-  const promos = adminState.products.filter((product) => (product.promo_type || "none") !== "none" || product.promo_label).length;
-  adminEls.productShelfNotes.innerHTML = [
-    `<span class="shelf-note">${adminState.products.length} productos cargados</span>`,
-    `<span class="shelf-note">${lowStock} con stock bajo</span>`,
-    `<span class="shelf-note">${promos} con promo</span>`,
-    hidden ? `<span class="shelf-note">${hidden} ocultos</span>` : ""
-  ].filter(Boolean).join("");
+  const promos = adminState.products.filter(isPromoProduct).length;
+  const categoryCounts = productCategoryCounts();
+  const brandCounts = productBrandCounts();
+  const activeStatus = adminState.productStatusFilter;
+  const activeCategory = adminState.productCategoryFilter;
+  const activeBrand = adminState.productBrandFilter;
+  const filterButton = ({ kind, value, label, count, alert = false }) => {
+    const active = (
+      (kind === "status" && activeStatus === value) ||
+      (kind === "category" && activeCategory === value) ||
+      (kind === "brand" && activeBrand === value)
+    );
+    return `
+      <button class="shelf-note filter-chip ${active ? "is-active" : ""} ${alert ? "is-alert" : ""}" data-product-filter="${kind}" data-filter-value="${escapeAttr(value)}" type="button" aria-pressed="${active ? "true" : "false"}">
+        <span>${escapeHtml(label)}</span>
+        <b>${count}</b>
+      </button>
+    `;
+  };
+
+  const statusFilters = [
+    filterButton({ kind: "status", value: "all", label: "Todos", count: total }),
+    filterButton({ kind: "status", value: "no_stock", label: "Sin stock", count: noStock, alert: noStock > 0 }),
+    filterButton({ kind: "status", value: "promo", label: "Con promo", count: promos }),
+    filterButton({ kind: "status", value: "hidden", label: "Ocultos", count: hidden })
+  ].join("");
+
+  const categoryFilters = [
+    filterButton({ kind: "category", value: "all", label: "Todas", count: total }),
+    ...categoryCounts.map((item) => filterButton({ kind: "category", value: item.value, label: item.label, count: item.count }))
+  ].join("");
+
+  const brandFilters = [
+    filterButton({ kind: "brand", value: "all", label: "Todas", count: total }),
+    ...brandCounts.map((item) => filterButton({ kind: "brand", value: item.value, label: item.label, count: item.count }))
+  ].join("");
+
+  adminEls.productShelfNotes.innerHTML = `
+    <div class="product-filter-group">
+      <span>Vista</span>
+      <div>${statusFilters}</div>
+    </div>
+    <div class="product-filter-group">
+      <span>Categorías</span>
+      <div>${categoryFilters}</div>
+    </div>
+    <div class="product-filter-group">
+      <span>Marcas</span>
+      <div>${brandFilters}</div>
+    </div>
+  `;
+}
+
+function renderProductFilterControls() {
+  syncProductFilterSelect(adminEls.productCategoryFilter, [
+    { value: "all", label: "Todas las categorías" },
+    ...productCategoryCounts().map((item) => ({
+      value: item.value,
+      label: `${item.label} (${item.count})`
+    }))
+  ], "productCategoryFilter");
+  syncProductFilterSelect(adminEls.productBrandFilter, [
+    { value: "all", label: "Todas las marcas" },
+    ...productBrandCounts().map((item) => ({
+      value: item.value,
+      label: `${item.label} (${item.count})`
+    }))
+  ], "productBrandFilter");
+  syncProductFilterSelect(adminEls.productStatusFilter, [
+    { value: "all", label: `Todos los productos (${adminState.products.length})` },
+    { value: "active", label: `Activos (${adminState.products.filter((product) => product.active).length})` },
+    { value: "hidden", label: `Ocultos (${adminState.products.filter((product) => !product.active).length})` },
+    { value: "no_stock", label: `Sin stock (${adminState.products.filter((product) => Number(product.stock || 0) <= 0).length})` },
+    { value: "promo", label: `Con promo (${adminState.products.filter(isPromoProduct).length})` }
+  ], "productStatusFilter");
+}
+
+function syncProductFilterSelect(select, options, stateKey) {
+  if (!select) return;
+  const current = adminState[stateKey] || "all";
+  const hasCurrent = options.some((item) => item.value === current);
+  if (!hasCurrent) adminState[stateKey] = "all";
+  select.innerHTML = options.map((item) => `
+    <option value="${escapeAttr(item.value)}">${escapeHtml(item.label)}</option>
+  `).join("");
+  select.value = adminState[stateKey] || "all";
+}
+
+function productCategoryCounts() {
+  const counts = new Map();
+  adminState.products.forEach((product) => {
+    const value = productCategoryFilterValue(product);
+    const label = product.category?.name || "Sin categoría";
+    const current = counts.get(value) || { value, label, count: 0 };
+    current.count += 1;
+    counts.set(value, current);
+  });
+  adminState.categories.forEach((category) => {
+    const value = String(category.id);
+    if (!counts.has(value)) counts.set(value, { value, label: category.name, count: 0 });
+  });
+  return Array.from(counts.values()).sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function productBrandCounts() {
+  const counts = new Map();
+  adminState.products.forEach((product) => {
+    const value = productBrandFilterValue(product);
+    const label = productBrandLabel(product);
+    const current = counts.get(value) || { value, label, count: 0 };
+    current.count += 1;
+    counts.set(value, current);
+  });
+  return Array.from(counts.values()).sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function handleProductFilterClick(event) {
+  const button = event.target.closest("[data-product-filter]");
+  if (!button) return;
+  const kind = button.dataset.productFilter;
+  const value = button.dataset.filterValue || "all";
+
+  if (kind === "status") adminState.productStatusFilter = value;
+  if (kind === "category") adminState.productCategoryFilter = value;
+  if (kind === "brand") adminState.productBrandFilter = value;
+
+  renderProductFilterControls();
+  renderProductShelfNotes();
+  renderProductsTable();
+}
+
+function productCategoryFilterValue(product) {
+  return product.category?.id ? String(product.category.id) : "__none";
+}
+
+function productBrandRaw(product) {
+  return String(product.brand_name || product.brand || "").trim();
+}
+
+function productBrandLabel(product) {
+  return productBrandRaw(product) || "Sin marca";
+}
+
+function productBrandFilterValue(product) {
+  const brand = productBrandRaw(product);
+  return brand ? normalizeProductFilterValue(brand) : "__none";
+}
+
+function normalizeProductFilterValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "__none";
+}
+
+function isPromoProduct(product) {
+  const type = product.promo_type || "none";
+  const label = String(product.promo_label || "").trim();
+  const hasDiscount = Number(product.compare_price || 0) > Number(product.price || 0);
+  return type !== "none" || Boolean(label) || hasDiscount;
 }
 
 function renderProductsTable() {
@@ -1113,17 +1412,19 @@ function renderProductsTable() {
           <div>
             <strong>${escapeHtml(product.name)}</strong>
             <span>${escapeHtml(product.sku || "Sin SKU")}</span>
+            ${productBrandRaw(product) ? `<span class="product-brand">Marca: ${escapeHtml(productBrandRaw(product))}</span>` : ""}
           </div>
         </div>
       </td>
       <td data-label="Categoría">${escapeHtml(product.category?.name || "Sin categoría")}</td>
       <td data-label="Precio">${productPriceAdmin(product)}</td>
       <td data-label="Compra">${productCostAdmin(product)}</td>
-      <td data-label="Ganancia">${productProfitAdmin(product)}</td>
+      <td data-label="Utilidad">${productProfitAdmin(product)}</td>
       <td data-label="Stock">${Number(product.stock || 0)}</td>
       <td data-label="Estado">
         <div class="status-stack">
           <span class="status-pill ${product.active ? "" : "off"}">${product.active ? "Activo" : "Oculto"}</span>
+          ${productStockAlertAdmin(product)}
           ${productPromoAdmin(product)}
         </div>
       </td>
@@ -1146,7 +1447,10 @@ function renderBannerAdmin() {
     <article class="banner-admin-card ${banner.active ? "" : "is-hidden-banner"}">
       <img ${imageAttrs(banner.image_url, { width: 520, widths: ADMIN_PREVIEW_WIDTHS, sizes: "(max-width: 760px) 100vw, 320px" })} alt="${escapeAttr(banner.title)}">
       <div class="banner-admin-card-copy">
-        <span>${escapeHtml(banner.kicker || "Promo")}</span>
+        <span>
+          <b>${escapeHtml(banner.kicker || "Promo")}</b>
+          <em>${banner.active ? "Visible" : "Oculto"}</em>
+        </span>
         <strong>${escapeHtml(banner.title)}</strong>
         <small>${escapeHtml(banner.text || (banner.active ? "Visible en la tienda." : "Oculto de la tienda."))}</small>
       </div>
@@ -1187,18 +1491,39 @@ function resetBannerForm(options = {}) {
   if (!options.silent) setMessage(adminEls.bannerMessage, "");
 }
 
+function currentBannerDraft() {
+  const form = adminEls.bannerForm;
+  if (!form) return {};
+  return {
+    kicker: form.elements.kicker?.value,
+    title: form.elements.title?.value,
+    text: form.elements.text?.value
+  };
+}
+
 function renderBannerPreview(src, banner = {}) {
   if (!adminEls.bannerPreview) return;
   const imageUrl = src || banner.image_url || "";
+  adminEls.bannerPreview.dataset.previewSrc = imageUrl;
+  const kicker = cleanDisplayText(banner.kicker || "Vista previa");
+  const title = cleanDisplayText(banner.title || "Banner de tienda");
+  const text = cleanDisplayText(banner.text || "Sube una imagen para ver la pieza final.");
   if (!imageUrl) {
-    adminEls.bannerPreview.innerHTML = "<span>Vista previa del banner</span>";
+    adminEls.bannerPreview.innerHTML = `
+      <div class="banner-preview-copy">
+        <span>${escapeHtml(kicker)}</span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(text)}</small>
+      </div>
+    `;
     return;
   }
   adminEls.bannerPreview.innerHTML = `
     <img ${imageAttrs(imageUrl, { width: 720, widths: ADMIN_PREVIEW_WIDTHS, sizes: "360px", loading: "eager", fetchPriority: "high" })} alt="${escapeAttr(banner.title || "Banner de tienda")}">
-    <div>
-      <span>${escapeHtml(banner.kicker || "Promo")}</span>
-      <strong>${escapeHtml(banner.title || "Banner de tienda")}</strong>
+    <div class="banner-preview-copy">
+      <span>${escapeHtml(kicker)}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <small>${escapeHtml(text)}</small>
     </div>
   `;
 }
@@ -1211,27 +1536,35 @@ function previewSelectedBannerImage() {
     kicker: adminEls.bannerForm.elements.kicker.value,
     title: adminEls.bannerForm.elements.title.value
   });
-  const img = adminEls.bannerPreview?.querySelector("img");
-  if (img) img.onload = () => URL.revokeObjectURL(objectUrl);
+}
+
+function cleanDisplayText(value) {
+  return String(value || "").trim();
 }
 
 function filteredProducts() {
   const query = adminState.productSearch;
   const filter = adminState.productStatusFilter;
+  const categoryFilter = adminState.productCategoryFilter || "all";
+  const brandFilter = adminState.productBrandFilter || "all";
   return adminState.products.filter((product) => {
     const text = [
       product.name,
       product.sku,
+      productBrandRaw(product),
       product.category?.name,
       product.promo_label
     ].join(" ").toLowerCase();
     const matchesQuery = !query || text.includes(query);
+    const matchesCategory = categoryFilter === "all" || productCategoryFilterValue(product) === categoryFilter;
+    const matchesBrand = brandFilter === "all" || productBrandFilterValue(product) === brandFilter;
     const matchesFilter =
       filter === "all" ||
       (filter === "active" && product.active) ||
       (filter === "hidden" && !product.active) ||
-      (filter === "low" && Number(product.stock || 0) <= 2);
-    return matchesQuery && matchesFilter;
+      (filter === "no_stock" && Number(product.stock || 0) <= 0) ||
+      (filter === "promo" && isPromoProduct(product));
+    return matchesQuery && matchesCategory && matchesBrand && matchesFilter;
   });
 }
 
@@ -1269,11 +1602,15 @@ function productProfitAdmin(product) {
   `;
 }
 
+function productStockAlertAdmin(product) {
+  if (Number(product.stock || 0) > 0) return "";
+  return `<span class="status-pill stock-alert">Sin stock</span>`;
+}
+
 function productPromoAdmin(product) {
   const type = product.promo_type || "none";
-  const label = product.promo_label || (Number(product.stock || 0) <= 2 ? "Últimas unidades" : "");
-  if (type === "none" && !label) return "";
-  return `<span class="status-pill promo-status">${escapeHtml(label || promoTypeLabel(type))}</span>`;
+  if (!isPromoProduct(product)) return "";
+  return `<span class="status-pill promo-status">${escapeHtml(product.promo_label || promoTypeLabel(type))}</span>`;
 }
 
 function promoTypeLabel(type) {
@@ -1285,14 +1622,14 @@ function promoTypeLabel(type) {
 
 function renderOrders() {
   if (!adminEls.ordersList) return;
-  renderOrdersOverview();
-  adminEls.ordersList.innerHTML = adminState.orders.map((order) => `
+  const orders = filteredOrders();
+  renderOrdersOverview(orders);
+  adminEls.ordersList.innerHTML = orders.map((order) => `
     ${renderOrderCard(order)}
   `).join("") || emptyAdminState("Todavía no hay pedidos.", "Cuando una clienta complete checkout, la orden aparecerá aquí.");
 }
 
-function renderOrdersOverview() {
-  const orders = adminState.orders || [];
+function renderOrdersOverview(orders = filteredOrders()) {
   const newCount = orders.filter((order) => order.status === "new").length;
   const pendingCount = orders.filter((order) => ["new", "waiting_payment", "paid", "preparing", "ready", "sent"].includes(order.status)).length;
   const doneCount = orders.filter((order) => ["completed", "cancelled"].includes(order.status)).length;
@@ -1305,8 +1642,418 @@ function renderOrdersOverview() {
   setText(adminEls.ordersVisibleTotal, formatCurrency(visibleTotal));
 }
 
+function filteredOrders() {
+  const orders = adminState.orders || [];
+  const query = adminState.orderSearch;
+  const status = adminState.orderStatusFilter || "all";
+  const period = adminState.orderPeriodFilter || "all";
+  return orders.filter((order) => {
+    const matchesStatus = status === "all" || order.status === status;
+    const matchesPeriod = orderMatchesPeriod(order, period);
+    const text = [
+      order.order_code,
+      order.customer_name,
+      order.customer_phone,
+      order.customer_email,
+      order.customer_city,
+      order.customer_address,
+      statusLabels[order.status],
+      paymentLabel(order.payment_method, order.payment_status)
+    ].join(" ").toLowerCase();
+    const matchesQuery = !query || text.includes(query);
+    return matchesStatus && matchesPeriod && matchesQuery;
+  });
+}
+
+function filteredReportOrders() {
+  const period = adminState.reportPeriodFilter || "all";
+  return (adminState.orders || []).filter((order) => orderMatchesPeriod(order, period));
+}
+
+function orderMatchesPeriod(order, period) {
+  if (period === "all") return true;
+  const orderDate = new Date(order.created_at);
+  if (Number.isNaN(orderDate.getTime())) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (period === "today") return orderDate >= today;
+  const days = period === "30d" ? 30 : 7;
+  const start = new Date(today);
+  start.setDate(today.getDate() - (days - 1));
+  return orderDate >= start;
+}
+
+function printAdminView(kind) {
+  const data = kind === "reports"
+    ? buildReportsPrintData()
+    : kind === "products"
+      ? buildProductsPrintData()
+      : buildOrdersPrintData();
+  const printWindow = window.open("", "_blank", "width=1120,height=760");
+  if (!printWindow) {
+    showToast("Activa las ventanas emergentes para imprimir.");
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(buildPrintDocument(data));
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.onafterprint = () => printWindow.close();
+  setTimeout(() => printWindow.print(), 240);
+}
+
+function buildReportsPrintData() {
+  const analytics = adminState.analytics || {};
+  const totals = analytics.totals || {};
+  const orders = filteredReportOrders();
+  const orderSummary = summarizeOrders(orders);
+  return {
+    title: "Reporte de negocio",
+    subtitle: "Ventas, utilidad, inventario y pedidos del periodo seleccionado.",
+    filters: [
+      ["Periodo", periodLabel(adminState.reportPeriodFilter)],
+      ["Generado", formatPrintDate(new Date())]
+    ],
+    metrics: [
+      ["Pedidos del periodo", orders.length],
+      ["Total visible del periodo", formatCurrency(orderSummary.sales)],
+      ["Ticket promedio del periodo", formatCurrency(orderSummary.averageOrder)],
+      ["Ventas netas del panel", formatCurrency(totals.sales)],
+      ["Utilidad estimada del panel", formatCurrency(totals.estimatedProfit)],
+      ["Inventario valorizado", formatCurrency(totals.inventoryValue)]
+    ],
+    sections: [
+      {
+        title: "Pedidos del periodo",
+        headers: ["Fecha", "Pedido", "Cliente", "Estado", "Pago", "Total"],
+        rows: orders.map((order) => [
+          formatPrintDate(order.created_at),
+          order.order_code,
+          order.customer_name,
+          statusLabels[order.status] || order.status,
+          paymentLabel(order.payment_method, order.payment_status),
+          formatCurrency(order.total)
+        ]),
+        empty: "No hay pedidos dentro del periodo seleccionado."
+      },
+      {
+        title: "Productos con mejor utilidad",
+        headers: ["Producto", "SKU", "Unidades", "Venta", "Utilidad"],
+        rows: (analytics.topProducts || []).slice(0, 12).map((product) => [
+          product.name,
+          product.sku || "Sin SKU",
+          Number(product.quantity || 0),
+          formatCurrency(product.sales),
+          formatCurrency(product.profit)
+        ]),
+        empty: "No hay ventas por producto registradas."
+      },
+      {
+        title: "Inventario por categoria",
+        headers: ["Categoria", "Stock", "Costo privado", "Venta potencial", "Utilidad potencial"],
+        rows: (analytics.categoryProfit || []).map((category) => [
+          category.category,
+          Number(category.stock || 0),
+          formatCurrency(category.inventoryCost),
+          formatCurrency(category.inventoryValue),
+          formatCurrency(category.potentialProfit)
+        ]),
+        empty: "No hay inventario medible por categoria."
+      }
+    ]
+  };
+}
+
+function buildProductsPrintData() {
+  const products = filteredProducts();
+  const inventoryValue = products.reduce((sum, product) => sum + Number(product.price || 0) * Number(product.stock || 0), 0);
+  const inventoryCost = products.reduce((sum, product) => sum + Number(product.cost_price || 0) * Number(product.stock || 0), 0);
+  const noStock = products.filter((product) => Number(product.stock || 0) <= 0).length;
+  return {
+    title: "Inventario de productos",
+    subtitle: "Catalogo filtrado listo para revisar en papel.",
+    filters: [
+      ["Busqueda", adminState.productSearch || "Sin busqueda"],
+      ["Categoria", selectedText(adminEls.productCategoryFilter)],
+      ["Marca", selectedText(adminEls.productBrandFilter)],
+      ["Estado", selectedText(adminEls.productStatusFilter)],
+      ["Generado", formatPrintDate(new Date())]
+    ],
+    metrics: [
+      ["Productos visibles", products.length],
+      ["Activos", products.filter((product) => product.active).length],
+      ["Sin stock", noStock],
+      ["Unidades visibles", products.reduce((sum, product) => sum + Number(product.stock || 0), 0)],
+      ["Costo privado visible", formatCurrency(inventoryCost)],
+      ["Venta potencial visible", formatCurrency(inventoryValue)]
+    ],
+    sections: [{
+      title: "Detalle de inventario",
+      headers: ["Producto", "Marca", "Categoria", "SKU", "Venta", "Compra", "Stock", "Estado"],
+      rows: products.map((product) => [
+        product.name,
+        productBrandRaw(product) || "Sin marca",
+        product.category?.name || "Sin categoria",
+        product.sku || "Sin SKU",
+        formatCurrency(product.price),
+        formatCurrency(product.cost_price),
+        Number(product.stock || 0),
+        product.active ? "Activo" : "Oculto"
+      ]),
+      empty: "No hay productos con los filtros aplicados."
+    }]
+  };
+}
+
+function buildOrdersPrintData() {
+  const orders = filteredOrders();
+  const summary = summarizeOrders(orders);
+  return {
+    title: "Pedidos",
+    subtitle: "Listado operativo segun filtros de busqueda, periodo y estado.",
+    filters: [
+      ["Busqueda", adminState.orderSearch || "Sin busqueda"],
+      ["Periodo", selectedText(adminEls.orderPeriodFilter)],
+      ["Estado", selectedText(adminEls.orderStatusFilter)],
+      ["Generado", formatPrintDate(new Date())]
+    ],
+    metrics: [
+      ["Pedidos visibles", orders.length],
+      ["Total no cancelado", formatCurrency(summary.sales)],
+      ["Total pagado", formatCurrency(summary.paidSales)],
+      ["Ticket promedio", formatCurrency(summary.averageOrder)],
+      ["Unidades", summary.units],
+      ["Pendientes", orders.filter((order) => ["new", "waiting_payment", "paid", "preparing", "ready", "sent"].includes(order.status)).length]
+    ],
+    sections: [{
+      title: "Detalle de pedidos",
+      headers: ["Fecha", "Pedido", "Cliente", "Telefono", "Estado", "Pago", "Entrega", "Productos", "Total"],
+      rows: orders.map((order) => [
+        formatPrintDate(order.created_at),
+        order.order_code,
+        order.customer_name,
+        order.customer_phone,
+        statusLabels[order.status] || order.status,
+        paymentLabel(order.payment_method, order.payment_status),
+        orderDeliveryLabel(order),
+        orderItemsSummary(order),
+        formatCurrency(order.total)
+      ]),
+      empty: "No hay pedidos con los filtros aplicados."
+    }]
+  };
+}
+
+function buildPrintDocument({ title, subtitle, filters, metrics, sections }) {
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)} | GStore</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; color: #17130a; background: #fffdf8; font-family: Arial, sans-serif; font-size: 12px; }
+    header { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; padding-bottom: 16px; border-bottom: 2px solid #17130a; }
+    h1 { margin: 0; font-size: 28px; line-height: 1; }
+    h2 { margin: 22px 0 10px; font-size: 16px; }
+    p { margin: 7px 0 0; color: #5f574b; line-height: 1.45; }
+    .brand { text-align: right; font-weight: 800; }
+    .filters, .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+    .chip, .metric { border: 1px solid #ded1b8; border-radius: 8px; padding: 8px 10px; background: #fbf6ea; }
+    .chip span, .metric span { display: block; color: #746a5c; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .chip strong, .metric strong { display: block; margin-top: 3px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: auto; }
+    th, td { padding: 7px 8px; border: 1px solid #ded1b8; text-align: left; vertical-align: top; }
+    th { background: #efe4cf; color: #5d4a22; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    .empty { padding: 12px; border: 1px dashed #ded1b8; border-radius: 8px; color: #746a5c; }
+    footer { margin-top: 22px; padding-top: 10px; border-top: 1px solid #ded1b8; color: #746a5c; font-size: 10px; }
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(subtitle)}</p>
+    </div>
+    <div class="brand">GStore<br><span>Panel privado</span></div>
+  </header>
+  <section class="filters">
+    ${filters.map(([label, value]) => `<div class="chip"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
+  </section>
+  <section class="metrics">
+    ${metrics.map(([label, value]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
+  </section>
+  ${sections.map((section) => `
+    <section>
+      <h2>${escapeHtml(section.title)}</h2>
+      ${section.rows.length ? `
+        <table>
+          <thead><tr>${section.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+          <tbody>${section.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+      ` : `<div class="empty">${escapeHtml(section.empty)}</div>`}
+    </section>
+  `).join("")}
+  <footer>Documento generado desde el panel privado de GStore.</footer>
+</body>
+</html>`;
+}
+
+function summarizeOrders(orders) {
+  const active = orders.filter((order) => order.status !== "cancelled");
+  const sales = active.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const paidSales = active
+    .filter((order) => order.payment_status === "paid")
+    .reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const units = orders.reduce((sum, order) => sum + (order.items || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0), 0);
+  return {
+    sales,
+    paidSales,
+    units,
+    averageOrder: active.length ? sales / active.length : 0
+  };
+}
+
+function orderItemsSummary(order) {
+  return (order.items || [])
+    .map((item) => `${Number(item.quantity || 0)} ${item.name}`)
+    .join(", ") || "Sin productos";
+}
+
+function selectedText(select) {
+  return select?.selectedOptions?.[0]?.textContent?.trim() || "Todos";
+}
+
+function periodLabel(value) {
+  const labels = {
+    all: "Todo el historial",
+    today: "Hoy",
+    "7d": "Ultimos 7 dias",
+    "30d": "Ultimos 30 dias"
+  };
+  return labels[value] || labels.all;
+}
+
+function formatPrintDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  return new Intl.DateTimeFormat("es-EC", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+
+function renderEmailStatus() {
+  const status = adminState.emailStatus;
+  if (!status) return;
+  const configured = Boolean(status.configured && status.ownerConfigured);
+  setText(adminEls.emailConfigured, configured ? "Activo" : "Falta configurar");
+  setText(adminEls.emailFrom, status.fromConfigured ? `Remitente: ${status.fromEmail || "configurado"}` : "Falta RESEND_FROM_EMAIL");
+  setText(adminEls.emailOwner, status.ownerConfigured ? `Admin: ${status.ownerEmail || "configurado"}` : "Falta RESEND_TO_EMAIL o STORE_OWNER_EMAIL");
+  if (adminEls.emailHint) {
+    adminEls.emailHint.innerHTML = configured
+      ? "<strong>Correo</strong> Resend listo para confirmaciones"
+      : "<strong>Correo</strong> Faltan variables de Resend";
+  }
+}
+
+function renderCustomers() {
+  if (!adminEls.customersList) return;
+  renderCustomersOverview();
+  const customers = filteredCustomers();
+  adminEls.customersList.innerHTML = customers.map(renderCustomerCard).join("")
+    || emptyAdminState("Todavia no hay clientes guardados.", "Cuando entren pedidos con correo, la ficha del cliente aparecera aqui.");
+}
+
+function renderCustomersOverview() {
+  const customers = adminState.customers || [];
+  const withEmail = customers.filter((customer) => customer.email).length;
+  const ordersTotal = customers.reduce((sum, customer) => sum + Number(customer.order_count || 0), 0);
+  const totalSpent = customers.reduce((sum, customer) => sum + Number(customer.total_spent || 0), 0);
+  setText(adminEls.customersTotal, customers.length);
+  setText(adminEls.customersWithEmail, withEmail);
+  setText(adminEls.customersOrdersTotal, ordersTotal);
+  setText(adminEls.customersTotalSpent, formatCurrency(totalSpent));
+}
+
+function filteredCustomers() {
+  const query = adminState.customerSearch;
+  const customers = adminState.customers || [];
+  if (!query) return customers;
+  return customers.filter((customer) => [
+    customer.name,
+    customer.phone,
+    customer.email,
+    customer.city,
+    customer.address,
+    customer.last_order_code
+  ].join(" ").toLowerCase().includes(query));
+}
+
+function renderCustomerCard(customer) {
+  const whatsappPhone = String(customer.phone || "").replace(/[^\d]/g, "");
+  const lastOrder = customer.last_order_code || "Sin codigo";
+  const lastOrderDate = customer.last_order_at ? formatDate(customer.last_order_at) : "Sin fecha";
+  return `
+    <article class="customer-card">
+      <div class="customer-card-head">
+        <div>
+          <span class="customer-kicker">${escapeHtml(customer.marketing_status || "cliente")}</span>
+          <h3>${escapeHtml(customer.name || "Cliente sin nombre")}</h3>
+          <p>${escapeHtml(customer.email || "Sin correo")} - ${escapeHtml(customer.phone || "Sin telefono")}</p>
+        </div>
+        <div class="customer-value">
+          <strong>${formatCurrency(customer.total_spent)}</strong>
+          <small>${Number(customer.order_count || 0)} pedido${Number(customer.order_count || 0) === 1 ? "" : "s"}</small>
+        </div>
+      </div>
+
+      <div class="customer-contact-grid">
+        <div>
+          <span>Ciudad</span>
+          <strong>${escapeHtml(customer.city || "Sin ciudad")}</strong>
+        </div>
+        <div>
+          <span>Direccion</span>
+          <strong>${escapeHtml(customer.address || "Sin direccion")}</strong>
+        </div>
+        <div>
+          <span>Ultimo pedido</span>
+          <strong>${escapeHtml(lastOrder)}</strong>
+          <small>${escapeHtml(lastOrderDate)}</small>
+        </div>
+      </div>
+
+      ${customer.notes ? `
+        <div class="customer-note">
+          <span>Notas</span>
+          <p>${escapeHtml(customer.notes)}</p>
+        </div>
+      ` : ""}
+
+      <div class="customer-actions">
+        ${customer.email ? `<a class="small-button" href="mailto:${escapeAttr(customer.email)}">Enviar email</a>` : ""}
+        ${whatsappPhone ? `<a class="small-button" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderOrderCard(order) {
   const nextAction = orderNextAction(order);
+  const adminEmailStatus = emailStatusLabel(order.admin_email_status);
+  const customerEmailStatus = emailStatusLabel(order.customer_email_status);
+  const emailDetail = order.email_error
+    ? `Error: ${order.email_error}`
+    : order.email_sent_at
+      ? `Ultimo intento: ${formatDate(order.email_sent_at)}`
+      : "Sin intento registrado";
   return `
     <article class="order-card order-status-${escapeAttr(order.status || "new")}">
       <div class="order-head">
@@ -1343,6 +2090,13 @@ function renderOrderCard(order) {
           <strong>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</strong>
           <small>${escapeHtml(order.payment_status === "paid" ? "Pago confirmado" : "Pendiente de confirmación")}</small>
         </div>
+        <div class="order-info-card email-info-card">
+          <span>Correos</span>
+          <strong>
+            <span class="status-pill ${emailStatusClass(order.customer_email_status)}">Cliente: ${escapeHtml(customerEmailStatus)}</span>
+          </strong>
+          <small>Admin: ${escapeHtml(adminEmailStatus)} - ${escapeHtml(emailDetail)}</small>
+        </div>
       </div>
 
       <div class="order-items-panel">
@@ -1371,6 +2125,7 @@ function renderOrderCard(order) {
         </label>
         <div class="order-action-buttons">
           ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
+          <button class="button ghost" data-order-email="${order.id}" type="button">Reenviar correo</button>
           <button class="button primary" data-order-whatsapp="${order.id}" type="button">Coordinar por WhatsApp</button>
         </div>
       </div>
@@ -1403,6 +2158,23 @@ function orderStatusClass(status) {
   return "";
 }
 
+function emailStatusLabel(status) {
+  const labels = {
+    sent: "Enviado",
+    failed: "Fallido",
+    skipped: "Omitido",
+    pending: "Pendiente"
+  };
+  return labels[status] || labels.pending;
+}
+
+function emailStatusClass(status) {
+  if (status === "sent") return "success";
+  if (status === "failed") return "email-failed";
+  if (status === "skipped") return "warning";
+  return "off";
+}
+
 function orderNextAction(order) {
   const delivery = order.delivery_method === "pickup" ? "retiro" : "envío";
   const map = {
@@ -1430,6 +2202,7 @@ function openProductDrawer(id) {
     const form = adminEls.productForm;
     form.elements.id.value = product.id;
     form.elements.name.value = product.name;
+    if (form.elements.brand_name) form.elements.brand_name.value = product.brand_name || "";
     form.elements.category_id.value = product.category?.id || "";
     form.elements.price.value = product.price;
     form.elements.cost_price.value = product.cost_price || "";
@@ -1474,6 +2247,7 @@ function resetProductForm(options = {}) {
   adminEls.productForm.elements.featured.checked = false;
   adminEls.productForm.elements.promo_type.value = "none";
   adminEls.productForm.elements.cost_price.value = "";
+  if (adminEls.productForm.elements.brand_name) adminEls.productForm.elements.brand_name.value = "";
   adminEls.productForm.elements.has_discount.checked = false;
   adminEls.productForm.elements.compare_price.value = "";
   adminEls.productForm.elements.discount_percent.value = "";
@@ -1583,8 +2357,10 @@ function validateProductForm({ focus = false } = {}) {
   const stock = Number(stockRaw);
   const imageFile = form.elements.imageFile?.files?.[0];
   const imageUrl = String(form.elements.image_url?.value || "").trim();
+  const brandName = String(form.elements.brand_name?.value || "").trim();
 
   if (name.length < 2) addError("name", "Escribe el nombre del producto.");
+  if (brandName.length > 120) addError("brand_name", "Usa una marca mas corta.");
   if (!adminState.categories.length) {
     addError("category_id", "Crea una categoría antes de guardar.");
   } else if (!categoryId) {
@@ -1728,6 +2504,7 @@ async function saveProduct(event) {
 
     const payload = {
       name: formData.get("name"),
+      brand_name: formData.get("brand_name"),
       category_id: formData.get("category_id"),
       price: formData.get("price"),
       cost_price: formData.get("cost_price"),
@@ -2001,6 +2778,23 @@ async function openOrderWhatsapp(id) {
   } catch (error) {
     showErrorToast(error);
   }
+}
+
+async function resendOrderEmail(id) {
+  try {
+    const data = await adminApi(`/api/admin/orders/${id}/email`, { method: "POST" });
+    adminState.orders = adminState.orders.map((order) => (
+      Number(order.id) === Number(id) ? data.order : order
+    ));
+    renderOrders();
+    showToast(data.email?.ok === false ? "Correo fallido. Revisa el estado del pedido." : "Correo procesado.");
+  } catch (error) {
+    showErrorToast(error);
+  }
+}
+
+function exportCustomers() {
+  window.location.href = `${API_BASE}/api/admin/customers/export`;
 }
 
 function openDrawer(drawer, focusTarget) {
@@ -2411,6 +3205,8 @@ function formatPercent(value) {
 function shortCurrency(value) {
   const number = Number(value || 0);
   if (Math.abs(number) >= 1000) return `$${(number / 1000).toFixed(1)}k`;
+  if (Math.abs(number) < 1) return "$0";
+  if (Math.abs(number) < 10 && number % 1 !== 0) return `$${number.toFixed(1)}`;
   return `$${number.toFixed(0)}`;
 }
 

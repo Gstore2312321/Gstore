@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260526-catalog-filters">
-  <link rel="stylesheet" href="css/admin.css?v=20260526-catalog-filters">
+  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-clientes">
+  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-clientes">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="dashboard">
   <main class="admin-shell">
@@ -103,6 +103,7 @@
           <a href="/admin-productos" data-nav-page="products">Productos</a>
           <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
+          <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
           <span>Operación</span>
@@ -140,9 +141,9 @@
               <small>Entradas para revisar hoy</small>
             </a>
             <a class="daily-action" href="/admin-productos">
-              <span>Stock bajo</span>
+              <span>Sin stock</span>
               <strong id="summaryLowStock">0</strong>
-              <small id="stockActionText">Inventario bajo control</small>
+              <small id="stockActionText">Sin alertas</small>
             </a>
           </div>
         </section>
@@ -154,22 +155,22 @@
             <small><b id="summaryActive">0</b> productos activos</small>
           </article>
           <article class="summary-card metric-sales">
-            <span>Ventas producto</span>
+            <span>Ventas netas</span>
             <strong id="summaryRevenue">$0.00</strong>
             <small>Pedidos no cancelados</small>
           </article>
           <article class="summary-card metric-profit">
-            <span>Ganancia estimada</span>
+            <span>Utilidad bruta</span>
             <strong id="summaryProfit">$0.00</strong>
             <small id="dashboardPendingText">Pendiente por cobrar: $0.00</small>
           </article>
           <article class="summary-card">
             <span>Margen</span>
             <strong id="summaryMargin">0%</strong>
-            <small>Ganancia sobre venta</small>
+            <small>Utilidad sobre venta</small>
           </article>
           <article class="summary-card metric-profit">
-            <span>Ganancia inventario</span>
+            <span>Utilidad potencial</span>
             <strong id="summaryInventoryProfit">$0.00</strong>
             <small>Utilidad posible en stock</small>
           </article>
@@ -177,9 +178,10 @@
 
         <section class="store-banner-admin" aria-label="Banners publicitarios de la tienda">
           <div class="banner-admin-head">
-            <div>
+            <div class="banner-admin-copy">
               <span class="eyebrow">Cabecera de tienda</span>
-              <h2>Banners publicitarios</h2>
+              <h2>Campanas de cabecera</h2>
+              <p>Prepara piezas horizontales para destacar promos, fechas y colecciones sin tocar codigo.</p>
             </div>
             <span id="bannerCountText">0 activos</span>
           </div>
@@ -188,6 +190,10 @@
             <form id="bannerForm" class="banner-form" novalidate>
               <input type="hidden" name="id">
               <input type="hidden" name="image_url">
+              <div class="banner-form-title full">
+                <span>Editor</span>
+                <strong>Contenido del banner</strong>
+              </div>
               <label>
                 Etiqueta
                 <input name="kicker" maxlength="42" placeholder="Oferta, nuevo, promo...">
@@ -206,10 +212,15 @@
               </label>
               <label class="banner-file full">
                 <span>Subir imagen del banner</span>
+                <small>Horizontal recomendado: 1600 x 520 px</small>
                 <input name="imageFile" type="file" accept="image/*">
               </label>
               <div class="banner-preview full" id="bannerPreview">
-                <span>Vista previa del banner</span>
+                <div class="banner-preview-copy">
+                  <span>Vista previa</span>
+                  <strong>Banner de tienda</strong>
+                  <small>Sube una imagen para ver la pieza final.</small>
+                </div>
               </div>
               <label class="check-inline full">
                 <input name="active" type="checkbox" checked>
@@ -233,10 +244,10 @@
                 <span class="eyebrow">Finanzas</span>
                 <h2>Ventas y utilidad de la semana</h2>
               </div>
-              <p>La barra marca venta y la línea muestra la utilidad estimada.</p>
+              <p>Compara ingreso y utilidad para leer si el movimiento deja margen real.</p>
             </div>
             <div class="chart-wrap">
-              <canvas id="salesProfitChart" aria-label="Ventas y ganancia por día"></canvas>
+              <canvas id="salesProfitChart" aria-label="Ventas y utilidad por día"></canvas>
             </div>
           </article>
 
@@ -267,11 +278,11 @@
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Productos</span>
-                <h2>Lo que más deja</h2>
+                <h2>Utilidad por producto</h2>
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="productProfitChart" aria-label="Ganancia por producto"></canvas>
+              <canvas id="productProfitChart" aria-label="Utilidad por producto"></canvas>
             </div>
           </article>
 
@@ -279,11 +290,11 @@
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Inventario</span>
-                <h2>Ganancia potencial</h2>
+                <h2>Utilidad potencial</h2>
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="categoryProfitChart" aria-label="Ganancia potencial por categoría"></canvas>
+              <canvas id="categoryProfitChart" aria-label="Utilidad potencial por categoría"></canvas>
             </div>
           </article>
 
@@ -305,6 +316,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260526-catalog-filters" defer></script>
+  <script src="js/admin.js?v=20260604-admin-clientes" defer></script>
 </body>
 </html>
