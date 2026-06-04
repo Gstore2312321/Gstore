@@ -1630,6 +1630,15 @@ function resendConfigured() {
   return Boolean(process.env.RESEND_API_KEY && normalizeResendEmailField(process.env.RESEND_FROM_EMAIL));
 }
 
+function resendReplyToOrFallback(fallback) {
+  const configuredRaw = cleanText(process.env.RESEND_REPLY_TO_EMAIL);
+  const configuredEmail = normalizeResendEmailField(configuredRaw);
+  if (configuredRaw && !configuredEmail) {
+    console.warn("RESEND_REPLY_TO_EMAIL invalido; se omitira y se usara un fallback valido si existe.");
+  }
+  return configuredEmail || normalizeResendEmailField(fallback);
+}
+
 async function sendResendEmail({ to, subject, text, replyTo }) {
   const apiKey = cleanText(process.env.RESEND_API_KEY);
   const fromEmail = normalizeResendEmailField(process.env.RESEND_FROM_EMAIL);
@@ -1676,7 +1685,7 @@ async function sendOrderEmail(order) {
   const ownerEmailRaw = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
   const customerEmailRaw = cleanText(order.customer_email);
   const ownerEmail = normalizeResendEmailField(ownerEmailRaw);
-  const replyToEmail = normalizeResendEmailField(process.env.RESEND_REPLY_TO_EMAIL || customerEmailRaw);
+  const replyToEmail = resendReplyToOrFallback(customerEmailRaw);
   const customerEmail = normalizeResendEmailField(order.customer_email);
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     const missing = [
@@ -2209,7 +2218,9 @@ function validateProductionConfig() {
   if ((process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL) && !normalizeResendEmailField(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL)) {
     missing.push("RESEND_TO_EMAIL o STORE_OWNER_EMAIL valido");
   }
-  if (process.env.RESEND_REPLY_TO_EMAIL && !normalizeResendEmailField(process.env.RESEND_REPLY_TO_EMAIL)) missing.push("RESEND_REPLY_TO_EMAIL valido");
+  if (process.env.RESEND_REPLY_TO_EMAIL && !normalizeResendEmailField(process.env.RESEND_REPLY_TO_EMAIL)) {
+    console.warn("RESEND_REPLY_TO_EMAIL invalido; no bloquea produccion porque es opcional.");
+  }
   if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imagenes persistentes");
   if (!MYSQL_CONNECTION_URL && !process.env.MYSQLHOST && !process.env.MYSQL_HOST) {
     missing.push("MYSQL_URL o variables MYSQL de Railway");

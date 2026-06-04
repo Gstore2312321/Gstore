@@ -65,7 +65,7 @@ RESEND_REPLY_TO_EMAIL=
 Notas de Resend:
 
 - `RESEND_FROM_EMAIL` debe usar un remitente o dominio verificado en Resend para enviar a clientes reales.
-- `RESEND_REPLY_TO_EMAIL` es opcional, pero si se usa debe ser `email@dominio.com` o `Nombre <email@dominio.com>`.
+- `RESEND_REPLY_TO_EMAIL` es opcional. Puedes dejarlo vacio. Si se usa debe ser `email@dominio.com` o `Nombre <email@dominio.com>`; si el formato esta mal, el sistema lo ignora y no bloquea el deploy.
 - Si Resend responde que solo puede enviar correos de prueba a tu propio email, falta verificar el dominio/remitente o autorizar destinatarios de prueba.
 
 Cloudinary acepta dos formas:
