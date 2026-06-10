@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-correos">
-  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-product-filters">
+  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
@@ -87,39 +87,41 @@
           </div>
         </header>
 
+        <section class="admin-page-brief" aria-label="Guía de productos">
+          <div>
+            <span class="eyebrow">Vitrina</span>
+            <h2>Sube mercadería sin perder el control.</h2>
+            <p>Cada ficha separa lo público de lo privado: precio de venta, costo, stock, promo, tallas, colores e imagen.</p>
+          </div>
+          <div class="admin-brief-stack">
+            <span><strong>01</strong> Completa datos básicos</span>
+            <span><strong>02</strong> Sube foto o conserva la actual</span>
+            <span><strong>03</strong> Activa promo si conviene vender rápido</span>
+          </div>
+        </section>
+
         <section class="admin-section products-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Inventario</span>
-              <h2>Catálogo administrable</h2>
+              <span class="eyebrow">Catálogo</span>
+              <h2>Inventario visible</h2>
             </div>
-            <div class="section-actions product-toolbar">
+            <div class="section-actions">
               <label class="search-control">
                 <span class="sr-only">Buscar productos</span>
-                <input id="productSearch" type="search" placeholder="Nombre, SKU o marca">
+                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU o categoría">
               </label>
-              <button class="button ghost" id="productPrintButton" type="button">Imprimir</button>
+              <select id="productStatusFilter" aria-label="Filtrar productos">
+                <option value="all">Todos</option>
+                <option value="active">Activos</option>
+                <option value="hidden">Ocultos</option>
+                <option value="low">Stock bajo</option>
+              </select>
               <button class="button primary" id="productCreateButton" type="button">Nuevo producto</button>
             </div>
           </div>
           <div class="shelf-notes" id="productShelfNotes"></div>
-          <div class="table-wrap product-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Precio</th>
-                  <th>Compra</th>
-                  <th>Utilidad</th>
-                  <th>Stock</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="productsTable"></tbody>
-            </table>
-          </div>
+          <div class="product-card-admin-grid" id="productsTable" aria-live="polite"></div>
         </section>
       </div>
     </section>
@@ -164,12 +166,7 @@
                 <select name="category_id" id="productCategorySelect" required aria-describedby="productCategoryError"></select>
                 <span class="field-error" id="productCategoryError" data-error-for="category_id"></span>
               </label>
-              <label data-field-wrap="brand_name">
-                Marca opcional
-                <input name="brand_name" maxlength="120" placeholder="Nautica, Victoria's Secret, Fossil..." aria-describedby="productBrandError">
-                <span class="field-error" id="productBrandError" data-error-for="brand_name"></span>
-              </label>
-              <label>
+              <label class="full">
                 SKU opcional
                 <input name="sku" maxlength="36" placeholder="GS-001">
               </label>
@@ -187,12 +184,12 @@
             <div class="form-grid three">
               <label class="field-required" data-field-wrap="price">
                 Precio de venta USD
-                <input name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" required placeholder="35.00" aria-describedby="productPriceError">
+                <input name="price" type="text" inputmode="decimal" autocomplete="off" required placeholder="35.00" data-money-input aria-describedby="productPriceError">
                 <span class="field-error" id="productPriceError" data-error-for="price"></span>
               </label>
               <label data-field-wrap="cost_price">
                 Precio de compra privado
-                <input name="cost_price" type="number" min="0" max="99999" step="0.01" inputmode="decimal" placeholder="18.00" aria-describedby="productCostPriceError">
+                <input name="cost_price" type="text" inputmode="decimal" autocomplete="off" placeholder="18.00" data-money-input aria-describedby="productCostPriceError">
                 <span class="field-error" id="productCostPriceError" data-error-for="cost_price"></span>
               </label>
               <label class="field-required" data-field-wrap="stock">
@@ -210,7 +207,7 @@
                 </label>
                 <label class="discount-field" id="discountPriceWrap" data-field-wrap="compare_price" hidden>
                   Precio antes del descuento
-                  <input name="compare_price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" placeholder="72.00" aria-describedby="productComparePriceError">
+                  <input name="compare_price" type="text" inputmode="decimal" autocomplete="off" placeholder="72.00" data-money-input aria-describedby="productComparePriceError">
                   <span class="field-error" id="productComparePriceError" data-error-for="compare_price"></span>
                 </label>
                 <label class="discount-field" id="discountPercentWrap" data-field-wrap="discount_percent" hidden>
@@ -294,7 +291,7 @@
               </label>
               <label>
                 Texto de promo
-                <input name="promo_label" maxlength="42" placeholder="Precio especial, últimas unidades...">
+                <input name="promo_label" maxlength="42" placeholder="Precio especial, Últimas unidades...">
               </label>
               <div class="option-picker full" data-option-picker="sizes">
                 <input type="hidden" name="sizes">
@@ -381,6 +378,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260604-admin-product-filters" defer></script>
+  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
 </body>
 </html>

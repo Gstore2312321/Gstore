@@ -37,13 +37,13 @@ http://localhost:4321/admin
 
 ## Configuración
 
-El archivo `.env` local ya deja la tienda lista para pruebas. Para producción, cambia:
+Crea un `.env` local desde `.env.example` solo si vas a probar en tu máquina. Para producción, configura estas variables directamente en Railway y no subas `.env` al repo:
 
 - `ADMIN_SECRET`
 - `ADMIN_PASSWORD_HASH` generado con `npm run hash:admin -- "tu-clave-larga"`
 - `ADMIN_SESSION_HOURS`
-- `ADMIN_COOKIE_DOMAIN` vacío si el panel vive en el mismo dominio
-- `ALLOWED_ORIGINS` con el dominio principal real
+- `ADMIN_COOKIE_DOMAIN` opcional si usarás subdominios compartiendo sesión
+- `ALLOWED_ORIGINS` con el dominio real y cualquier subdominio permitido
 - `MYSQL_URL` o las variables `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`
 - `UPLOAD_DIR` solo si usarás volumen para imágenes locales
 - Credenciales de `PAYPAL_CLIENT_ID` y `PAYPAL_CLIENT_SECRET`
@@ -58,18 +58,16 @@ El archivo `.env` local ya deja la tienda lista para pruebas. Para producción, 
   - `RESEND_FROM_EMAIL`
   - `RESEND_TO_EMAIL`
   - `RESEND_REPLY_TO_EMAIL` opcional
+- Alertas de errores:
+  - `ERROR_ALERT_EMAIL`
+  - `ERROR_ALERT_MINUTES`
+- Backups:
+  - `MYSQL_BACKUP_URL` opcional si usarÃ¡s un usuario distinto al de la app
+  - `BACKUP_DIR` para la carpeta temporal/local
+  - `BACKUP_COPY_DIR` para copiar el backup fuera del servidor
+  - `BACKUP_RETENTION_DAYS`
 - `PUBLIC_BASE_URL` por el dominio real
 - `STORE_TIME_ZONE` y `DEFAULT_SHIPPING` si cambian la zona horaria o el costo de envío
-
-Formato recomendado para Resend:
-
-```text
-RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
-RESEND_TO_EMAIL=correo-admin@tudominio.com
-RESEND_REPLY_TO_EMAIL=
-```
-
-`RESEND_REPLY_TO_EMAIL` es opcional. Si se deja vacio, el sistema usa un correo valido de respaldo cuando existe. Si lo llenas, debe ser solo `email@dominio.com` o `Nombre <email@dominio.com>`; no pongas telefono, nombre solo ni texto adicional. Para enviar a clientes reales, el remitente/dominio debe estar verificado en Resend; si la cuenta esta en modo prueba, Resend solo envia a correos autorizados de la cuenta.
 
 El correo privado y el número de WhatsApp viven solo en variables de entorno. No se imprimen en la tienda pública.
 
@@ -82,7 +80,26 @@ Antes de subir a GitHub o conectar Railway, corre:
 ```bash
 npm run check
 npm run railway:check
+npm run prod:check
 ```
+
+Checks adicionales cuando ya tengas dominio y credenciales reales:
+
+```bash
+npm run uptime:check
+npm run paypal:check
+npm run smoke:order
+npm run smoke:cloudinary
+npm run test:real-products
+```
+
+`smoke:order` crea un pedido real contra `PUBLIC_BASE_URL` o `SMOKE_BASE_URL`. Necesita `SMOKE_CUSTOMER_PHONE` y `SMOKE_CUSTOMER_EMAIL`. Si pones `SMOKE_TEST_PAYPAL=1`, tambien crea una orden PayPal y devuelve el `approvalUrl` para completar el pago con una cuenta real/sandbox.
+
+`paypal:check` valida `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE` y `PUBLIC_BASE_URL` contra OAuth de PayPal. No crea pedidos ni cobra.
+
+`smoke:cloudinary` entra al admin con `ADMIN_EMAIL` + `ADMIN_LOGIN_PASSWORD` y sube una imagen real por `/api/admin/upload`. Falla si el provider no es `cloudinary`, salvo que definas `ALLOW_LOCAL_UPLOAD=1` para pruebas locales.
+
+El monitoreo externo incluido usa GitHub Actions en `.github/workflows/gstore-uptime.yml`. Configura `GSTORE_HEALTH_URL=https://tu-dominio.com/api/health` como variable o secreto del repo para revisar la tienda cada 15 minutos.
 
 ## Importar lote de productos a Cloudinary
 
@@ -124,7 +141,7 @@ Variables mínimas en Railway:
 ```text
 NODE_ENV=production
 PUBLIC_BASE_URL=https://tu-dominio.com
-ALLOWED_ORIGINS=https://tu-dominio.com
+ALLOWED_ORIGINS=https://tu-dominio.com,https://admin.tu-dominio.com
 MYSQL_URL=mysql://usuario:clave@host:3306/base
 STORE_NAME=GStore
 STORE_CURRENCY=USD
@@ -145,16 +162,22 @@ RESEND_API_KEY=...
 RESEND_FROM_EMAIL=GStore <pedidos@tu-dominio.com>
 RESEND_TO_EMAIL=...
 RESEND_REPLY_TO_EMAIL=...
+ERROR_ALERT_EMAIL=...
+ERROR_ALERT_MINUTES=15
 PAYPAL_MODE=live
 PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
+MYSQL_BACKUP_URL=
+BACKUP_DIR=/tmp/gstore-backups
+BACKUP_COPY_DIR=
+BACKUP_RETENTION_DAYS=30
 ```
 
 Si Cloudinary muestra `Invalid Signature`, revisa que el API key y API secret sean de la misma cuenta. El panel tiene diagnostico privado en `/api/admin/cloudinary/status`; muestra valores enmascarados, carpeta y advertencias sin exponer secretos.
 
 La app crea sola las tablas `categories`, `products` y `orders` cuando arranca.
 Tambien crea `audit_logs`, `app_settings` y `password_reset_tokens`.
-La recuperacion de clave usa `ADMIN_EMAIL`, `PUBLIC_BASE_URL` y Resend. El panel entra por `https://tu-dominio.com/admin`, no por subdominio. Mantén `ADMIN_PASSWORD_HASH` en Railway como clave inicial y fallback seguro.
+La recuperacion de clave usa `ADMIN_EMAIL`, `PUBLIC_BASE_URL` y Resend. Mantén `ADMIN_PASSWORD_HASH` en Railway como clave inicial y fallback seguro.
 
 ## Seguridad operativa
 
@@ -174,5 +197,7 @@ npm run hash:admin -- "tu-clave-larga"
 ```bash
 npm run backup:mysql
 ```
+
+En producciÃ³n, no dejes el Ãºnico backup dentro del mismo servidor. Configura `BACKUP_COPY_DIR` si corres el backup desde una mÃ¡quina externa, o usa un job externo con `MYSQL_BACKUP_URL` para guardar el `.json.gz` fuera de Railway.
 
 Lee `RAILWAY_DEPLOYMENT.md` antes de publicar.

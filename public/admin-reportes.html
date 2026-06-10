@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Reportes privados de GStore para revisar ventas, utilidad e inventario.">
+  <meta name="description" content="Reportes privados de GStore para revisar ventas, ganancia e inventario.">
   <title>Reportes | Panel GStore</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-correos">
-  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-product-filters">
+  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="reports">
   <main class="admin-shell">
@@ -27,7 +27,7 @@
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Reportes de utilidad</span>
+            <span>Reportes de ganancia</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -78,17 +78,10 @@
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Control financiero</span>
-            <h1>Rentabilidad e inventario</h1>
+            <span class="eyebrow">Rentabilidad</span>
+            <h1>Reportes</h1>
           </div>
           <div class="topbar-actions">
-            <select id="reportPeriodFilter" aria-label="Filtrar reportes por periodo">
-              <option value="all">Todo el historial</option>
-              <option value="today">Hoy</option>
-              <option value="7d">Últimos 7 días</option>
-              <option value="30d">Últimos 30 días</option>
-            </select>
-            <button class="button ghost" id="reportPrintButton" type="button">Imprimir reporte</button>
             <button class="button primary" id="refreshReportsButton" type="button">Actualizar reportes</button>
             <a class="button ghost" href="/admin-pedidos">Ver pedidos</a>
           </div>
@@ -96,17 +89,17 @@
 
         <section class="reports-hero" aria-label="Resumen de reportes">
           <div>
-            <span class="eyebrow">Lectura ejecutiva</span>
-            <h2>Ventas, utilidad y capital en inventario.</h2>
-            <p id="reportsSummaryText">Calculando ventas activas, margen real y valor comercial del stock.</p>
+            <span class="eyebrow">Lectura del negocio</span>
+            <h2>Dónde se vende, dónde se gana y qué conviene mover.</h2>
+            <p id="reportsSummaryText">Calculando ventas, margen y valor del inventario.</p>
           </div>
           <div class="reports-hero-metrics">
             <article>
-              <span>Ticket promedio por pedido</span>
+              <span>Ticket promedio</span>
               <strong id="reportAverageOrder">$0.00</strong>
             </article>
             <article>
-              <span>Utilidad cobrada</span>
+              <span>Ganancia cobrada</span>
               <strong id="reportPaidProfit">$0.00</strong>
             </article>
           </div>
@@ -114,12 +107,12 @@
 
         <section class="report-metric-grid" aria-label="Indicadores principales">
           <article>
-            <span>Ventas netas</span>
+            <span>Ventas estimadas</span>
             <strong id="reportSales">$0.00</strong>
-            <small>Pedidos activos, sin cancelados</small>
+            <small>Pedidos no cancelados</small>
           </article>
           <article class="metric-profit">
-            <span>Utilidad bruta estimada</span>
+            <span>Ganancia estimada</span>
             <strong id="reportProfit">$0.00</strong>
             <small>Venta menos costo privado</small>
           </article>
@@ -129,9 +122,9 @@
             <small>Rentabilidad sobre venta</small>
           </article>
           <article>
-            <span>Valor comercial del inventario</span>
+            <span>Inventario valorizado</span>
             <strong id="reportInventoryValue">$0.00</strong>
-            <small>Precio de venta del stock actual</small>
+            <small>Venta potencial en stock</small>
           </article>
         </section>
 
@@ -140,12 +133,12 @@
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Últimos 7 días</span>
-                <h2>Ventas vs utilidad</h2>
+                <h2>Ventas contra ganancia</h2>
               </div>
-              <p>Compara ingreso y utilidad para detectar días de alto movimiento con margen bajo.</p>
+              <p>Una subida de ventas no siempre significa más utilidad. Esta gráfica compara ambos datos.</p>
             </div>
             <div class="chart-wrap">
-              <canvas id="reportSalesChart" aria-label="Ventas y utilidad de los últimos siete días"></canvas>
+              <canvas id="reportSalesChart" aria-label="Ventas y ganancia de los Últimos siete días"></canvas>
             </div>
           </article>
 
@@ -153,11 +146,11 @@
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Inventario</span>
-                <h2>Utilidad potencial por categoría</h2>
+                <h2>Utilidad por categoría</h2>
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="reportCategoryChart" aria-label="Utilidad potencial por categoría"></canvas>
+              <canvas id="reportCategoryChart" aria-label="Ganancia potencial por categoría"></canvas>
             </div>
           </article>
 
@@ -179,10 +172,9 @@
             <div class="report-panel-heading">
               <div>
                 <span class="eyebrow">Productos</span>
-                <h2>Ranking de productos vendidos</h2>
-                <p>Ordenado por utilidad generada en pedidos activos.</p>
+                <h2>Lo que más deja</h2>
               </div>
-              <a class="small-button" href="/admin-productos">Gestionar stock</a>
+              <a class="small-button" href="/admin-productos">Editar stock</a>
             </div>
             <div class="report-list" id="reportProductsList"></div>
           </article>
@@ -191,8 +183,7 @@
             <div class="report-panel-heading">
               <div>
                 <span class="eyebrow">Categorías</span>
-                <h2>Mapa de inventario rentable</h2>
-                <p>Stock, inversión privada, venta potencial y margen por categoría.</p>
+                <h2>Inventario y utilidad</h2>
               </div>
             </div>
             <div class="report-list" id="reportCategoriesList"></div>
@@ -215,6 +206,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260604-admin-product-filters" defer></script>
+  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
 </body>
 </html>

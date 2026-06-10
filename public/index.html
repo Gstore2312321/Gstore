@@ -1,32 +1,28 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="GStore es una tienda familiar de moda importada con catálogo, carrito y checkout por WhatsApp o PayPal.">
   <meta property="og:title" content="GStore | Catálogo">
-  <meta property="og:description" content="Busca piezas disponibles, elige talla o color y prepara tu pedido.">
-  <meta property="og:image" content="assets/og-gstore.svg">
+  <meta property="og:description" content="Moda, accesorios, perfumes y más para elegir con calma desde el celular.">
+  <meta property="og:image" content="assets/gstore-logo.svg">
   <meta property="og:type" content="website">
   <title>GStore | Catálogo</title>
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/gstore-mark.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260604-catalog-footer-polish">
+  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
 </head>
 <body class="catalog-only">
   <a class="skip-link" href="#catalogo">Saltar al catálogo</a>
 
   <header class="site-header" data-animate="header">
     <a class="brand" href="#catalogo" data-scroll-target="catalogo" aria-label="Catálogo GStore">
-      <span class="brand-mark">G</span>
-      <span>
-        <strong>GStore</strong>
-        <small>Catálogo</small>
-      </span>
+      <img class="brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="G Store" width="172" height="82" decoding="async" fetchpriority="high">
     </a>
 
     <nav class="desktop-nav" aria-label="Navegación principal">
@@ -43,22 +39,56 @@
   </header>
 
   <main class="page-shell">
-    <section class="store-banners" id="storeBanners" aria-label="Banners publicitarios" hidden></section>
+    <section class="store-banners" id="storeBanners" aria-label="Promociones de la tienda" hidden></section>
+
+    <section class="brand-campaign" aria-label="Presentación de GStore">
+      <div class="campaign-corner campaign-corner-left" aria-hidden="true"></div>
+      <div class="campaign-corner campaign-corner-right" aria-hidden="true"></div>
+      <img class="campaign-logo" src="assets/gstore-logo.svg?v=20260608" alt="G Store, tu estilo todos los días" width="420" height="199" decoding="async">
+      <div class="campaign-copy">
+        <span>Moda, accesorios, perfumes y más</span>
+        <h2>Estilo para todos.</h2>
+        <p>Prendas y detalles seleccionados para regalar, combinar y usar todos los días.</p>
+      </div>
+      <div class="campaign-features" aria-label="Beneficios de compra">
+        <span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 19v-7a4 4 0 0 1 8 0v7"/><path d="M5 19h14"/><path d="M12 4v4"/><path d="m9 7 3-3 3 3"/></svg>
+          Para él y para ella
+        </span>
+        <span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v6c0 5 3.4 7.6 8 8 4.6-.4 8-3 8-8V7l-8-4Z"/><path d="m8.8 12.4 2.1 2.1 4.3-4.7"/></svg>
+          Calidad que se siente
+        </span>
+        <span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11h10"/><path d="M12 4v16"/><path d="m5 20 7-5 7 5"/></svg>
+          Tendencias actuales
+        </span>
+        <span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 9-4 9 4-9 4-9-4Z"/><path d="m3 7 9 4v10L3 17V7Z"/><path d="m21 7-9 4v10l9-4V7Z"/></svg>
+          Variedad que te representa
+        </span>
+      </div>
+      <div class="campaign-actions" aria-label="Opciones de pedido">
+        <span>Pedidos por WhatsApp</span>
+        <span>Envíos disponibles</span>
+        <a href="#catalogo" data-scroll-target="catalogo">Ver favoritos</a>
+      </div>
+    </section>
 
     <section class="catalog-section catalog-first" id="catalogo" aria-labelledby="catalogTitle">
       <div class="section-heading catalog-heading">
         <div>
           <span class="eyebrow">Catálogo GStore</span>
-          <h1 id="catalogTitle">Elige tu pieza.</h1>
+          <h1 id="catalogTitle">Encuentra tu favorito.</h1>
         </div>
-        <p>Busca, filtra y agrega al carrito. El detalle se abre solo cuando necesitas talla, color o cantidad.</p>
+        <p>Explora lo disponible, filtra por lo que buscas y agrega al carrito cuando algo te haga click.</p>
       </div>
 
       <div class="catalog-tools" aria-label="Filtros de productos">
         <label class="search-field">
           <span class="sr-only">Buscar producto</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.8-4.8"/><circle cx="10.8" cy="10.8" r="6.8"/></svg>
-          <input id="searchInput" type="search" placeholder="Buscar ropa, zapatos, carteras...">
+          <input id="searchInput" type="search" placeholder="Buscar por prenda, marca o categoría...">
         </label>
         <div class="category-row" id="categoryFilters"></div>
         <div class="catalog-refine" aria-label="Opciones de catálogo">
@@ -83,8 +113,8 @@
 
       <div class="product-grid" id="productGrid" aria-live="polite"></div>
       <div class="empty-state" id="emptyState" hidden>
-        <strong>No encontramos productos con ese filtro.</strong>
-        <span>Prueba otra categoría o borra la búsqueda.</span>
+        <strong>Catalogo listo para cargar productos.</strong>
+        <span>Agrega categorias y productos desde el panel admin para empezar.</span>
       </div>
     </section>
   </main>
@@ -126,8 +156,18 @@
           </div>
           <div class="cart-review-footer" id="cartReviewFooter" hidden>
             <div class="cart-total">
-              <span>Total</span>
-              <strong id="cartTotal">$0.00</strong>
+              <div>
+                <span>Subtotal</span>
+                <strong id="cartSubtotal">$0.00</strong>
+              </div>
+              <div>
+                <span>Envío</span>
+                <strong id="cartShipping">$0.00</strong>
+              </div>
+              <div class="cart-total-grand">
+                <span>Total</span>
+                <strong id="cartTotal">$0.00</strong>
+              </div>
             </div>
             <button class="button primary" id="continueCheckoutButton" type="button">Ya terminé de elegir</button>
             <small>Después completas entrega y datos para confirmar el pedido.</small>
@@ -144,7 +184,11 @@
               </div>
             </div>
             <div class="checkout-recap">
-              <strong id="checkoutRecapTotal">$0.00</strong>
+              <div class="checkout-recap-lines" aria-label="Resumen de compra">
+                <span>Subtotal <strong id="checkoutSubtotal">$0.00</strong></span>
+                <span>Envío <strong id="checkoutShipping">$0.00</strong></span>
+                <span class="checkout-recap-total">Total <strong id="checkoutRecapTotal">$0.00</strong></span>
+              </div>
               <button class="button ghost" id="editCartButton" type="button">Volver al pedido</button>
             </div>
           </section>
@@ -216,13 +260,23 @@
             <div class="step-heading">
               <span>05</span>
               <div>
-                <strong>Enviar</strong>
+                <strong>Confirmar</strong>
                 <small>El pedido queda guardado antes de confirmar.</small>
               </div>
             </div>
+            <div class="checkout-policy-alert" role="note">
+              <strong>Pedido definitivo</strong>
+              <p>Antes de enviar, revisa producto, talla, color y cantidad. No se aceptan devoluciones por cambio de opinión una vez realizado el pedido.</p>
+            </div>
+            <label class="checkout-acceptance">
+              <input name="terms_accepted" type="checkbox" required>
+              <span>
+                Acepto los <a href="terminos" target="_blank" rel="noopener">términos y condiciones</a>, la <a href="privacidad" target="_blank" rel="noopener">política de privacidad</a> y entiendo que el pedido no tiene devolución por cambio de opinión.
+              </span>
+            </label>
             <div class="checkout-actions">
               <button class="button primary" id="whatsappCheckoutButton" type="submit">
-                Enviar pedido por WhatsApp
+                Confirmar pedido por WhatsApp
               </button>
               <button class="button paypal" id="paypalCheckoutButton" type="button">
                 Pagar con PayPal
@@ -237,31 +291,28 @@
 
   <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
 
-  <footer class="site-footer" id="footer" aria-labelledby="footerTitle">
-    <div class="footer-brand">
-      <span class="footer-kicker">Catálogo curado</span>
-      <strong id="footerTitle">GStore</strong>
+  <footer class="site-footer">
+    <div>
+      <strong>GStore</strong>
       <span>Moda importada, seleccionada con paciencia y cariño.</span>
+      <nav class="legal-links" aria-label="Documentos legales">
+        <a href="privacidad">Política de privacidad</a>
+        <a href="terminos">Términos y condiciones</a>
+      </nav>
     </div>
-    <div class="footer-meta" aria-label="Ventajas de compra">
-      <span>Stock revisado</span>
-      <span>Pedido por WhatsApp</span>
-      <span>Atención personalizada</span>
-    </div>
-    <a class="romalinks" href="https://romalinks.com" target="_blank" rel="noreferrer" aria-label="Desarrollado por Romalinks">
-      <span class="romalinks-mark" aria-hidden="true">
-        <img src="assets/romalinks-logo-footer.png" alt="" loading="lazy" decoding="async">
-      </span>
-      <span class="romalinks-copy">
+    <a class="romalinks" href="https://romalinks.com" target="_blank" rel="noreferrer" aria-label="Abrir Romalinks">
+      <span>
         <small>Desarrollado por</small>
         <strong>Romalinks</strong>
       </span>
+      <img src="assets/romalinks-logo.png?v=20260604" alt="Romalinks" width="58" height="46" loading="lazy" decoding="async">
     </a>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/store.js?v=20260526-catalog-filters" defer></script>
+  <script src="js/store-catalog-filters.js?v=20260609-admin-cards" defer></script>
+  <script src="js/store.js?v=20260609-admin-cards" defer></script>
 </body>
 </html>

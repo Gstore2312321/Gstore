@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260604-admin-correos">
-  <link rel="stylesheet" href="css/admin.css?v=20260604-admin-product-filters">
+  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="customers">
   <main class="admin-shell">
@@ -23,7 +23,7 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, pedidos, clientes y reportes en un panel hecho para operar sin tocar codigo.</p>
+          <p>Inventario, pedidos, clientes y reportes en un panel hecho para operar sin tocar código.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Clientes guardados</span>
             <span>Tabla de clientes</span>
@@ -59,20 +59,20 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegacion del panel">
+        <nav aria-label="Navegación del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categorias</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operacion</span>
+          <span>Operación</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesion</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesión</button>
       </aside>
 
       <div class="admin-content">
@@ -146,6 +146,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin.js?v=20260604-admin-product-filters" defer></script>
+  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
 </body>
 </html>

@@ -21,14 +21,14 @@ npm run railway:check
 6. Railway usa `railway.json` con `RAILPACK` y arranca con `npm start`.
 7. Verifica que el start command sea `npm start`.
 8. Configura las variables de entorno del admin.
-9. Agrega tu dominio principal en Railway.
+9. Agrega tu dominio o subdominio en Railway.
 
 ## Variables minimas
 
 ```text
 NODE_ENV=production
-PUBLIC_BASE_URL=https://tu-dominio.com
-ALLOWED_ORIGINS=https://tu-dominio.com
+PUBLIC_BASE_URL=https://tu-subdominio.tudominio.com
+ALLOWED_ORIGINS=https://tu-subdominio.tudominio.com
 
 MYSQL_URL=mysql://usuario:clave@host:3306/base
 
@@ -60,13 +60,14 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
 RESEND_TO_EMAIL=correo-admin@tudominio.com
 RESEND_REPLY_TO_EMAIL=
+ERROR_ALERT_EMAIL=correo-admin@tudominio.com
+ERROR_ALERT_MINUTES=15
+
+MYSQL_BACKUP_URL=
+BACKUP_DIR=/tmp/gstore-backups
+BACKUP_COPY_DIR=
+BACKUP_RETENTION_DAYS=30
 ```
-
-Notas de Resend:
-
-- `RESEND_FROM_EMAIL` debe usar un remitente o dominio verificado en Resend para enviar a clientes reales.
-- `RESEND_REPLY_TO_EMAIL` es opcional. Puedes dejarlo vacio. Si se usa debe ser `email@dominio.com` o `Nombre <email@dominio.com>`; si el formato esta mal, el sistema lo ignora y no bloquea el deploy.
-- Si Resend responde que solo puede enviar correos de prueba a tu propio email, falta verificar el dominio/remitente o autorizar destinatarios de prueba.
 
 Cloudinary acepta dos formas:
 
@@ -129,7 +130,7 @@ El script incluido crea un backup comprimido de MySQL:
 npm run backup:mysql
 ```
 
-Para automatizarlo, crea un segundo servicio o tarea programada en Railway usando el mismo repo y el comando `npm run backup:mysql`. Guarda los backups fuera del repo.
+Para automatizarlo, crea un segundo servicio o tarea programada usando el mismo repo y el comando `npm run backup:mysql`. Si el backup corre dentro de Railway, no lo consideres copia externa definitiva: usa `MYSQL_BACKUP_URL` desde otra maquina o define `BACKUP_COPY_DIR` en un job externo para guardar el `.json.gz` fuera del servidor.
 
 ## Imágenes locales
 
@@ -153,11 +154,43 @@ Para producción, verifica un dominio en Resend y usa un remitente propio:
 RESEND_FROM_EMAIL=GStore <pedidos@tudominio.com>
 ```
 
-La recuperación de clave solo envía enlace si el correo escrito coincide con `ADMIN_EMAIL` o `STORE_OWNER_EMAIL`. El enlace usa `PUBLIC_BASE_URL`, por eso debe estar puesto con el dominio principal real.
+La recuperación de clave solo envía enlace si el correo escrito coincide con `ADMIN_EMAIL` o `STORE_OWNER_EMAIL`. El enlace usa `PUBLIC_BASE_URL`, por eso debe estar puesto con el dominio real de Railway o tu subdominio.
 
 ## Dominio
 
-Railway permite agregar el dominio desde el panel del servicio. Para esta tienda usa el dominio principal y entra al panel en `https://tu-dominio.com/admin`; no hace falta crear un subdominio de admin.
+Railway permite agregar dominios y subdominios desde el panel del servicio. Para un subdominio como `gstore.tudominio.com`, agregalo en Railway y apunta el DNS segun lo indique Railway.
+
+## Pruebas reales post-deploy
+
+Cuando Railway ya tenga variables reales y el dominio final responda:
+
+```bash
+npm run prod:check
+npm run uptime:check
+npm run paypal:check
+npm run smoke:order
+npm run smoke:cloudinary
+```
+
+Variables para `smoke:order`:
+
+```text
+SMOKE_BASE_URL=https://tu-dominio.com
+SMOKE_CUSTOMER_PHONE=593...
+SMOKE_CUSTOMER_EMAIL=cliente-real-o-test@dominio.com
+SMOKE_TEST_PAYPAL=1
+```
+
+Variables para `smoke:cloudinary`:
+
+```text
+SMOKE_BASE_URL=https://tu-dominio.com
+ADMIN_EMAIL=correo-admin@tudominio.com
+ADMIN_LOGIN_PASSWORD=clave-admin-real
+LIVE_UPLOAD_IMAGE=ruta/local/a/imagen-real.jpg
+```
+
+Para monitoreo externo sin depender de Railway, este repo incluye `.github/workflows/gstore-uptime.yml`. En GitHub configura `GSTORE_HEALTH_URL=https://tu-dominio.com/api/health` como variable o secreto del repo. Para alertas con correo/WhatsApp/SMS, conecta ademas un servicio externo como UptimeRobot o Better Stack al mismo endpoint.
 
 ## Antes de entregar
 
@@ -168,3 +201,7 @@ Railway permite agregar el dominio desde el panel del servicio. Para esta tienda
 - Cambiar estado del pedido.
 - Revisar `/api/health`.
 - Confirmar que el servicio `Gstore` puede leer `MYSQL_URL`.
+- Ejecutar `npm run prod:check` con las variables reales.
+- Ejecutar `npm run smoke:order` con WhatsApp y, si aplica, `SMOKE_TEST_PAYPAL=1`.
+- Ejecutar `npm run smoke:cloudinary` con una imagen real desde admin.
+- Ejecutar `npm run backup:mysql` y confirmar copia externa.

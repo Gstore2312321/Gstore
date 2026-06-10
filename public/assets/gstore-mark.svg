@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="title desc">
+  <title id="title">G Store</title>
+  <desc id="desc">Monograma G Store con gancho dorado.</desc>
+  <rect width="120" height="120" rx="32" fill="#fffaf1"/>
+  <path d="M61 21c-23 0-40 17-40 39 0 23 17 40 40 40 15 0 27-6 34-17H68V62h51v12c-7 27-28 44-58 44C26 118 0 93 0 60S26 2 61 2c24 0 44 11 54 31H88c-6-8-15-12-27-12Z" transform="translate(9 -1) scale(.86)" fill="#09223d"/>
+  <path d="M70 47h32v47c-7 8-18 14-32 17V47Z" fill="#d26772"/>
+  <path d="M59 38c0-7 5-12 12-12s12 5 12 12c0 6-3 9-8 12-3 2-5 4-5 8v4" fill="none" stroke="#c79a36" stroke-width="6" stroke-linecap="round"/>
+  <path d="M69 62 29 84M71 62l40 22" fill="none" stroke="#c79a36" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

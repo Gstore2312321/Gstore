@@ -1,5 +1,5 @@
 const state = {
-  config: { storeName: "GStore", currency: "USD", paypalEnabled: false },
+  config: { storeName: "GStore", currency: "USD", paypalEnabled: false, shippingCost: 0 },
   categories: [],
   products: [],
   banners: [],
@@ -18,6 +18,7 @@ const CARD_IMAGE_WIDTHS = [180, 260, 360, 520];
 const DETAIL_IMAGE_WIDTHS = [420, 640, 820, 1100];
 const CART_IMAGE_WIDTHS = [96, 140, 180];
 const SIZE_NONE = "__none";
+let catalogFilters = null;
 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
@@ -36,7 +37,11 @@ const els = {
   cartLines: document.querySelector("#cartLines"),
   cartEmpty: document.querySelector("#cartEmpty"),
   cartReviewFooter: document.querySelector("#cartReviewFooter"),
+  cartSubtotal: document.querySelector("#cartSubtotal"),
+  cartShipping: document.querySelector("#cartShipping"),
   cartTotal: document.querySelector("#cartTotal"),
+  checkoutSubtotal: document.querySelector("#checkoutSubtotal"),
+  checkoutShipping: document.querySelector("#checkoutShipping"),
   checkoutRecapTotal: document.querySelector("#checkoutRecapTotal"),
   checkoutForm: document.querySelector("#checkoutForm"),
   continueCheckoutButton: document.querySelector("#continueCheckoutButton"),
@@ -53,6 +58,14 @@ const els = {
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
+  catalogFilters = window.GStoreCatalogFilters?.createCatalogFilters({
+    escapeAttr,
+    escapeHtml,
+    formatProductName,
+    matchesSizeFilter,
+    normalizeText,
+    state
+  });
   bindEvents();
   renderCart();
   await loadData();
@@ -70,11 +83,13 @@ function bindEvents() {
 
   els.searchInput?.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
+    renderCategories();
     renderProducts();
   });
 
   els.sizeFilter?.addEventListener("change", (event) => {
     state.activeSize = event.target.value || "all";
+    renderCategories();
     renderProducts();
   });
 
@@ -91,16 +106,27 @@ function bindEvents() {
     if (els.searchInput) els.searchInput.value = "";
     if (els.sizeFilter) els.sizeFilter.value = "all";
     if (els.sortFilter) els.sortFilter.value = "default";
-    syncCategoryButtons();
+    renderCategories();
     renderProducts();
   });
 
   document.addEventListener("click", (event) => {
+    const bannerControl = event.target.closest("[data-banner-slide]");
+    if (bannerControl) {
+      scrollBannerCarousel(Number(bannerControl.dataset.bannerSlide || 1));
+      return;
+    }
+
+    const categoryBanner = event.target.closest("[data-banner-category]");
+    if (categoryBanner) {
+      event.preventDefault();
+      selectCategory(categoryBanner.dataset.bannerCategory, { scroll: true, updateHash: true });
+      return;
+    }
+
     const categoryButton = event.target.closest("[data-category-filter]");
     if (categoryButton) {
-      state.activeCategory = categoryButton.dataset.categoryFilter;
-      syncCategoryButtons();
-      renderProducts();
+      selectCategory(categoryButton.dataset.categoryFilter, { scroll: false, updateHash: false });
       return;
     }
 
@@ -157,10 +183,11 @@ async function loadData() {
       api("/api/products"),
       api("/api/banners")
     ]);
-    state.config = config;
+    state.config = { ...state.config, ...config, shippingCost: Number(config.shippingCost || 0) };
     state.categories = categories.categories || [];
     state.products = products.products || [];
     state.banners = banners.banners || [];
+    syncCategoryFromHash();
     renderStoreBanners();
     renderCategories();
     renderCatalogOptions();
@@ -266,10 +293,10 @@ function clampFrameNumber(value, min, max, fallback) {
 
 function normalizedImageFrame(source = {}) {
   return {
-    fit: source.image_fit === "contain" ? "contain" : "cover",
-    x: clampFrameNumber(source.image_position_x, 0, 100, 50),
-    y: clampFrameNumber(source.image_position_y, 0, 100, 50),
-    zoom: clampFrameNumber(source.image_zoom, 1, 1.8, 1)
+    fit: (source.image_fit || source.fit) === "contain" ? "contain" : "cover",
+    x: clampFrameNumber(source.image_position_x ?? source.x, 0, 100, 50),
+    y: clampFrameNumber(source.image_position_y ?? source.y, 0, 100, 50),
+    zoom: clampFrameNumber(source.image_zoom ?? source.zoom, 1, 1.8, 1)
   };
 }
 
@@ -301,18 +328,21 @@ function renderStoreBanners() {
     els.storeBanners.innerHTML = "";
     return;
   }
-  els.storeBanners.innerHTML = banners.map((banner, index) => {
-    const tag = banner.link_url ? "a" : "article";
-    const href = banner.link_url ? ` href="${escapeAttr(banner.link_url)}"${bannerLinkExtraAttrs(banner.link_url)}` : "";
+  const slides = banners.map((banner, index) => {
+    const categorySlug = cleanCategorySlug(banner.category_slug) || categorySlugFromBannerLink(banner.link_url);
+    const bannerUrl = categorySlug ? `#categoria-${categorySlug}` : banner.link_url;
+    const tag = bannerUrl ? "a" : "article";
+    const href = bannerUrl ? ` href="${escapeAttr(bannerUrl)}"${categorySlug ? "" : bannerLinkExtraAttrs(bannerUrl)}` : "";
+    const categoryAttrs = categorySlug ? ` data-banner-category="${escapeAttr(categorySlug)}"` : "";
     return `
-      <${tag} class="store-banner ${index === 0 ? "is-featured" : ""}"${href}>
+      <${tag} class="store-banner ${index === 0 ? "is-featured" : ""}"${href}${categoryAttrs}>
         <img ${imageAttrs(banner.image_url, {
-          width: index === 0 ? 960 : 520,
+          width: index === 0 ? 1200 : 960,
           widths: index === 0 ? DETAIL_IMAGE_WIDTHS : CARD_IMAGE_WIDTHS,
-          sizes: index === 0 ? "(max-width: 760px) 88vw, 720px" : "(max-width: 760px) 78vw, 320px",
+          sizes: "(max-width: 760px) 92vw, 1120px",
           loading: index === 0 ? "eager" : "lazy",
           fetchPriority: index === 0 ? "high" : "low"
-        })} alt="${escapeAttr(banner.title)}">
+        })} ${imageFrameAttrs(banner)} alt="${escapeAttr(banner.title)}">
         <span class="store-banner-shade" aria-hidden="true"></span>
         <span class="store-banner-copy">
           <small>${escapeHtml(banner.kicker || "Promo")}</small>
@@ -322,21 +352,95 @@ function renderStoreBanners() {
       </${tag}>
     `;
   }).join("");
+  els.storeBanners.innerHTML = `
+    <div class="store-banner-carousel">
+      <div class="store-banner-track" data-banner-track>${slides}</div>
+      ${banners.length > 1 ? `
+        <div class="store-banner-controls" aria-label="Controles de promociones">
+          <button class="store-banner-control" data-banner-slide="-1" type="button" aria-label="Banner anterior">‹</button>
+          <span>${banners.length} promociones</span>
+          <button class="store-banner-control" data-banner-slide="1" type="button" aria-label="Banner siguiente">›</button>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function cleanCategorySlug(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70);
+}
+
+function categorySlugFromBannerLink(value) {
+  const match = String(value || "").match(/^#categoria-([a-z0-9-]+)$/i);
+  return match ? cleanCategorySlug(match[1]) : "";
+}
+
+function scrollBannerCarousel(direction) {
+  const track = els.storeBanners?.querySelector("[data-banner-track]");
+  if (!track) return;
+  track.scrollBy({
+    left: direction * Math.max(280, track.clientWidth * 0.92),
+    behavior: prefersReducedMotion() ? "auto" : "smooth"
+  });
+}
+
+function selectCategory(slug, options = {}) {
+  const categorySlug = cleanCategorySlug(slug);
+  const exists = categorySlug === "all" || state.categories.some((category) => category.slug === categorySlug);
+  state.activeCategory = exists ? categorySlug : "all";
+  syncCategoryButtons();
+  renderProducts();
+  if (options.scroll) {
+    document.getElementById("catalogo")?.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "start"
+    });
+  }
+  if (options.updateHash) {
+    const hash = state.activeCategory === "all" ? "catalogo" : `categoria-${state.activeCategory}`;
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${hash}`);
+  }
+}
+
+function syncCategoryFromHash() {
+  const match = String(window.location.hash || "").match(/^#categoria-([a-z0-9-]+)$/i);
+  if (!match) return;
+  const categorySlug = cleanCategorySlug(match[1]);
+  if (state.categories.some((category) => category.slug === categorySlug)) {
+    state.activeCategory = categorySlug;
+  }
 }
 
 function renderCategories() {
+  const allCount = categoryVisibleCount("all");
   els.categoryFilters.innerHTML = [
-    `<button class="filter-chip is-active" data-category-filter="all" type="button">Todo</button>`,
-    ...state.categories.map((category) => (
-      `<button class="filter-chip" data-category-filter="${escapeAttr(category.slug)}" type="button">${escapeHtml(category.name)}</button>`
-    ))
+    categoryFilterButton({ slug: "all", name: "Todo" }, allCount),
+    ...state.categories.map((category) => categoryFilterButton(category, categoryVisibleCount(category.slug)))
   ].join("");
   syncCategoryButtons();
 }
 
+function categoryFilterButton(category, count) {
+  if (catalogFilters) return catalogFilters.categoryFilterButton(category, count);
+  return "";
+}
+
+function categoryVisibleCount(categorySlug) {
+  if (catalogFilters) return catalogFilters.visibleCount(state.products, categorySlug);
+  return 0;
+}
+
 function syncCategoryButtons() {
   document.querySelectorAll("[data-category-filter]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.categoryFilter === state.activeCategory);
+    const active = button.dataset.categoryFilter === state.activeCategory;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
   });
 }
 
@@ -384,22 +488,9 @@ function sizeSortRank(size) {
 }
 
 function renderProducts() {
-  const normalizedSearch = normalizeText(state.search);
-  const filteredProducts = state.products.filter((product) => {
-    const categoryMatch = state.activeCategory === "all" || product.category?.slug === state.activeCategory;
-    const sizeMatch = matchesSizeFilter(product);
-    const searchText = normalizeText([
-      product.name,
-      formatProductName(product.name),
-      product.description,
-      product.category?.name,
-      product.promo_label,
-      product.promo_type,
-      product.sizes.join(" "),
-      product.colors.join(" ")
-    ].join(" "));
-    return categoryMatch && sizeMatch && (!normalizedSearch || searchText.includes(normalizedSearch));
-  });
+  const filteredProducts = state.products.filter((product) => (
+    productMatchesCategory(product, state.activeCategory) && productMatchesActiveRefinements(product)
+  ));
   const products = sortProducts(filteredProducts);
 
   els.productGrid.innerHTML = products.map(productCard).join("");
@@ -417,6 +508,17 @@ function renderProducts() {
       stagger: 0.018
     });
   }
+}
+
+function productMatchesCategory(product, categorySlug = "all") {
+  return catalogFilters
+    ? catalogFilters.productMatchesCategory(product, categorySlug)
+    : categorySlug === "all" || product.category?.slug === categorySlug;
+}
+
+function productMatchesActiveRefinements(product) {
+  if (catalogFilters) return catalogFilters.productMatchesActiveRefinements(product);
+  return matchesSizeFilter(product);
 }
 
 function matchesSizeFilter(product) {
@@ -643,10 +745,8 @@ function renderPriceStack(product, className = "") {
 
 function renderCart() {
   const count = state.cart.reduce((sum, line) => sum + line.quantity, 0);
-  const total = state.cart.reduce((sum, line) => sum + line.price * line.quantity, 0);
   els.cartCount.textContent = count;
-  els.cartTotal.textContent = formatCurrency(total);
-  if (els.checkoutRecapTotal) els.checkoutRecapTotal.textContent = formatCurrency(total);
+  renderCartTotals();
   els.cartEmpty.hidden = state.cart.length > 0;
   if (els.cartReviewFooter) els.cartReviewFooter.hidden = state.cart.length === 0;
   if (!state.cart.length) state.checkoutStage = "review";
@@ -674,11 +774,34 @@ function renderCart() {
   renderCheckoutState();
 }
 
+function cartSubtotal() {
+  return state.cart.reduce((sum, line) => sum + line.price * line.quantity, 0);
+}
+
+function currentShippingCost() {
+  if (!state.cart.length || getDeliveryMethod() === "pickup") return 0;
+  const amount = Number(state.config.shippingCost || 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
+function renderCartTotals() {
+  const subtotal = cartSubtotal();
+  const shipping = currentShippingCost();
+  const total = subtotal + shipping;
+  if (els.cartSubtotal) els.cartSubtotal.textContent = formatCurrency(subtotal);
+  if (els.cartShipping) els.cartShipping.textContent = formatCurrency(shipping);
+  if (els.cartTotal) els.cartTotal.textContent = formatCurrency(total);
+  if (els.checkoutSubtotal) els.checkoutSubtotal.textContent = formatCurrency(subtotal);
+  if (els.checkoutShipping) els.checkoutShipping.textContent = formatCurrency(shipping);
+  if (els.checkoutRecapTotal) els.checkoutRecapTotal.textContent = formatCurrency(total);
+}
+
 function renderCheckoutState() {
   const hasItems = state.cart.length > 0;
   const isPickup = getDeliveryMethod() === "pickup";
   const checkoutReady = hasItems && state.checkoutStage === "checkout";
   const paypalEnabled = Boolean(state.config.paypalEnabled);
+  renderCartTotals();
   els.whatsappCheckoutButton.disabled = !checkoutReady;
   if (els.paypalCheckoutButton) {
     els.paypalCheckoutButton.hidden = !paypalEnabled;
@@ -689,7 +812,9 @@ function renderCheckoutState() {
       ? ""
       : isPickup
       ? "Para retiro, confirma por WhatsApp para coordinar hora y punto."
-      : "PayPal está activo. El pago se procesa de forma segura.";
+      : state.config.paypalMode === "live"
+      ? "Pago seguro con PayPal. Te llevamos a PayPal y vuelves a GStore para confirmar."
+      : "PayPal está en modo sandbox. Cambia PAYPAL_MODE=live cuando conectes la cuenta real.";
     els.paypalNote.textContent = note;
     els.paypalNote.hidden = !note;
   }
@@ -727,7 +852,7 @@ function getDeliveryMethod() {
 function getWhatsappCheckoutLabel() {
   return getDeliveryMethod() === "pickup"
     ? "Coordinar retiro por WhatsApp"
-    : "Enviar pedido por WhatsApp";
+    : "Confirmar pedido por WhatsApp";
 }
 
 function renderDeliveryState() {
@@ -746,6 +871,7 @@ function renderDeliveryState() {
     addressInput.required = !isPickup;
     addressInput.placeholder = isPickup ? "No hace falta dirección para retiro" : "Sector, referencia o dirección";
   }
+  renderCartTotals();
   if (!els.whatsappCheckoutButton.disabled) {
     els.whatsappCheckoutButton.textContent = getWhatsappCheckoutLabel();
   }
@@ -774,6 +900,7 @@ async function submitWhatsappOrder(event) {
     continueToCheckout();
     return;
   }
+  if (!validateCheckoutForm()) return;
 
   const pendingWindow = window.open("", "_blank");
   if (pendingWindow) {
@@ -820,6 +947,7 @@ async function submitPaypalOrder() {
     return;
   }
   if (!state.cart.length) return showToast("Agrega al menos un producto.");
+  if (!validateCheckoutForm()) return;
 
   setCheckoutLoading(true, "Conectando PayPal...");
   try {
@@ -856,6 +984,13 @@ function buildOrderPayload() {
       color: line.color
     }))
   };
+}
+
+function validateCheckoutForm() {
+  if (!els.checkoutForm) return true;
+  return typeof els.checkoutForm.reportValidity === "function"
+    ? els.checkoutForm.reportValidity()
+    : els.checkoutForm.checkValidity();
 }
 
 function setCheckoutLoading(isLoading, label = "") {

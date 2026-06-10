@@ -9,11 +9,10 @@
     "dev": "node server.js",
     "hash:admin": "node scripts/generate-admin-password-hash.js",
     "backup:mysql": "node scripts/backup-mysql.js",
-    "cloudinary:import": "node scripts/upload-imported-products-to-cloudinary.js",
-    "cloudinary:import:dry": "node scripts/upload-imported-products-to-cloudinary.js --dry-run",
-    "cloudinary:import:local": "powershell -ExecutionPolicy Bypass -File scripts/upload-imported-products-to-cloudinary.ps1",
-    "railway:check": "node tests/railway-readiness-check.cjs",
-    "check": "node --check server.js && node --check api/index.js && node --check public/js/admin.js && node --check public/js/store.js && node --check public/js/success.js && node --check scripts/upload-imported-products-to-cloudinary.js"
+    "prod:check": "node scripts/production-smoke-check.js",
+    "paypal:check": "node scripts/paypal-readiness-check.js",
+    "uptime:check": "node scripts/uptime-check.js",
+    "check": "node --check server.js && node --check api/index.js && node --check public/js/admin.js && node --check public/js/admin-money.js && node --check public/js/store.js && node --check public/js/store-catalog-filters.js && node --check public/js/success.js && node --check server/utils/number.js && node --check server/services/error-alerts.js && node --check scripts/generate-admin-password-hash.js && node --check scripts/backup-mysql.js && node --check scripts/production-smoke-check.js && node --check scripts/paypal-readiness-check.js && node --check scripts/uptime-check.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -9,6 +9,8 @@ const multer = require("multer");
 const bcrypt = require("bcryptjs");
 const mysql = require("mysql2/promise");
 const sharp = require("sharp");
+const { formatMoney, money, moneyInput, numericValue } = require("./server/utils/number");
+const { createErrorAlerter } = require("./server/services/error-alerts");
 
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
@@ -48,23 +50,47 @@ const LOCAL_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const IMAGE_WIDTHS = [96, 140, 180, 220, 260, 320, 360, 420, 520, 640, 720, 820, 960, 1100, 1200, 1400];
 const IMAGE_CACHE_DIR = path.join(UPLOAD_DIR, "_image-cache");
 const STORE_BANNERS_SETTING_KEY = "store_banners";
+const STORE_SHIPPING_SETTING_KEY = "store_shipping_cost";
 const MAX_STORE_BANNERS = 6;
 const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
+const ORDER_STATUSES = ["new", "waiting_payment", "paid", "preparing", "ready", "sent", "completed", "cancelled"];
+const FINAL_ORDER_STATUSES = new Set(["completed", "cancelled"]);
+const ERROR_ALERT_MINUTES = Math.max(1, Number(process.env.ERROR_ALERT_MINUTES || 15));
 let db;
 
 const CLEAN_PAGE_PATHS = new Map([
   ["/index.html", "/"],
   ["/success.html", "/success"],
+  ["/privacidad.html", "/privacidad"],
+  ["/terminos.html", "/terminos"],
   ["/admin.html", "/admin"],
   ["/admin-reportes.html", "/admin-reportes"],
   ["/admin-productos.html", "/admin-productos"],
   ["/admin-categorias.html", "/admin-categorias"],
-  ["/admin-pedidos.html", "/admin-pedidos"],
-  ["/admin-clientes.html", "/admin-clientes"]
+  ["/admin-pedidos.html", "/admin-pedidos"]
 ]);
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+app.post("/api/admin/orders/:id/email", requireAdmin, asyncHandler(async (req, res, next) => {
+  const order = await getOrderById(Number(req.params.id));
+  if (!order) return next(httpError(404, "Pedido no encontrado."));
+  const email = await sendOrderEmail(order);
+  const updatedOrder = await getOrderById(order.id);
+  await auditLog(req, {
+    action: "order.email_resend",
+    entityType: "order",
+    entityId: String(order.id),
+    summary: `Correo procesado para ${order.order_code}`,
+    metadata: {
+      admin_email_status: updatedOrder.admin_email_status || "pending",
+      customer_email_status: updatedOrder.customer_email_status || "pending",
+      email_error: updatedOrder.email_error || ""
+    }
+  });
+  res.json({ order: publicOrder(updatedOrder), email });
+}));
+
 app.use((req, res, next) => {
   applySecurityHeaders(req, res);
   return next();
@@ -95,12 +121,6 @@ app.get(Array.from(CLEAN_PAGE_PATHS.keys()), (req, res) => {
   const queryIndex = req.originalUrl.indexOf("?");
   const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
   res.redirect(301, `${cleanPath}${query}`);
-});
-
-app.get(/^\/admin(?:-[a-z]+)?\/$/, (req, res) => {
-  const queryIndex = req.originalUrl.indexOf("?");
-  const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
-  res.redirect(301, `${req.path.replace(/\/$/, "")}${query}`);
 });
 
 app.get(/^\/admin(?:-[a-z]+)?$/, (req, res, next) => {
@@ -216,7 +236,7 @@ function applySecurityHeaders(req, res) {
 }
 
 function isAdminPagePath(pathname) {
-  return /^\/admin(?:-[a-z]+)?(?:\.html|\/)?$/.test(pathname);
+  return /^\/admin(?:-[a-z]+)?(?:\.html)?$/.test(pathname);
 }
 
 function createRateLimiter({ windowMs, max, message }) {
@@ -368,14 +388,6 @@ function incomingList(value) {
     .filter(Boolean);
 }
 
-function money(value) {
-  return Math.round(Number(value || 0) * 100) / 100;
-}
-
-function formatMoney(value) {
-  return money(value).toFixed(2);
-}
-
 function boolToInt(value) {
   return value === true || value === "true" || value === "1" || value === 1 ? 1 : 0;
 }
@@ -420,11 +432,7 @@ function normalizePhone(value) {
   return String(value || "").replace(/[^\d+]/g, "").trim();
 }
 
-function normalizeEmail(value) {
-  return cleanText(value).toLowerCase();
-}
-
-function publicOrder(order, options = {}) {
+function publicOrder(order) {
   if (!order) return null;
   const publicItems = parseJsonList(order.items_json).map((item) => ({
     product_id: item.product_id,
@@ -437,7 +445,7 @@ function publicOrder(order, options = {}) {
     color: item.color,
     line_total: item.line_total
   }));
-  const output = {
+  return {
     id: order.id,
     order_code: order.order_code,
     customer_name: order.customer_name,
@@ -454,75 +462,16 @@ function publicOrder(order, options = {}) {
     payment_method: order.payment_method,
     payment_status: order.payment_status,
     status: order.status,
+    admin_email_status: order.admin_email_status || "pending",
+    customer_email_status: order.customer_email_status || "pending",
+    email_error: order.email_error || "",
+    email_sent_at: order.email_sent_at || "",
+    stock_reserved: Boolean(order.stock_reserved),
+    stock_restored_at: order.stock_restored_at || "",
     source: order.source,
     created_at: order.created_at,
     updated_at: order.updated_at
   };
-  if (options.includeAdmin) {
-    output.admin_email_status = order.admin_email_status || "pending";
-    output.customer_email_status = order.customer_email_status || "pending";
-    output.email_error = order.email_error || "";
-    output.email_sent_at = order.email_sent_at || "";
-  }
-  return output;
-}
-
-function publicCustomer(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: row.name,
-    phone: row.phone,
-    email: row.email,
-    city: row.city || "",
-    address: row.address || "",
-    notes: row.notes || "",
-    marketing_status: row.marketing_status || "cliente",
-    order_count: Number(row.order_count || 0),
-    total_spent: money(row.total_spent || 0),
-    last_order_code: row.last_order_code || "",
-    first_order_at: row.first_order_at || "",
-    last_order_at: row.last_order_at || "",
-    created_at: row.created_at || "",
-    updated_at: row.updated_at || ""
-  };
-}
-
-function csvCell(value) {
-  const text = String(value ?? "").replace(/\r?\n/g, " ").replace(/"/g, '""');
-  return `"${text}"`;
-}
-
-function customersToCsv(customers) {
-  const headers = [
-    "Nombre",
-    "Telefono",
-    "Correo",
-    "Ciudad",
-    "Direccion",
-    "Notas",
-    "Estado marketing",
-    "Pedidos",
-    "Total comprado",
-    "Ultimo pedido",
-    "Primera compra",
-    "Ultima compra"
-  ];
-  const rows = customers.map((customer) => [
-    customer.name,
-    customer.phone,
-    customer.email,
-    customer.city,
-    customer.address,
-    customer.notes,
-    customer.marketing_status,
-    customer.order_count,
-    formatMoney(customer.total_spent),
-    customer.last_order_code,
-    customer.first_order_at,
-    customer.last_order_at
-  ]);
-  return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
 
 function productFromRow(row, options = {}) {
@@ -530,7 +479,6 @@ function productFromRow(row, options = {}) {
   const product = {
     id: row.id,
     name: row.name,
-    brand_name: row.brand_name || "",
     slug: row.slug,
     description: row.description || "",
     price: row.price,
@@ -643,6 +591,38 @@ async function setAppSetting(key, value) {
   `, [key, value, now()]);
 }
 
+function cleanOptionalSlug(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70);
+}
+
+function normalizeShippingCost(value) {
+  const text = String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(",", ".");
+  const numeric = Number(text || 0);
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return money(Math.min(numeric, 999.99));
+}
+
+async function getShippingCost() {
+  const saved = await getAppSetting(STORE_SHIPPING_SETTING_KEY);
+  if (saved !== "") return normalizeShippingCost(saved);
+  return normalizeShippingCost(process.env.DEFAULT_SHIPPING || 0);
+}
+
+async function saveShippingCost(value) {
+  const shippingCost = normalizeShippingCost(value);
+  await setAppSetting(STORE_SHIPPING_SETTING_KEY, shippingCost.toFixed(2));
+  return shippingCost;
+}
+
 function cleanBannerLink(value) {
   const link = cleanText(value);
   if (!link) return "";
@@ -664,13 +644,21 @@ function bannerFromInput(body = {}, existing = {}) {
   if (title.length < 2) throw httpError(400, "El banner necesita un título corto.");
   const kicker = cleanText(body.kicker || existing.kicker || "Promo").slice(0, 42);
   const text = cleanText(body.text || existing.text).slice(0, 150);
+  const categorySlug = cleanOptionalSlug(body.category_slug || existing.category_slug);
+  const rawLink = body.link_url === undefined ? existing.link_url : body.link_url;
+  const linkUrl = cleanBannerLink(rawLink || (categorySlug ? `#categoria-${categorySlug}` : ""));
   return {
     id: existing.id || crypto.randomUUID(),
     kicker,
     title,
     text,
     image_url: imageUrl,
-    link_url: cleanBannerLink(body.link_url || existing.link_url),
+    image_fit: normalizeImageFit(body.image_fit || existing.image_fit),
+    image_position_x: clampImagePercent(body.image_position_x ?? existing.image_position_x, 50),
+    image_position_y: clampImagePercent(body.image_position_y ?? existing.image_position_y, 50),
+    image_zoom: clampImageZoom(body.image_zoom ?? existing.image_zoom),
+    link_url: linkUrl,
+    category_slug: categorySlug,
     active: body.active === undefined ? Boolean(existing.active ?? true) : boolToInt(body.active) === 1,
     created_at: existing.created_at || now(),
     updated_at: now()
@@ -695,7 +683,12 @@ function normalizeBannerList(value, { includeInactive = false } = {}) {
       title: cleanText(item.title).slice(0, 80),
       text: cleanText(item.text).slice(0, 150),
       image_url: cleanText(item.image_url),
+      image_fit: normalizeImageFit(item.image_fit),
+      image_position_x: clampImagePercent(item.image_position_x, 50),
+      image_position_y: clampImagePercent(item.image_position_y, 50),
+      image_zoom: clampImageZoom(item.image_zoom),
       link_url: cleanBannerLink(item.link_url),
+      category_slug: cleanOptionalSlug(item.category_slug),
       active: Boolean(item.active),
       created_at: cleanText(item.created_at),
       updated_at: cleanText(item.updated_at)
@@ -803,7 +796,6 @@ async function ensureSchema() {
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       category_id INT UNSIGNED NULL,
       name VARCHAR(220) NOT NULL,
-      brand_name VARCHAR(120) DEFAULT '',
       slug VARCHAR(240) NOT NULL,
       description TEXT,
       price DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -850,12 +842,14 @@ async function ensureSchema() {
       payment_method VARCHAR(40) NOT NULL,
       payment_status VARCHAR(40) NOT NULL DEFAULT 'pending',
       status VARCHAR(40) NOT NULL DEFAULT 'new',
-      source VARCHAR(80) DEFAULT 'storefront',
-      paypal_order_id VARCHAR(160) DEFAULT '',
       admin_email_status VARCHAR(40) DEFAULT 'pending',
       customer_email_status VARCHAR(40) DEFAULT 'pending',
       email_error TEXT,
       email_sent_at VARCHAR(32) DEFAULT '',
+      stock_reserved TINYINT(1) NOT NULL DEFAULT 0,
+      stock_restored_at VARCHAR(32) DEFAULT NULL,
+      source VARCHAR(80) DEFAULT 'storefront',
+      paypal_order_id VARCHAR(160) DEFAULT '',
       created_at VARCHAR(32) NOT NULL,
       updated_at VARCHAR(32) NOT NULL,
       PRIMARY KEY (id),
@@ -863,30 +857,6 @@ async function ensureSchema() {
       KEY orders_status_index (status),
       KEY orders_payment_status_index (payment_status),
       KEY orders_paypal_order_id_index (paypal_order_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `);
-
-  await dbRun(`
-    CREATE TABLE IF NOT EXISTS customers (
-      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-      name VARCHAR(180) NOT NULL,
-      phone VARCHAR(60) NOT NULL,
-      email VARCHAR(180) NOT NULL,
-      city VARCHAR(120) DEFAULT '',
-      address TEXT,
-      notes TEXT,
-      marketing_status VARCHAR(80) DEFAULT 'cliente',
-      order_count INT UNSIGNED NOT NULL DEFAULT 0,
-      total_spent DECIMAL(10,2) NOT NULL DEFAULT 0,
-      last_order_code VARCHAR(60) DEFAULT '',
-      first_order_at VARCHAR(32) DEFAULT '',
-      last_order_at VARCHAR(32) DEFAULT '',
-      created_at VARCHAR(32) NOT NULL,
-      updated_at VARCHAR(32) NOT NULL,
-      PRIMARY KEY (id),
-      UNIQUE KEY customers_email_unique (email),
-      KEY customers_phone_index (phone),
-      KEY customers_last_order_index (last_order_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
@@ -935,7 +905,12 @@ async function ensureSchema() {
   `);
 
   await ensureColumn("orders", "delivery_method", "delivery_method VARCHAR(30) DEFAULT 'delivery'");
-  await ensureColumn("products", "brand_name", "brand_name VARCHAR(120) DEFAULT ''");
+  await ensureColumn("orders", "stock_reserved", "stock_reserved TINYINT(1) NOT NULL DEFAULT 0");
+  await ensureColumn("orders", "stock_restored_at", "stock_restored_at VARCHAR(32) DEFAULT NULL");
+  await ensureColumn("orders", "admin_email_status", "admin_email_status VARCHAR(40) DEFAULT 'pending'");
+  await ensureColumn("orders", "customer_email_status", "customer_email_status VARCHAR(40) DEFAULT 'pending'");
+  await ensureColumn("orders", "email_error", "email_error TEXT");
+  await ensureColumn("orders", "email_sent_at", "email_sent_at VARCHAR(32) DEFAULT ''");
   await ensureColumn("products", "cost_price", "cost_price DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ensureColumn("products", "compare_price", "compare_price DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ensureColumn("products", "promo_type", "promo_type VARCHAR(40) DEFAULT 'none'");
@@ -945,11 +920,8 @@ async function ensureSchema() {
   await ensureColumn("products", "image_position_x", "image_position_x DECIMAL(5,2) NOT NULL DEFAULT 50");
   await ensureColumn("products", "image_position_y", "image_position_y DECIMAL(5,2) NOT NULL DEFAULT 50");
   await ensureColumn("products", "image_zoom", "image_zoom DECIMAL(4,2) NOT NULL DEFAULT 1");
-  await ensureColumn("orders", "admin_email_status", "admin_email_status VARCHAR(40) DEFAULT 'pending'");
-  await ensureColumn("orders", "customer_email_status", "customer_email_status VARCHAR(40) DEFAULT 'pending'");
-  await ensureColumn("orders", "email_error", "email_error TEXT");
-  await ensureColumn("orders", "email_sent_at", "email_sent_at VARCHAR(32) DEFAULT ''");
-  await rebuildCustomersFromOrders();
+
+  await migrateLegacyOrderStockFlags();
 
   const promoCount = await dbGet(`
     SELECT COUNT(*) AS count
@@ -1033,15 +1005,14 @@ async function seedProductList(products) {
     const category = await dbGet("SELECT id FROM categories WHERE slug = ?", [categorySlug]);
     await dbRun(`
       INSERT INTO products (
-        category_id, name, brand_name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+        category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
         image_fit, image_position_x, image_position_y, image_zoom,
         sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       category ? category.id : null,
       name,
-      cleanText(product.brand || product.brandName || ""),
       await ensureUniqueSlug("products", name),
       cleanText(product.description),
       money(product.price),
@@ -1174,15 +1145,14 @@ async function seedData() {
       const category = await dbGet("SELECT id FROM categories WHERE slug = ?", [product.category]);
       await dbRun(`
         INSERT INTO products (
-          category_id, name, brand_name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+          category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
           image_fit, image_position_x, image_position_y, image_zoom,
           sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
       `, [
         category ? category.id : null,
         product.name,
-        cleanText(product.brand || product.brandName || ""),
         await ensureUniqueSlug("products", product.name),
         product.description,
         product.price,
@@ -1258,11 +1228,6 @@ function createOrderCode() {
 
 function normalizeDeliveryMethod(value) {
   return cleanText(value) === "pickup" ? "pickup" : "delivery";
-}
-
-function numericValue(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
 }
 
 function dayKey(value) {
@@ -1344,7 +1309,7 @@ function validateCustomer(input, deliveryMethod = "delivery") {
   const customer = {
     name: cleanText(input.name),
     phone: normalizePhone(input.phone),
-    email: normalizeEmail(input.email),
+    email: cleanText(input.email),
     address: cleanText(input.address),
     city: cleanText(input.city || "Guayaquil"),
     notes: cleanText(input.notes)
@@ -1361,7 +1326,7 @@ function validateCustomer(input, deliveryMethod = "delivery") {
   return customer;
 }
 
-async function calculateCart(rawItems) {
+async function calculateCart(rawItems, options = {}) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw httpError(400, "El carrito está vacío.");
   }
@@ -1416,7 +1381,8 @@ async function calculateCart(rawItems) {
   }
 
   const subtotal = money(items.reduce((sum, item) => sum + item.line_total, 0));
-  const shipping = money(process.env.DEFAULT_SHIPPING || 0);
+  const deliveryMethod = normalizeDeliveryMethod(options.deliveryMethod);
+  const shipping = deliveryMethod === "delivery" ? await getShippingCost() : 0;
   return {
     items,
     subtotal,
@@ -1427,12 +1393,99 @@ async function calculateCart(rawItems) {
 
 async function decrementStock(items) {
   for (const item of items) {
+    const quantity = Number(item.quantity || 0);
+    const productId = Number(item.product_id || item.id || 0);
+    if (!productId || quantity <= 0) continue;
     await dbRun(`
       UPDATE products
       SET stock = GREATEST(stock - ?, 0),
           updated_at = ?
       WHERE id = ?
-    `, [item.quantity, now(), item.product_id]);
+    `, [quantity, now(), productId]);
+  }
+}
+
+async function incrementStock(items) {
+  for (const item of items) {
+    const quantity = Number(item.quantity || 0);
+    const productId = Number(item.product_id || item.id || 0);
+    if (!productId || quantity <= 0) continue;
+    await dbRun(`
+      UPDATE products
+      SET stock = stock + ?,
+          updated_at = ?
+      WHERE id = ?
+    `, [quantity, now(), productId]);
+  }
+}
+
+function isFinalOrderStatus(status) {
+  return FINAL_ORDER_STATUSES.has(cleanText(status));
+}
+
+async function markOrderStockReserved(orderId) {
+  await dbRun("UPDATE orders SET stock_reserved = 1, updated_at = ? WHERE id = ?", [now(), orderId]);
+}
+
+async function restoreOrderStockIfNeeded(order) {
+  if (!order || !Number(order.stock_reserved) || order.stock_restored_at) return false;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute("SELECT * FROM orders WHERE id = ? FOR UPDATE", [order.id]);
+    const lockedOrder = rows[0];
+    if (!lockedOrder || !Number(lockedOrder.stock_reserved) || lockedOrder.stock_restored_at) {
+      await connection.commit();
+      return false;
+    }
+
+    const stamp = now();
+    for (const item of parseJsonList(lockedOrder.items_json)) {
+      const quantity = Number(item.quantity || 0);
+      const productId = Number(item.product_id || item.id || 0);
+      if (!productId || quantity <= 0) continue;
+      await connection.execute(`
+        UPDATE products
+        SET stock = stock + ?,
+            updated_at = ?
+        WHERE id = ?
+      `, [quantity, stamp, productId]);
+    }
+
+    await connection.execute(`
+      UPDATE orders
+      SET stock_restored_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `, [stamp, stamp, order.id]);
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function migrateLegacyOrderStockFlags() {
+  await dbRun(`
+    UPDATE orders
+    SET stock_reserved = 1
+    WHERE stock_reserved = 0
+      AND stock_restored_at IS NULL
+      AND (payment_method = 'whatsapp' OR payment_status = 'paid')
+  `);
+
+  const cancelledOrders = await dbAll(`
+    SELECT *
+    FROM orders
+    WHERE status = 'cancelled'
+      AND stock_reserved = 1
+      AND stock_restored_at IS NULL
+  `);
+  for (const order of cancelledOrders) {
+    await restoreOrderStockIfNeeded(order);
   }
 }
 
@@ -1470,80 +1523,6 @@ async function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paym
   return getOrderById(result.insertId);
 }
 
-async function syncCustomerFromOrder(order) {
-  if (!order) return null;
-  const email = normalizeEmail(order.customer_email);
-  if (!email) return null;
-
-  const latest = await dbGet(`
-    SELECT *
-    FROM orders
-    WHERE LOWER(customer_email) = ?
-    ORDER BY created_at DESC, id DESC
-    LIMIT 1
-  `, [email]);
-  const totals = await dbGet(`
-    SELECT
-      COUNT(*) AS order_count,
-      COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS total_spent,
-      MIN(created_at) AS first_order_at,
-      MAX(created_at) AS last_order_at
-    FROM orders
-    WHERE LOWER(customer_email) = ?
-  `, [email]);
-
-  if (!latest) return null;
-  await dbRun(`
-    INSERT INTO customers (
-      name, phone, email, city, address, notes, marketing_status, order_count, total_spent,
-      last_order_code, first_order_at, last_order_at, created_at, updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      name = VALUES(name),
-      phone = VALUES(phone),
-      city = VALUES(city),
-      address = VALUES(address),
-      notes = VALUES(notes),
-      marketing_status = VALUES(marketing_status),
-      order_count = VALUES(order_count),
-      total_spent = VALUES(total_spent),
-      last_order_code = VALUES(last_order_code),
-      first_order_at = VALUES(first_order_at),
-      last_order_at = VALUES(last_order_at),
-      updated_at = VALUES(updated_at)
-  `, [
-    cleanText(latest.customer_name),
-    normalizePhone(latest.customer_phone),
-    email,
-    cleanText(latest.customer_city),
-    cleanText(latest.customer_address),
-    cleanText(latest.notes),
-    "cliente con pedido",
-    Number(totals?.order_count || 0),
-    money(totals?.total_spent || 0),
-    cleanText(latest.order_code),
-    cleanText(totals?.first_order_at),
-    cleanText(totals?.last_order_at),
-    now(),
-    now()
-  ]);
-
-  return dbGet("SELECT * FROM customers WHERE email = ?", [email]);
-}
-
-async function rebuildCustomersFromOrders() {
-  const rows = await dbAll(`
-    SELECT MIN(customer_email) AS customer_email
-    FROM orders
-    WHERE customer_email IS NOT NULL AND customer_email != ''
-    GROUP BY LOWER(customer_email)
-  `);
-  for (const row of rows) {
-    await syncCustomerFromOrder({ customer_email: row.customer_email });
-  }
-}
-
 function buildWhatsappMessage(order) {
   const deliveryMethod = normalizeDeliveryMethod(order.delivery_method);
   const items = parseJsonList(order.items_json)
@@ -1561,6 +1540,8 @@ function buildWhatsappMessage(order) {
     `Pedido: ${order.order_code}`,
     items,
     "",
+    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
+    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
     `Total: $${formatMoney(order.total)} ${CURRENCY}`,
     `Nombre: ${order.customer_name}`,
     `Teléfono: ${order.customer_phone}`,
@@ -1580,76 +1561,14 @@ function getWhatsappUrl(order) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order))}`;
 }
 
-function extractEmailAddress(value) {
-  const text = cleanText(value);
-  const angleMatch = text.match(/<([^<>]+)>/);
-  return cleanText(angleMatch ? angleMatch[1] : text).toLowerCase();
-}
-
-function isValidEmailAddress(value) {
-  const email = extractEmailAddress(value);
-  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
-}
-
-function normalizeResendEmailField(value) {
-  const text = cleanText(value);
-  if (!text) return "";
-
-  const angleMatch = text.match(/^(.+?)\s*<([^<>]+)>$/);
-  if (angleMatch) {
-    const name = cleanText(angleMatch[1]).replace(/[<>"]/g, "");
-    const email = cleanText(angleMatch[2]).toLowerCase();
-    if (!isValidEmailAddress(email)) return "";
-    return name ? `${name} <${email}>` : email;
-  }
-
-  const email = extractEmailAddress(text);
-  return isValidEmailAddress(email) ? email : "";
-}
-
-function friendlyEmailProviderError(rawMessage) {
-  const message = cleanText(rawMessage);
-  const lower = message.toLowerCase();
-
-  if (lower.includes("testing emails") && lower.includes("own email address")) {
-    return "Resend esta en modo prueba: verifica el dominio/remitente o agrega el correo del cliente como destinatario autorizado.";
-  }
-
-  if (lower.includes("reply_to") || lower.includes("email address needs to follow")) {
-    return "Reply-to invalido: revisa RESEND_REPLY_TO_EMAIL y el correo del cliente. Usa email@dominio.com o Nombre <email@dominio.com>.";
-  }
-
-  if (lower.includes("domain") && lower.includes("verified")) {
-    return "El dominio/remitente de Resend no esta verificado para enviar correos en produccion.";
-  }
-
-  return message ? `Resend rechazo el envio: ${message.slice(0, 220)}` : "Resend rechazo el envio del correo.";
-}
-
 function resendConfigured() {
-  return Boolean(process.env.RESEND_API_KEY && normalizeResendEmailField(process.env.RESEND_FROM_EMAIL));
-}
-
-function resendReplyToOrFallback(fallback) {
-  const configuredRaw = cleanText(process.env.RESEND_REPLY_TO_EMAIL);
-  const configuredEmail = normalizeResendEmailField(configuredRaw);
-  if (configuredRaw && !configuredEmail) {
-    console.warn("RESEND_REPLY_TO_EMAIL invalido; se omitira y se usara un fallback valido si existe.");
-  }
-  return configuredEmail || normalizeResendEmailField(fallback);
+  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
 }
 
 async function sendResendEmail({ to, subject, text, replyTo }) {
-  const apiKey = cleanText(process.env.RESEND_API_KEY);
-  const fromEmail = normalizeResendEmailField(process.env.RESEND_FROM_EMAIL);
-  const toEmail = normalizeResendEmailField(to);
-  const replyToEmail = normalizeResendEmailField(replyTo);
-  if (!apiKey) return { skipped: true, message: "Falta RESEND_API_KEY." };
-  if (!fromEmail) return { ok: false, message: "RESEND_FROM_EMAIL no tiene formato valido." };
-  if (!toEmail) return { ok: false, message: "El correo de destino no tiene formato valido." };
-  if (replyTo && !replyToEmail) {
-    console.warn("Resend reply_to omitido por formato invalido.");
-  }
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "GStore <onboarding@resend.dev>";
+  if (!apiKey || !to) return { skipped: true };
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -1659,8 +1578,8 @@ async function sendResendEmail({ to, subject, text, replyTo }) {
     },
     body: JSON.stringify({
       from: fromEmail,
-      to: toEmail,
-      reply_to: replyToEmail || undefined,
+      to,
+      reply_to: replyTo || undefined,
       subject,
       text
     })
@@ -1669,11 +1588,25 @@ async function sendResendEmail({ to, subject, text, replyTo }) {
   if (!response.ok) {
     const message = await response.text();
     console.warn("Resend no pudo enviar la notificacion:", message);
-    return { ok: false, message: friendlyEmailProviderError(message), rawMessage: message };
+    return { ok: false, message };
   }
 
-  return { ok: true, ...(await response.json()) };
+  return response.json();
 }
+
+const sendServerErrorAlert = createErrorAlerter({
+  cleanText,
+  clientIp,
+  errorAlertEmail: process.env.ERROR_ALERT_EMAIL,
+  fallbackEmail: process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL,
+  isProduction: IS_PRODUCTION,
+  minMinutes: ERROR_ALERT_MINUTES,
+  now,
+  resendApiKey: process.env.RESEND_API_KEY,
+  sendEmail: sendResendEmail,
+  shortUserAgent,
+  storeName: STORE_NAME
+});
 
 function orderEmailLines(order) {
   return parseJsonList(order.items_json)
@@ -1681,23 +1614,110 @@ function orderEmailLines(order) {
     .join("\n");
 }
 
+function emailStatusFromResult(result) {
+  if (!result) return "pending";
+  if (result.skipped) return "skipped";
+  if (result.ok === false) return "failed";
+  return "sent";
+}
+
+function emailErrorSummary(results) {
+  return Object.values(results || {})
+    .filter((result) => result && result.ok === false)
+    .map((result) => cleanText(result.message || result.rawMessage || "No se pudo enviar el correo."))
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 800);
+}
+
+async function updateOrderEmailStatus(orderId, { admin = "pending", customer = "pending", error = "" } = {}) {
+  await dbRun(`
+    UPDATE orders
+    SET admin_email_status = ?,
+        customer_email_status = ?,
+        email_error = ?,
+        email_sent_at = ?
+    WHERE id = ?
+  `, [admin, customer, error, now(), orderId]);
+}
+
+function extractEmailAddress(value) {
+  const text = cleanText(value);
+  const angleMatch = text.match(/<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>/);
+  if (angleMatch) return angleMatch[1].toLowerCase();
+  const directMatch = text.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/);
+  return directMatch ? directMatch[0].toLowerCase() : "";
+}
+
+function isValidEmailAddress(value) {
+  const email = extractEmailAddress(value);
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+}
+
+function emailConfigStatus() {
+  const fromRaw = cleanText(process.env.RESEND_FROM_EMAIL);
+  const ownerRaw = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
+  const replyToRaw = cleanText(process.env.RESEND_REPLY_TO_EMAIL);
+  return {
+    configured: Boolean(process.env.RESEND_API_KEY && fromRaw),
+    fromConfigured: Boolean(fromRaw),
+    ownerConfigured: Boolean(ownerRaw),
+    replyToConfigured: Boolean(replyToRaw),
+    fromValid: !fromRaw || isValidEmailAddress(fromRaw),
+    ownerValid: !ownerRaw || isValidEmailAddress(ownerRaw),
+    replyToValid: !replyToRaw || isValidEmailAddress(replyToRaw),
+    fromEmail: maskValue(fromRaw, 2, 10),
+    ownerEmail: maskValue(ownerRaw, 2, 10),
+    replyToEmail: maskValue(replyToRaw, 2, 10)
+  };
+}
+
+function customersFromOrders(orders) {
+  const groups = new Map();
+  for (const order of orders || []) {
+    const email = cleanText(order.customer_email).toLowerCase();
+    const phone = cleanText(order.customer_phone);
+    const key = email || phone || `order:${order.id}`;
+    const current = groups.get(key) || {
+      id: key,
+      name: "",
+      phone: "",
+      email,
+      city: "",
+      address: "",
+      marketing_status: "cliente",
+      order_count: 0,
+      total_spent: 0,
+      last_order_code: "",
+      last_order_at: ""
+    };
+    current.name = current.name || cleanText(order.customer_name);
+    current.phone = current.phone || phone;
+    current.email = current.email || email;
+    current.city = cleanText(order.customer_city) || current.city;
+    current.address = cleanText(order.customer_address) || current.address;
+    current.order_count += 1;
+    current.total_spent += Number(order.total || 0);
+    if (!current.last_order_at || String(order.created_at || "") > current.last_order_at) {
+      current.last_order_at = order.created_at || "";
+      current.last_order_code = order.order_code || "";
+    }
+    groups.set(key, current);
+  }
+  return Array.from(groups.values())
+    .sort((a, b) => String(b.last_order_at || "").localeCompare(String(a.last_order_at || "")));
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
 async function sendOrderEmail(order) {
-  const ownerEmailRaw = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
-  const customerEmailRaw = cleanText(order.customer_email);
-  const ownerEmail = normalizeResendEmailField(ownerEmailRaw);
-  const replyToEmail = resendReplyToOrFallback(customerEmailRaw);
-  const customerEmail = normalizeResendEmailField(order.customer_email);
-  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
-    const missing = [
-      !process.env.RESEND_API_KEY ? "RESEND_API_KEY" : "",
-      !process.env.RESEND_FROM_EMAIL ? "RESEND_FROM_EMAIL" : ""
-    ].filter(Boolean).join(", ");
-    await updateOrderEmailStatus(order.id, {
-      admin: "skipped",
-      customer: "skipped",
-      error: `Correo no configurado: falta ${missing}.`
-    });
-    return { skipped: true, reason: missing };
+  const ownerEmail = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
+  const replyToEmail = cleanText(process.env.RESEND_REPLY_TO_EMAIL || order.customer_email);
+  if (!process.env.RESEND_API_KEY) {
+    await updateOrderEmailStatus(order.id, { admin: "skipped", customer: order.customer_email ? "skipped" : "skipped" });
+    return { skipped: true };
   }
 
   const items = orderEmailLines(order);
@@ -1714,6 +1734,8 @@ async function sendOrderEmail(order) {
     "",
     items,
     "",
+    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
+    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
     `Total: $${formatMoney(order.total)} ${CURRENCY}`,
     `Método: ${order.payment_method}`,
     `Estado de pago: ${order.payment_status}`
@@ -1726,6 +1748,8 @@ async function sendOrderEmail(order) {
     "",
     items,
     "",
+    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
+    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
     `Total: $${formatMoney(order.total)} ${CURRENCY}`,
     `Entrega: ${normalizeDeliveryMethod(order.delivery_method) === "pickup" ? "Retiro coordinado por WhatsApp" : "Envío a domicilio"}`,
     `Estado de pago: ${order.payment_status === "paid" ? "Pagado" : "Pendiente"}`,
@@ -1733,7 +1757,7 @@ async function sendOrderEmail(order) {
     "Te contactaremos para confirmar los detalles."
   ].filter(Boolean).join("\n");
 
-  const results = { admin: null, customer: null };
+  const results = {};
   if (ownerEmail) {
     results.admin = await sendResendEmail({
       to: ownerEmail,
@@ -1741,90 +1765,42 @@ async function sendOrderEmail(order) {
       subject: `${STORE_NAME}: nuevo pedido ${order.order_code}`,
       text: adminText
     });
-  } else if (ownerEmailRaw) {
-    results.admin = { ok: false, message: "El correo admin no tiene formato valido. Revisa RESEND_TO_EMAIL o STORE_OWNER_EMAIL." };
   } else {
-    results.admin = { skipped: true, message: "Falta RESEND_TO_EMAIL o STORE_OWNER_EMAIL." };
+    results.admin = { skipped: true, message: "No hay correo admin configurado." };
   }
-  if (customerEmail) {
+  if (order.customer_email) {
     results.customer = await sendResendEmail({
-      to: customerEmail,
+      to: order.customer_email,
       replyTo: ownerEmail || undefined,
       subject: `Confirmación de pedido ${order.order_code}`,
       text: customerText
     });
-  } else if (customerEmailRaw) {
-    results.customer = { ok: false, message: "El correo del cliente no tiene formato valido." };
   } else {
     results.customer = { skipped: true, message: "El pedido no tiene correo de cliente." };
   }
 
-  const adminStatus = emailStatusFromResult(results.admin);
-  const customerStatus = emailStatusFromResult(results.customer);
+  const error = emailErrorSummary(results);
   await updateOrderEmailStatus(order.id, {
-    admin: adminStatus,
-    customer: customerStatus,
-    error: emailErrorSummary(results)
+    admin: emailStatusFromResult(results.admin),
+    customer: emailStatusFromResult(results.customer),
+    error
   });
 
-  return { ok: adminStatus !== "failed" && customerStatus !== "failed", results };
-}
-
-function emailStatusFromResult(result) {
-  if (!result || result.skipped) return "skipped";
-  if (result.ok === false) return "failed";
-  return "sent";
-}
-
-function emailErrorSummary(results) {
-  const labels = {
-    admin: "Admin",
-    customer: "Cliente"
-  };
-  return Object.entries(results || {})
-    .map(([kind, result]) => {
-      if (!result || result.ok !== false) return "";
-      return `${labels[kind] || kind}: ${cleanText(result.message).slice(0, 220)}`;
-    })
-    .filter(Boolean)
-    .join(" | ");
-}
-
-async function updateOrderEmailStatus(orderId, { admin = "pending", customer = "pending", error = "" } = {}) {
-  if (!orderId) return;
-  const sentAt = admin === "sent" || customer === "sent" ? now() : "";
-  await dbRun(`
-    UPDATE orders
-    SET admin_email_status = ?,
-        customer_email_status = ?,
-        email_error = ?,
-        email_sent_at = ?,
-        updated_at = ?
-    WHERE id = ?
-  `, [
-    cleanText(admin),
-    cleanText(customer),
-    cleanText(error).slice(0, 1000),
-    sentAt,
-    now(),
-    orderId
-  ]);
-}
-
-async function markOrderEmailFailed(orderId, error) {
-  await updateOrderEmailStatus(orderId, {
-    admin: "failed",
-    customer: "failed",
-    error: friendlyEmailProviderError(error?.message || error || "No se pudo enviar el correo.")
-  });
+  return { ok: !error, results };
 }
 
 function paypalConfigured() {
   return Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
 }
 
-function paypalBaseUrl() {
+function paypalMode() {
   return process.env.PAYPAL_MODE === "live"
+    ? "live"
+    : "sandbox";
+}
+
+function paypalBaseUrl() {
+  return paypalMode() === "live"
     ? "https://api-m.paypal.com"
     : "https://api-m.sandbox.paypal.com";
 }
@@ -2214,13 +2190,6 @@ function validateProductionConfig() {
     missing.push("ADMIN_PASSWORD_HASH bcrypt valido");
   }
   if (!process.env.PUBLIC_BASE_URL || /localhost|127\.0\.0\.1/.test(process.env.PUBLIC_BASE_URL)) missing.push("PUBLIC_BASE_URL real");
-  if (process.env.RESEND_FROM_EMAIL && !normalizeResendEmailField(process.env.RESEND_FROM_EMAIL)) missing.push("RESEND_FROM_EMAIL valido");
-  if ((process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL) && !normalizeResendEmailField(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL)) {
-    missing.push("RESEND_TO_EMAIL o STORE_OWNER_EMAIL valido");
-  }
-  if (process.env.RESEND_REPLY_TO_EMAIL && !normalizeResendEmailField(process.env.RESEND_REPLY_TO_EMAIL)) {
-    console.warn("RESEND_REPLY_TO_EMAIL invalido; no bloquea produccion porque es opcional.");
-  }
   if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imagenes persistentes");
   if (!MYSQL_CONNECTION_URL && !process.env.MYSQLHOST && !process.env.MYSQL_HOST) {
     missing.push("MYSQL_URL o variables MYSQL de Railway");
@@ -2241,13 +2210,15 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, store: STORE_NAME, time: now() });
 });
 
-app.get("/api/config", (req, res) => {
+app.get("/api/config", asyncHandler(async (req, res) => {
   res.json({
     storeName: STORE_NAME,
     currency: CURRENCY,
-    paypalEnabled: paypalConfigured()
+    paypalEnabled: paypalConfigured(),
+    paypalMode: paypalConfigured() ? paypalMode() : "",
+    shippingCost: await getShippingCost()
   });
-});
+}));
 
 app.get("/api/banners", asyncHandler(async (req, res) => {
   res.json({ banners: await getStoreBanners() });
@@ -2285,7 +2256,7 @@ app.get("/api/orders/:code", orderLookupLimiter, asyncHandler(async (req, res, n
 app.post("/api/orders/whatsapp", checkoutLimiter, asyncHandler(async (req, res) => {
   const deliveryMethod = normalizeDeliveryMethod(req.body.delivery_method);
   const customer = validateCustomer(req.body.customer || {}, deliveryMethod);
-  const cart = await calculateCart(req.body.items || []);
+  const cart = await calculateCart(req.body.items || [], { deliveryMethod });
   const order = await insertOrder({
     customer,
     cart,
@@ -2297,14 +2268,12 @@ app.post("/api/orders/whatsapp", checkoutLimiter, asyncHandler(async (req, res) 
   });
 
   await decrementStock(cart.items);
-  await syncCustomerFromOrder(order);
-  sendOrderEmail(order).catch((error) => {
-    console.warn(error.message);
-    return markOrderEmailFailed(order.id, error);
-  });
+  await markOrderStockReserved(order.id);
+  const reservedOrder = await getOrderById(order.id);
+  sendOrderEmail(reservedOrder).catch((error) => console.warn(error.message));
   res.status(201).json({
-    order: publicOrder(order),
-    whatsappUrl: getWhatsappUrl(order)
+    order: publicOrder(reservedOrder),
+    whatsappUrl: getWhatsappUrl(reservedOrder)
   });
 }));
 
@@ -2315,7 +2284,7 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
     throw httpError(400, "Para retiro, confirma el pedido por WhatsApp para coordinar directamente.");
   }
   const customer = validateCustomer(req.body.customer || {}, deliveryMethod);
-  const cart = await calculateCart(req.body.items || []);
+  const cart = await calculateCart(req.body.items || [], { deliveryMethod });
 
   const draftOrder = {
     order_code: createOrderCode(),
@@ -2335,11 +2304,9 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
   });
 
   await dbRun("UPDATE orders SET order_code = ?, updated_at = ? WHERE id = ?", [draftOrder.order_code, now(), order.id]);
-  const finalOrder = await getOrderById(order.id);
-  await syncCustomerFromOrder(finalOrder);
 
   res.status(201).json({
-    order: publicOrder(finalOrder),
+    order: publicOrder(await getOrderById(order.id)),
     paypalOrderId: paypalOrder.paypalOrderId,
     approvalUrl: paypalOrder.approvalUrl
   });
@@ -2367,12 +2334,8 @@ app.post("/api/paypal/capture", checkoutLimiter, asyncHandler(async (req, res) =
 
   if (status === "paid") {
     await decrementStock(parseJsonList(order.items_json));
-    const paidOrder = await getOrderById(order.id);
-    await syncCustomerFromOrder(paidOrder);
-    sendOrderEmail(paidOrder).catch((error) => {
-      console.warn(error.message);
-      return markOrderEmailFailed(order.id, error);
-    });
+    await markOrderStockReserved(order.id);
+    sendOrderEmail(await getOrderById(order.id)).catch((error) => console.warn(error.message));
   }
 
   res.json({ order: publicOrder(await getOrderById(order.id)), capture });
@@ -2505,6 +2468,25 @@ app.get("/api/admin/summary", requireAdmin, asyncHandler(async (req, res) => {
   });
 }));
 
+app.get("/api/admin/store-settings", requireAdmin, asyncHandler(async (req, res) => {
+  res.json({
+    shippingCost: await getShippingCost()
+  });
+}));
+
+app.put("/api/admin/store-settings", requireAdmin, asyncHandler(async (req, res) => {
+  const before = await getShippingCost();
+  const shippingCost = await saveShippingCost(req.body.shipping_cost ?? req.body.shippingCost ?? 0);
+  await auditLog(req, {
+    action: "store_settings.update",
+    entityType: "store_settings",
+    entityId: "shipping",
+    summary: `Costo de envío actualizado: $${formatMoney(shippingCost)}`,
+    metadata: { before, after: shippingCost }
+  });
+  res.json({ shippingCost });
+}));
+
 app.get("/api/admin/banners", requireAdmin, asyncHandler(async (req, res) => {
   res.json({ banners: await getStoreBanners({ includeInactive: true }) });
 }));
@@ -2567,7 +2549,7 @@ app.get("/api/admin/analytics", requireAdmin, asyncHandler(async (req, res) => {
     preparing: "Preparando",
     ready: "Listo",
     sent: "Enviado",
-    completed: "Completado",
+    completed: "Entregado",
     cancelled: "Cancelado"
   };
   const productIndex = await getProductPrivateIndex();
@@ -2745,8 +2727,6 @@ app.delete("/api/admin/categories/:id", requireAdmin, asyncHandler(async (req, r
 async function validateAdminProductInput(body) {
   const name = cleanText(body.name);
   if (name.length < 2) throw httpError(400, "El producto necesita nombre.");
-  const brandName = cleanText(body.brand_name || body.brand || "");
-  if (brandName.length > 120) throw httpError(400, "La marca debe tener máximo 120 caracteres.");
 
   const categoryId = Number(body.category_id || 0);
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
@@ -2755,13 +2735,13 @@ async function validateAdminProductInput(body) {
   const category = await dbGet("SELECT id FROM categories WHERE id = ?", [categoryId]);
   if (!category) throw httpError(400, "La categoría seleccionada no existe.");
 
-  const price = money(body.price);
+  const price = moneyInput(body.price);
   if (!Number.isFinite(price) || price <= 0) {
     throw httpError(400, "El precio de venta debe ser mayor a 0.");
   }
   if (price > 99999) throw httpError(400, "El precio de venta supera el límite permitido.");
 
-  const costPrice = money(body.cost_price);
+  const costPrice = moneyInput(body.cost_price);
   if (!Number.isFinite(costPrice) || costPrice < 0) {
     throw httpError(400, "El precio de compra no puede ser negativo.");
   }
@@ -2781,14 +2761,13 @@ async function validateAdminProductInput(body) {
   const imageZoom = clampImageZoom(body.image_zoom);
 
   const promoType = normalizePromoType(body.promo_type);
-  const comparePrice = promoType === "discount" ? money(body.compare_price) : 0;
+  const comparePrice = promoType === "discount" ? moneyInput(body.compare_price) : 0;
   if (promoType === "discount" && (!Number.isFinite(comparePrice) || comparePrice <= price)) {
     throw httpError(400, "El precio antes del descuento debe ser mayor al precio de venta.");
   }
 
   return {
     name,
-    brandName,
     categoryId,
     price,
     costPrice,
@@ -2810,7 +2789,6 @@ app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
 app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
   const {
     name,
-    brandName,
     categoryId,
     price,
     costPrice,
@@ -2826,15 +2804,14 @@ app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
   const slug = await ensureUniqueSlug("products", name);
   const result = await dbRun(`
     INSERT INTO products (
-      category_id, name, brand_name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
+      category_id, name, slug, description, price, cost_price, compare_price, stock, sku, image_url,
       image_fit, image_position_x, image_position_y, image_zoom,
       sizes_json, colors_json, promo_type, promo_label, active, featured, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     categoryId,
     name,
-    brandName,
     slug,
     cleanText(req.body.description),
     price,
@@ -2873,7 +2850,6 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
   if (!current) return next(httpError(404, "Producto no encontrado."));
   const {
     name,
-    brandName,
     categoryId,
     price,
     costPrice,
@@ -2889,14 +2865,13 @@ app.put("/api/admin/products/:id", requireAdmin, asyncHandler(async (req, res, n
   const slug = await ensureUniqueSlug("products", name, id);
   await dbRun(`
     UPDATE products
-    SET category_id = ?, name = ?, brand_name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
+    SET category_id = ?, name = ?, slug = ?, description = ?, price = ?, cost_price = ?, compare_price = ?, stock = ?, sku = ?,
         image_url = ?, image_fit = ?, image_position_x = ?, image_position_y = ?, image_zoom = ?,
         sizes_json = ?, colors_json = ?, promo_type = ?, promo_label = ?, active = ?, featured = ?, updated_at = ?
     WHERE id = ?
   `, [
     categoryId,
     name,
-    brandName,
     slug,
     cleanText(req.body.description),
     price,
@@ -2979,51 +2954,42 @@ app.get("/api/admin/cloudinary/status", requireAdmin, (req, res) => {
   });
 });
 
-app.get("/api/admin/email/status", requireAdmin, (req, res) => {
-  const fromRaw = cleanText(process.env.RESEND_FROM_EMAIL);
-  const ownerRaw = cleanText(process.env.RESEND_TO_EMAIL || process.env.STORE_OWNER_EMAIL);
-  const replyToRaw = cleanText(process.env.RESEND_REPLY_TO_EMAIL);
-  res.json({
-    configured: resendConfigured(),
-    apiKeyConfigured: Boolean(cleanText(process.env.RESEND_API_KEY)),
-    fromConfigured: Boolean(fromRaw),
-    ownerConfigured: Boolean(ownerRaw),
-    replyToConfigured: Boolean(replyToRaw),
-    fromValid: !fromRaw || Boolean(normalizeResendEmailField(fromRaw)),
-    ownerValid: !ownerRaw || Boolean(normalizeResendEmailField(ownerRaw)),
-    replyToValid: !replyToRaw || Boolean(normalizeResendEmailField(replyToRaw)),
-    fromEmail: maskValue(fromRaw, 2, 10),
-    ownerEmail: maskValue(ownerRaw, 2, 10),
-    replyToEmail: maskValue(replyToRaw, 2, 10)
-  });
-});
+app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
+  const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC")).map(publicOrder);
+  res.json({ orders });
+}));
 
 app.get("/api/admin/customers", requireAdmin, asyncHandler(async (req, res) => {
-  const customers = (await dbAll(`
-    SELECT *
-    FROM customers
-    ORDER BY last_order_at DESC, updated_at DESC
-  `)).map(publicCustomer);
-  res.json({ customers });
+  const orders = await dbAll("SELECT * FROM orders ORDER BY created_at DESC");
+  res.json({ customers: customersFromOrders(orders) });
 }));
 
 app.get("/api/admin/customers/export", requireAdmin, asyncHandler(async (req, res) => {
-  const customers = (await dbAll(`
-    SELECT *
-    FROM customers
-    ORDER BY last_order_at DESC, updated_at DESC
-  `)).map(publicCustomer);
-  const filename = `gstore-clientes-${new Date().toISOString().slice(0, 10)}.csv`;
+  const orders = await dbAll("SELECT * FROM orders ORDER BY created_at DESC");
+  const customers = customersFromOrders(orders);
+  const rows = [
+    ["Nombre", "Telefono", "Correo", "Ciudad", "Direccion", "Pedidos", "Total comprado", "Ultimo pedido", "Fecha ultimo pedido"],
+    ...customers.map((customer) => [
+      customer.name,
+      customer.phone,
+      customer.email,
+      customer.city,
+      customer.address,
+      customer.order_count,
+      formatMoney(customer.total_spent),
+      customer.last_order_code,
+      customer.last_order_at
+    ])
+  ];
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(customersToCsv(customers));
+  res.setHeader("Content-Disposition", `attachment; filename="gstore-clientes-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(`\ufeff${csv}`);
 }));
 
-app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
-  const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC"))
-    .map((order) => publicOrder(order, { includeAdmin: true }));
-  res.json({ orders });
-}));
+app.get("/api/admin/email/status", requireAdmin, (req, res) => {
+  res.json(emailConfigStatus());
+});
 
 app.get("/api/admin/audit-logs", requireAdmin, asyncHandler(async (req, res) => {
   const limit = Math.max(1, Math.min(100, Number(req.query.limit || 50)));
@@ -3043,14 +3009,20 @@ app.get("/api/admin/audit-logs", requireAdmin, asyncHandler(async (req, res) => 
 
 app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req, res, next) => {
   const id = Number(req.params.id);
-  const allowed = ["new", "waiting_payment", "paid", "preparing", "ready", "sent", "completed", "cancelled"];
   const status = cleanText(req.body.status);
-  if (!allowed.includes(status)) throw httpError(400, "Estado no válido.");
+  if (!ORDER_STATUSES.includes(status)) throw httpError(400, "Estado no válido.");
   const order = await getOrderById(id);
   if (!order) return next(httpError(404, "Pedido no encontrado."));
+  if (status === order.status) {
+    return res.json({ order: publicOrder(order) });
+  }
+  if (isFinalOrderStatus(order.status)) {
+    throw httpError(409, "Este pedido ya está cerrado y no se puede cambiar.");
+  }
+
+  const stockRestored = status === "cancelled" ? await restoreOrderStockIfNeeded(order) : false;
   await dbRun("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?", [status, now(), id]);
   const updatedOrder = await getOrderById(id);
-  await syncCustomerFromOrder(updatedOrder);
   await auditLog(req, {
     action: "order.status_update",
     entityType: "order",
@@ -3059,35 +3031,17 @@ app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req,
     metadata: {
       order_code: updatedOrder.order_code,
       before: { status: order.status, payment_status: order.payment_status },
-      after: { status: updatedOrder.status, payment_status: updatedOrder.payment_status }
+      after: { status: updatedOrder.status, payment_status: updatedOrder.payment_status },
+      stock_restored: stockRestored
     }
   });
-  res.json({ order: publicOrder(updatedOrder, { includeAdmin: true }) });
-}));
-
-app.post("/api/admin/orders/:id/email", requireAdmin, asyncHandler(async (req, res, next) => {
-  const order = await getOrderById(Number(req.params.id));
-  if (!order) return next(httpError(404, "Pedido no encontrado."));
-  const email = await sendOrderEmail(order);
-  const updatedOrder = await getOrderById(order.id);
-  await auditLog(req, {
-    action: "order.email_resend",
-    entityType: "order",
-    entityId: String(order.id),
-    summary: `Correo reenviado para ${order.order_code}`,
-    metadata: {
-      order_code: order.order_code,
-      admin_email_status: updatedOrder.admin_email_status,
-      customer_email_status: updatedOrder.customer_email_status,
-      email_error: updatedOrder.email_error || ""
-    }
-  });
-  res.json({ order: publicOrder(updatedOrder, { includeAdmin: true }), email });
+  res.json({ order: publicOrder(updatedOrder) });
 }));
 
 app.get("/api/admin/orders/:id/whatsapp", requireAdmin, asyncHandler(async (req, res, next) => {
   const order = await getOrderById(Number(req.params.id));
   if (!order) return next(httpError(404, "Pedido no encontrado."));
+  if (isFinalOrderStatus(order.status)) throw httpError(409, "Este pedido ya está cerrado.");
   res.json({ whatsappUrl: getWhatsappUrl(order) });
 }));
 
@@ -3106,6 +3060,9 @@ app.use((err, req, res, next) => {
       method: req.method,
       path: req.path,
       stack: err.stack
+    });
+    sendServerErrorAlert(err, req, status).catch((alertError) => {
+      console.warn("No se pudo enviar alerta de error:", cleanText(alertError.message || ""));
     });
   }
   const showAdminDetail = req.path.startsWith("/api/admin/") && req.admin;

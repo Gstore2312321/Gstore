@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 470" role="img" aria-labelledby="title desc">
+  <title id="title">G Store</title>
+  <desc id="desc">Logo de G Store con monograma G, gancho dorado, wordmark y tagline.</desc>
+  <defs>
+    <linearGradient id="rose" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#e4868d"/>
+      <stop offset="1" stop-color="#c95864"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#09223d" flood-opacity=".10"/>
+    </filter>
+  </defs>
+
+  <g opacity=".55">
+    <circle cx="690" cy="56" r="3.2" fill="#c79a36"/>
+    <circle cx="722" cy="56" r="3.2" fill="#c79a36"/>
+    <circle cx="754" cy="56" r="3.2" fill="#c79a36"/>
+    <circle cx="690" cy="88" r="3.2" fill="#c79a36"/>
+    <circle cx="722" cy="88" r="3.2" fill="#c79a36"/>
+    <circle cx="754" cy="88" r="3.2" fill="#c79a36"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M409 41c-72 0-124 52-124 121 0 71 53 123 124 123 45 0 82-19 104-52h-86v-61h161v36c-20 82-86 134-179 134-110 0-194-76-194-180C215 59 299-17 409-17c75 0 139 36 170 96h-83c-20-25-49-38-87-38Z" fill="#09223d" transform="translate(0 24) scale(.78) translate(116 0)"/>
+    <path d="M475 139h73v113c-17 19-43 35-73 43V139Z" fill="url(#rose)"/>
+    <path d="M407 93c0-18 14-32 32-32s32 14 32 32c0 14-8 24-20 31-8 5-12 11-12 21v13" fill="none" stroke="#c79a36" stroke-width="14" stroke-linecap="round"/>
+    <path d="M438 158 326 216M441 158l113 58" fill="none" stroke="#c79a36" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="700">
+    <text x="154" y="374" font-size="82" fill="#d26772" letter-spacing="8">G</text>
+    <text x="270" y="374" font-size="82" fill="#09223d" letter-spacing="17">STORE</text>
+  </g>
+
+  <g fill="none" stroke="#c79a36" stroke-width="4" stroke-linecap="round">
+    <path d="M112 412h48"/>
+    <path d="M660 412h48"/>
+  </g>
+  <text x="410" y="419" text-anchor="middle" font-family="Outfit, Calibri, Arial, sans-serif" font-size="20" font-weight="800" fill="#09223d" letter-spacing="9">TU ESTILO. TODOS LOS DIAS.</text>
+</svg>
