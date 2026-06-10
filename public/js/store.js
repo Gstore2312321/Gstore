@@ -629,7 +629,10 @@ function renderProductDetail() {
           <button type="button" data-detail-quantity="1" aria-label="Sumar cantidad">+</button>
         </div>
       </div>
-      <button class="button primary" id="addDetailToCart" ${soldOut ? "disabled" : ""} type="button">${soldOut ? "Agotado" : "Agregar al carrito"}</button>
+      <div class="detail-actions">
+        <button class="button primary" id="addDetailToCart" ${soldOut ? "disabled" : ""} type="button">${soldOut ? "Agotado" : "Agregar al carrito"}</button>
+        <button class="button ghost" id="viewCartFromDetail" type="button">Ver carrito</button>
+      </div>
     </div>
   `;
 
@@ -649,7 +652,22 @@ function renderProductDetail() {
   });
 
   els.productDetail.querySelector("#addDetailToCart")?.addEventListener("click", () => {
-    addToCart(product, { size: detail.size, color: detail.color }, detail.quantity, { silent: true });
+    const result = addToCart(product, { size: detail.size, color: detail.color }, detail.quantity, {
+      toastPrefix: "Agregado",
+      keepShopping: true
+    });
+    if (!result?.added) return;
+    const addButton = els.productDetail.querySelector("#addDetailToCart");
+    if (!addButton) return;
+    addButton.textContent = result.capped ? "Stock maximo en carrito" : "Agregado al carrito";
+    addButton.classList.add("is-confirmed");
+    window.setTimeout(() => {
+      addButton.textContent = "Agregar al carrito";
+      addButton.classList.remove("is-confirmed");
+    }, 1100);
+  });
+
+  els.productDetail.querySelector("#viewCartFromDetail")?.addEventListener("click", () => {
     closeProduct();
     openCart();
   });
@@ -674,11 +692,19 @@ function renderOptionGroup(label, key, values, selected) {
 function addToCart(product, options, quantity, settings = {}) {
   if (product.stock <= 0) {
     showToast("Ese producto está agotado.");
-    return;
+    return { added: false, capped: false };
   }
   const key = cartKey(product.id, options.size, options.color);
   const current = state.cart.find((line) => line.key === key);
-  const nextQuantity = Math.min(product.stock, (current?.quantity || 0) + quantity);
+  const currentQuantity = current?.quantity || 0;
+  const requestedQuantity = Math.max(1, Number(quantity) || 1);
+  const nextQuantity = Math.min(product.stock, currentQuantity + requestedQuantity);
+  const addedQuantity = Math.max(0, nextQuantity - currentQuantity);
+
+  if (!addedQuantity) {
+    showToast("Ya agregaste todo el stock disponible de este producto.");
+    return { added: false, capped: true };
+  }
 
   if (current) {
     current.quantity = nextQuantity;
@@ -696,7 +722,7 @@ function addToCart(product, options, quantity, settings = {}) {
       stock: product.stock,
       size: options.size || "",
       color: options.color || "",
-      quantity: Math.max(1, Math.min(product.stock, quantity))
+      quantity: Math.max(1, Math.min(product.stock, requestedQuantity))
     });
   }
 
@@ -704,8 +730,14 @@ function addToCart(product, options, quantity, settings = {}) {
   state.checkoutStage = "review";
   renderCart();
   if (!settings.silent) {
-    showToast(`${product.name} agregado al carrito.`);
+    const suffix = nextQuantity >= product.stock && product.stock > 1 ? " Stock maximo en carrito." : "";
+    const prefix = settings.toastPrefix || product.name;
+    const message = settings.keepShopping
+      ? `${prefix}. Puedes seguir viendo productos.${suffix}`
+      : `${product.name} agregado al carrito.${suffix}`;
+    showToast(message);
   }
+  return { added: true, capped: nextQuantity >= product.stock, quantity: addedQuantity };
 }
 
 function getDiscountPercent(product) {
@@ -831,7 +863,6 @@ function continueToCheckout() {
   if (navigator.vibrate) navigator.vibrate(10);
   requestAnimationFrame(() => {
     els.checkoutForm?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-    els.checkoutForm?.elements.name?.focus({ preventScroll: true });
   });
 }
 
