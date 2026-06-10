@@ -4,6 +4,8 @@ const state = {
   products: [],
   banners: [],
   cart: loadCart(),
+  productsPagination: { page: 1, limit: 48, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
+  productsLoading: false,
   activeCategory: "all",
   activeSize: "all",
   sortOrder: "default",
@@ -19,6 +21,7 @@ const DETAIL_IMAGE_WIDTHS = [420, 640, 820, 1100];
 const CART_IMAGE_WIDTHS = [96, 140, 180];
 const SIZE_NONE = "__none";
 let catalogFilters = null;
+let catalogSearchTimer = null;
 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
@@ -27,6 +30,8 @@ const els = {
   clearCatalogFilters: document.querySelector("#clearCatalogFilters"),
   storeBanners: document.querySelector("#storeBanners"),
   productGrid: document.querySelector("#productGrid"),
+  catalogPagination: document.querySelector("#catalogPagination"),
+  loadMoreProducts: document.querySelector("#loadMoreProducts"),
   emptyState: document.querySelector("#emptyState"),
   searchInput: document.querySelector("#searchInput"),
   cartCount: document.querySelector("#cartCount"),
@@ -83,8 +88,7 @@ function bindEvents() {
 
   els.searchInput?.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
-    renderCategories();
-    renderProducts();
+    debounceCatalogLoad();
   });
 
   els.sizeFilter?.addEventListener("change", (event) => {
@@ -95,7 +99,7 @@ function bindEvents() {
 
   els.sortFilter?.addEventListener("change", (event) => {
     state.sortOrder = event.target.value || "default";
-    renderProducts();
+    loadProducts({ reset: true }).catch((error) => showToast(error.message || "No pudimos ordenar el catÃ¡logo."));
   });
 
   els.clearCatalogFilters?.addEventListener("click", () => {
@@ -106,8 +110,11 @@ function bindEvents() {
     if (els.searchInput) els.searchInput.value = "";
     if (els.sizeFilter) els.sizeFilter.value = "all";
     if (els.sortFilter) els.sortFilter.value = "default";
-    renderCategories();
-    renderProducts();
+    loadProducts({ reset: true }).catch((error) => showToast(error.message || "No pudimos limpiar filtros."));
+  });
+
+  els.loadMoreProducts?.addEventListener("click", () => {
+    loadProducts({ append: true }).catch((error) => showToast(error.message || "No pudimos cargar mÃ¡s productos."));
   });
 
   document.addEventListener("click", (event) => {
@@ -177,25 +184,74 @@ function handleInternalScroll(event) {
 
 async function loadData() {
   try {
-    const [config, categories, products, banners] = await Promise.all([
+    const [config, categories, banners] = await Promise.all([
       api("/api/config"),
       api("/api/categories"),
-      api("/api/products"),
       api("/api/banners")
     ]);
     state.config = { ...state.config, ...config, shippingCost: Number(config.shippingCost || 0) };
     state.categories = categories.categories || [];
-    state.products = products.products || [];
     state.banners = banners.banners || [];
     syncCategoryFromHash();
     renderStoreBanners();
-    renderCategories();
-    renderCatalogOptions();
-    renderProducts();
+    await loadProducts({ reset: true });
     renderCheckoutState();
   } catch (error) {
     showToast(error.message || "No pudimos cargar la tienda.");
   }
+}
+
+async function loadProducts(options = {}) {
+  if (state.productsLoading) return;
+  const append = Boolean(options.append);
+  const reset = Boolean(options.reset);
+  const nextPage = append ? Number(state.productsPagination.page || 1) + 1 : 1;
+  state.productsLoading = true;
+  renderCatalogPagination();
+  try {
+    const data = await api(buildProductListUrl(nextPage));
+    const incoming = data.products || [];
+    state.products = append && !reset ? [...state.products, ...incoming] : incoming;
+    state.productsPagination = normalizeProductPagination(data.pagination, nextPage);
+    renderCategories();
+    renderCatalogOptions();
+    renderProducts();
+  } finally {
+    state.productsLoading = false;
+    renderCatalogPagination();
+  }
+}
+
+function buildProductListUrl(page = 1) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", String(state.productsPagination.limit || 48));
+  if (state.search) params.set("q", state.search);
+  if (state.activeCategory && state.activeCategory !== "all") params.set("category", state.activeCategory);
+  if (state.sortOrder && state.sortOrder !== "default") params.set("sort", state.sortOrder);
+  return `/api/products?${params.toString()}`;
+}
+
+function normalizeProductPagination(meta, fallbackPage = 1) {
+  const limit = Math.max(1, Number(meta?.limit || state.productsPagination.limit || 48));
+  const total = Math.max(0, Number(meta?.total || 0));
+  const totalPages = Math.max(1, Number(meta?.totalPages || Math.ceil(total / limit) || 1));
+  const page = Math.min(Math.max(1, Number(meta?.page || fallbackPage || 1)), totalPages);
+  return {
+    page,
+    limit,
+    total,
+    totalPages,
+    hasNext: Boolean(meta?.hasNext ?? page < totalPages),
+    hasPrev: Boolean(meta?.hasPrev ?? page > 1)
+  };
+}
+
+function debounceCatalogLoad() {
+  window.clearTimeout(catalogSearchTimer);
+  catalogSearchTimer = window.setTimeout(() => {
+    loadProducts({ reset: true }).catch((error) => showToast(error.message || "No pudimos buscar productos."));
+  }, 260);
 }
 
 async function api(url, options = {}) {
@@ -395,7 +451,7 @@ function selectCategory(slug, options = {}) {
   const exists = categorySlug === "all" || state.categories.some((category) => category.slug === categorySlug);
   state.activeCategory = exists ? categorySlug : "all";
   syncCategoryButtons();
-  renderProducts();
+  loadProducts({ reset: true }).catch((error) => showToast(error.message || "No pudimos filtrar productos."));
   if (options.scroll) {
     document.getElementById("catalogo")?.scrollIntoView({
       behavior: prefersReducedMotion() ? "auto" : "smooth",
@@ -432,6 +488,13 @@ function categoryFilterButton(category, count) {
 }
 
 function categoryVisibleCount(categorySlug) {
+  if (!state.search && state.activeSize === "all") {
+    if (categorySlug === "all") {
+      return state.categories.reduce((sum, category) => sum + Number(category.product_count || 0), 0);
+    }
+    const category = state.categories.find((item) => item.slug === categorySlug);
+    if (category) return Number(category.product_count || 0);
+  }
   if (catalogFilters) return catalogFilters.visibleCount(state.products, categorySlug);
   return 0;
 }
@@ -495,6 +558,7 @@ function renderProducts() {
 
   els.productGrid.innerHTML = products.map(productCard).join("");
   els.emptyState.hidden = products.length > 0;
+  renderCatalogPagination();
 
   const shouldAnimateCards = !state.productsRenderedOnce && products.length > 0 && products.length <= 12;
   state.productsRenderedOnce = true;
@@ -508,6 +572,15 @@ function renderProducts() {
       stagger: 0.018
     });
   }
+}
+
+function renderCatalogPagination() {
+  if (!els.catalogPagination || !els.loadMoreProducts) return;
+  const meta = state.productsPagination || {};
+  const hasNext = Boolean(meta.hasNext);
+  els.catalogPagination.hidden = !hasNext && !state.productsLoading;
+  els.loadMoreProducts.disabled = state.productsLoading || !hasNext;
+  els.loadMoreProducts.textContent = state.productsLoading ? "Cargando..." : "Ver mas productos";
 }
 
 function productMatchesCategory(product, categorySlug = "all") {
@@ -548,7 +621,7 @@ function compareProductNames(a, b) {
 function productCard(product, index = 0) {
   const needsChoice = product.sizes.length > 0 || product.colors.length > 0;
   const soldOut = product.stock <= 0;
-  const promoLabel = getProductPromoLabel(product);
+  const promoLabel = getProductCardPromoLabel(product);
   const displayName = formatProductName(product.name);
   const variants = [
     product.sizes.length ? product.sizes.slice(0, 4).map((size) => `<span class="variant-pill">${escapeHtml(size)}</span>`).join("") : "",
@@ -617,7 +690,7 @@ function renderProductDetail() {
           ${renderPriceStack(product, "detail-price")}
           <span class="detail-stock">${soldOut ? "Agotado" : `${product.stock} disponible${product.stock === 1 ? "" : "s"}`}</span>
         </div>
-        ${getProductPromoLabel(product) ? `<div class="detail-promo">${escapeHtml(getProductPromoLabel(product))}${getDiscountPercent(product) > 0 ? ` - ${getDiscountPercent(product)}% menos` : ""}</div>` : ""}
+        ${getProductDetailPromoText(product) ? `<div class="detail-promo">${escapeHtml(getProductDetailPromoText(product))}</div>` : ""}
       </div>
       ${renderOptionGroup("Talla", "size", product.sizes, detail.size)}
       ${renderOptionGroup("Color", "color", product.colors, detail.color)}
@@ -631,7 +704,7 @@ function renderProductDetail() {
       </div>
       <div class="detail-actions">
         <button class="button primary" id="addDetailToCart" ${soldOut ? "disabled" : ""} type="button">${soldOut ? "Agotado" : "Agregar al carrito"}</button>
-        <button class="button ghost" id="viewCartFromDetail" type="button">Ver carrito</button>
+        <button class="button ghost" id="viewCartFromDetail" type="button">Revisar pedido</button>
       </div>
     </div>
   `;
@@ -652,14 +725,11 @@ function renderProductDetail() {
   });
 
   els.productDetail.querySelector("#addDetailToCart")?.addEventListener("click", () => {
-    const result = addToCart(product, { size: detail.size, color: detail.color }, detail.quantity, {
-      toastPrefix: "Agregado",
-      keepShopping: true
-    });
+    const result = addToCart(product, { size: detail.size, color: detail.color }, detail.quantity, { silent: true });
     if (!result?.added) return;
     const addButton = els.productDetail.querySelector("#addDetailToCart");
     if (!addButton) return;
-    addButton.textContent = result.capped ? "Stock maximo en carrito" : "Agregado al carrito";
+    addButton.textContent = result.capped ? "Stock maximo" : "Listo en carrito";
     addButton.classList.add("is-confirmed");
     window.setTimeout(() => {
       addButton.textContent = "Agregar al carrito";
@@ -702,7 +772,7 @@ function addToCart(product, options, quantity, settings = {}) {
   const addedQuantity = Math.max(0, nextQuantity - currentQuantity);
 
   if (!addedQuantity) {
-    showToast("Ya agregaste todo el stock disponible de este producto.");
+    showToast("Ya tienes el stock disponible en tu carrito.");
     return { added: false, capped: true };
   }
 
@@ -729,13 +799,10 @@ function addToCart(product, options, quantity, settings = {}) {
   saveCart();
   state.checkoutStage = "review";
   renderCart();
+  pulseCartButton();
   if (!settings.silent) {
-    const suffix = nextQuantity >= product.stock && product.stock > 1 ? " Stock maximo en carrito." : "";
-    const prefix = settings.toastPrefix || product.name;
-    const message = settings.keepShopping
-      ? `${prefix}. Puedes seguir viendo productos.${suffix}`
-      : `${product.name} agregado al carrito.${suffix}`;
-    showToast(message);
+    const suffix = nextQuantity >= product.stock && product.stock > 1 ? " Es el maximo disponible." : "";
+    showToast(`Listo, esta en tu carrito.${suffix}`);
   }
   return { added: true, capped: nextQuantity >= product.stock, quantity: addedQuantity };
 }
@@ -762,15 +829,40 @@ function getProductPromoLabel(product) {
   return "";
 }
 
+function getProductCardPromoLabel(product) {
+  const discountPercent = getDiscountPercent(product);
+  if (discountPercent > 0 || product.promo_type === "discount") return `${discountPercent || ""}% menos`.trim();
+  if (product.promo_type === "last_units" || product.stock <= 2) return "Ultimas unidades";
+  if (product.promo_type === "new_arrival") return "Nuevo";
+  return product.promo_label ? "Promo" : "";
+}
+
+function getProductDetailPromoText(product) {
+  const custom = String(product.promo_label || "").trim();
+  if (custom) return compactPromoText(custom);
+  const discountPercent = getDiscountPercent(product);
+  if (discountPercent > 0 || product.promo_type === "discount") return `${discountPercent || ""}% menos por tiempo limitado`.trim();
+  if (product.promo_type === "last_units" || product.stock <= 2) return "Ultimas unidades disponibles";
+  if (product.promo_type === "new_arrival") return "Recien llegado";
+  return "";
+}
+
+function compactPromoText(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const compact = text
+    .replace(/^promo especial descuento\s*/i, "Promo especial ")
+    .replace(/^descuento\s*/i, "")
+    .replace(/\s*-\s*\d+%\s*menos\s*$/i, "")
+    .trim();
+  return compact || text;
+}
+
 function renderPriceStack(product, className = "") {
   const hasDiscount = Number(product.compare_price || 0) > Number(product.price || 0);
-  const discountPercent = getDiscountPercent(product);
-  const savings = getDiscountSavings(product);
   return `
     <span class="price-stack ${className}">
       ${hasDiscount ? `<small class="was-price">Antes ${formatCurrency(product.compare_price)}</small>` : ""}
       <strong>${formatCurrency(product.price)}</strong>
-      ${hasDiscount ? `<span class="saving-price">Ahorras ${formatCurrency(savings)} · ${discountPercent}% menos</span>` : ""}
     </span>
   `;
 }
@@ -1112,7 +1204,15 @@ function showToast(message) {
   els.toast.textContent = message;
   els.toast.classList.add("is-visible");
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => els.toast.classList.remove("is-visible"), 3200);
+  showToast.timer = setTimeout(() => els.toast.classList.remove("is-visible"), 1900);
+}
+
+function pulseCartButton() {
+  const cartButton = document.querySelector("#openCartButton");
+  if (!cartButton) return;
+  cartButton.classList.remove("is-bumped");
+  void cartButton.offsetWidth;
+  cartButton.classList.add("is-bumped");
 }
 
 function normalizeText(value) {

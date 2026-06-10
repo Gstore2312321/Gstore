@@ -396,6 +396,44 @@ function cleanText(value, fallback = "") {
   return String(value || fallback).trim();
 }
 
+function cleanSearchText(value) {
+  return cleanText(value).replace(/\s+/g, " ").slice(0, 120);
+}
+
+function paginatedRequest(query = {}, options = {}) {
+  const defaultLimit = Number(options.defaultLimit || 50);
+  const maxLimit = Number(options.maxLimit || 100);
+  const page = Math.max(1, Math.floor(Number(query.page || 1)) || 1);
+  const requestedLimit = Math.floor(Number(query.limit || defaultLimit)) || defaultLimit;
+  const limit = Math.max(1, Math.min(maxLimit, requestedLimit));
+  return {
+    page,
+    limit,
+    offset: (page - 1) * limit
+  };
+}
+
+function paginationMeta({ page, limit }, total) {
+  const safeTotal = Math.max(0, Number(total || 0));
+  const totalPages = Math.max(1, Math.ceil(safeTotal / limit));
+  return {
+    page,
+    limit,
+    total: safeTotal,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1
+  };
+}
+
+function likeParam(value) {
+  return `%${cleanSearchText(value).replace(/[%_\\]/g, "\\$&")}%`;
+}
+
+function limitOffsetClause(pagination) {
+  return `LIMIT ${Number(pagination.limit)} OFFSET ${Number(pagination.offset)}`;
+}
+
 function cleanEnvValue(value, fallback = "") {
   let text = cleanText(value);
   if (!text) text = cleanText(fallback);
@@ -550,6 +588,7 @@ function categoryFromRow(row) {
     slug: row.slug,
     description: row.description || "",
     active: Boolean(row.active),
+    product_count: Number(row.product_count || 0),
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -775,6 +814,20 @@ async function ensureColumn(table, column, definition) {
   }
 }
 
+async function ensureIndex(table, indexName, definition) {
+  const rows = await dbAll(`
+    SELECT INDEX_NAME
+    FROM INFORMATION_SCHEMA.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND INDEX_NAME = ?
+    LIMIT 1
+  `, [table, indexName]);
+  if (!rows.length) {
+    await dbRun(`ALTER TABLE \`${table}\` ADD INDEX \`${indexName}\` (${definition})`);
+  }
+}
+
 async function ensureSchema() {
   await dbRun(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -920,6 +973,11 @@ async function ensureSchema() {
   await ensureColumn("products", "image_position_x", "image_position_x DECIMAL(5,2) NOT NULL DEFAULT 50");
   await ensureColumn("products", "image_position_y", "image_position_y DECIMAL(5,2) NOT NULL DEFAULT 50");
   await ensureColumn("products", "image_zoom", "image_zoom DECIMAL(4,2) NOT NULL DEFAULT 1");
+  await ensureIndex("orders", "orders_created_at_index", "created_at");
+  await ensureIndex("orders", "orders_status_created_index", "status, created_at");
+  await ensureIndex("orders", "orders_email_status_index", "admin_email_status, customer_email_status, created_at");
+  await ensureIndex("products", "products_active_updated_index", "active, updated_at");
+  await ensureIndex("products", "products_stock_index", "stock");
 
   await migrateLegacyOrderStockFlags();
 
@@ -1178,16 +1236,89 @@ async function seedData() {
   await seedProductList(importedProducts);
 }
 
-async function getProducts({ includeInactive = false, includePrivate = false } = {}) {
+function productListQuery(options = {}) {
+  const includeInactive = Boolean(options.includeInactive);
+  const search = cleanSearchText(options.search);
+  const status = cleanText(options.status || "all").toLowerCase();
+  const category = cleanText(options.category || "all").toLowerCase();
+  const where = [];
+  const params = [];
+
+  if (!includeInactive) where.push("p.active = 1");
+  if (search) {
+    const term = likeParam(search);
+    where.push("(p.name LIKE ? ESCAPE '\\\\' OR p.sku LIKE ? ESCAPE '\\\\' OR c.name LIKE ? ESCAPE '\\\\' OR p.promo_label LIKE ? ESCAPE '\\\\')");
+    params.push(term, term, term, term);
+  }
+  if (category && category !== "all") {
+    where.push("c.slug = ?");
+    params.push(category);
+  }
+  if (status === "active") where.push("p.active = 1");
+  if (status === "hidden") where.push("p.active = 0");
+  if (status === "low") where.push("p.stock <= 2");
+  if (status === "promo") where.push("(p.promo_type != 'none' OR p.promo_label != '' OR p.compare_price > p.price)");
+
+  const sort = cleanText(options.sort || "default").toLowerCase();
+  let orderBy = "p.featured DESC, p.updated_at DESC, p.id DESC";
+  if (sort === "price-asc") orderBy = "p.price ASC, p.name ASC, p.id DESC";
+  if (sort === "price-desc") orderBy = "p.price DESC, p.name ASC, p.id DESC";
+  if (sort === "name-asc") orderBy = "p.name ASC, p.id DESC";
+
+  return {
+    whereSql: where.length ? `WHERE ${where.join(" AND ")}` : "",
+    params,
+    orderBy
+  };
+}
+
+async function getProductSummary(options = {}) {
+  const includeInactive = Boolean(options.includeInactive);
+  const baseWhere = includeInactive ? "" : "WHERE active = 1";
+  const [total, active, hidden, lowStock, promos] = await Promise.all([
+    dbGet(`SELECT COUNT(*) AS count FROM products ${baseWhere}`),
+    dbGet("SELECT COUNT(*) AS count FROM products WHERE active = 1"),
+    dbGet("SELECT COUNT(*) AS count FROM products WHERE active = 0"),
+    dbGet(`SELECT COUNT(*) AS count FROM products ${includeInactive ? "WHERE" : "WHERE active = 1 AND"} stock <= 2`),
+    dbGet(`SELECT COUNT(*) AS count FROM products ${includeInactive ? "WHERE" : "WHERE active = 1 AND"} (promo_type != 'none' OR promo_label != '' OR compare_price > price)`)
+  ]);
+  return {
+    total: Number(total?.count || 0),
+    active: Number(active?.count || 0),
+    hidden: Number(hidden?.count || 0),
+    lowStock: Number(lowStock?.count || 0),
+    promos: Number(promos?.count || 0)
+  };
+}
+
+async function getProducts({ includeInactive = false, includePrivate = false, pagination = null, search = "", status = "all", category = "all", sort = "default" } = {}) {
+  const listQuery = productListQuery({ includeInactive, search, status, category, sort });
   const sql = `
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
-    ${includeInactive ? "" : "WHERE p.active = 1"}
-    ORDER BY p.featured DESC, p.updated_at DESC, p.id DESC
+    ${listQuery.whereSql}
+    ORDER BY ${listQuery.orderBy}
+    ${pagination ? limitOffsetClause(pagination) : ""}
   `;
-  const rows = await dbAll(sql);
-  return rows.map((row) => productFromRow(row, { includePrivate }));
+  const [rows, totalRow] = await Promise.all([
+    dbAll(sql, listQuery.params),
+    pagination
+      ? dbGet(`
+        SELECT COUNT(*) AS count
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        ${listQuery.whereSql}
+      `, listQuery.params)
+      : Promise.resolve(null)
+  ]);
+  const products = rows.map((row) => productFromRow(row, { includePrivate }));
+  if (!pagination) return products;
+  return {
+    products,
+    pagination: paginationMeta(pagination, totalRow?.count),
+    summary: await getProductSummary({ includeInactive })
+  };
 }
 
 async function getProductPrivateIndex() {
@@ -1218,6 +1349,106 @@ async function getOrderByCode(code) {
 
 async function getOrderById(id) {
   return dbGet("SELECT * FROM orders WHERE id = ?", [id]);
+}
+
+function orderListQuery(options = {}) {
+  const search = cleanSearchText(options.search);
+  const status = cleanText(options.status || "all").toLowerCase();
+  const emailStatus = cleanText(options.emailStatus || "all").toLowerCase();
+  const where = [];
+  const params = [];
+
+  if (search) {
+    const term = likeParam(search);
+    where.push("(order_code LIKE ? ESCAPE '\\\\' OR customer_name LIKE ? ESCAPE '\\\\' OR customer_phone LIKE ? ESCAPE '\\\\' OR customer_email LIKE ? ESCAPE '\\\\' OR customer_city LIKE ? ESCAPE '\\\\')");
+    params.push(term, term, term, term, term);
+  }
+  if (status && status !== "all" && ORDER_STATUSES.includes(status)) {
+    where.push("status = ?");
+    params.push(status);
+  }
+  if (emailStatus && emailStatus !== "all") {
+    const emailStateSql = orderEmailStateSql();
+    where.push(`${emailStateSql} = ?`);
+    params.push(emailStatus);
+  }
+
+  return {
+    whereSql: where.length ? `WHERE ${where.join(" AND ")}` : "",
+    params
+  };
+}
+
+function orderEmailStateSql() {
+  return `CASE
+    WHEN admin_email_status = 'failed' OR customer_email_status = 'failed' THEN 'failed'
+    WHEN admin_email_status = 'pending' OR customer_email_status = 'pending' THEN 'pending'
+    WHEN admin_email_status = 'sent' OR customer_email_status = 'sent' THEN 'sent'
+    WHEN admin_email_status = 'skipped' OR customer_email_status = 'skipped' THEN 'skipped'
+    ELSE 'pending'
+  END`;
+}
+
+async function orderSummary(options = {}) {
+  const listQuery = orderListQuery(options);
+  const rows = await dbAll(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS new_count,
+      SUM(CASE WHEN status IN ('new', 'waiting_payment', 'paid', 'preparing', 'ready', 'sent') THEN 1 ELSE 0 END) AS pending_count,
+      SUM(CASE WHEN status IN ('completed', 'cancelled') THEN 1 ELSE 0 END) AS done_count,
+      COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS visible_total
+    FROM orders
+    ${listQuery.whereSql}
+  `, listQuery.params);
+  const row = rows[0] || {};
+  return {
+    total: Number(row.total || 0),
+    newCount: Number(row.new_count || 0),
+    pendingCount: Number(row.pending_count || 0),
+    doneCount: Number(row.done_count || 0),
+    visibleTotal: money(row.visible_total || 0)
+  };
+}
+
+async function emailSummary(options = {}) {
+  const listQuery = orderListQuery({ search: options.search });
+  const rows = await dbAll(`
+    SELECT email_state, COUNT(*) AS count
+    FROM (
+      SELECT ${orderEmailStateSql()} AS email_state
+      FROM orders
+      ${listQuery.whereSql}
+    ) email_orders
+    GROUP BY email_state
+  `, listQuery.params);
+  const summary = { total: 0, failed: 0, pending: 0, sent: 0, skipped: 0 };
+  rows.forEach((row) => {
+    const key = row.email_state || "pending";
+    summary[key] = Number(row.count || 0);
+    summary.total += Number(row.count || 0);
+  });
+  return summary;
+}
+
+async function paginatedOrders(options = {}) {
+  const pagination = options.pagination || paginatedRequest({}, { defaultLimit: 50, maxLimit: 100 });
+  const listQuery = orderListQuery(options);
+  const [rows, totalRow] = await Promise.all([
+    dbAll(`
+      SELECT *
+      FROM orders
+      ${listQuery.whereSql}
+      ORDER BY created_at DESC, id DESC
+      ${limitOffsetClause(pagination)}
+    `, listQuery.params),
+    dbGet(`SELECT COUNT(*) AS count FROM orders ${listQuery.whereSql}`, listQuery.params)
+  ]);
+  return {
+    orders: rows.map(publicOrder),
+    pagination: paginationMeta(pagination, totalRow?.count),
+    summary: options.emailStatus ? await emailSummary({ search: options.search }) : await orderSummary(options)
+  };
 }
 
 function createOrderCode() {
@@ -1706,6 +1937,88 @@ function customersFromOrders(orders) {
   }
   return Array.from(groups.values())
     .sort((a, b) => String(b.last_order_at || "").localeCompare(String(a.last_order_at || "")));
+}
+
+function customerListQuery(options = {}) {
+  const search = cleanSearchText(options.search);
+  const where = [];
+  const params = [];
+  if (search) {
+    const term = likeParam(search);
+    where.push("(customer_name LIKE ? ESCAPE '\\\\' OR customer_phone LIKE ? ESCAPE '\\\\' OR customer_email LIKE ? ESCAPE '\\\\' OR customer_city LIKE ? ESCAPE '\\\\' OR customer_address LIKE ? ESCAPE '\\\\' OR order_code LIKE ? ESCAPE '\\\\')");
+    params.push(term, term, term, term, term, term);
+  }
+  return {
+    whereSql: where.length ? `WHERE ${where.join(" AND ")}` : "",
+    params
+  };
+}
+
+function customerGroupedSql(whereSql = "") {
+  const keySql = "COALESCE(NULLIF(LOWER(customer_email), ''), NULLIF(customer_phone, ''), CONCAT('order:', id))";
+  return `
+    SELECT
+      ${keySql} AS id,
+      SUBSTRING_INDEX(GROUP_CONCAT(customer_name ORDER BY created_at DESC, id DESC SEPARATOR '|||'), '|||', 1) AS name,
+      SUBSTRING_INDEX(GROUP_CONCAT(customer_phone ORDER BY created_at DESC, id DESC SEPARATOR '|||'), '|||', 1) AS phone,
+      SUBSTRING_INDEX(GROUP_CONCAT(customer_email ORDER BY created_at DESC, id DESC SEPARATOR '|||'), '|||', 1) AS email,
+      SUBSTRING_INDEX(GROUP_CONCAT(customer_city ORDER BY created_at DESC, id DESC SEPARATOR '|||'), '|||', 1) AS city,
+      SUBSTRING_INDEX(GROUP_CONCAT(customer_address ORDER BY created_at DESC, id DESC SEPARATOR '|||'), '|||', 1) AS address,
+      'cliente' AS marketing_status,
+      COUNT(*) AS order_count,
+      COALESCE(SUM(total), 0) AS total_spent,
+      SUBSTRING_INDEX(GROUP_CONCAT(order_code ORDER BY created_at DESC, id DESC SEPARATOR '|||'), '|||', 1) AS last_order_code,
+      MAX(created_at) AS last_order_at,
+      MAX(CASE WHEN customer_email != '' THEN 1 ELSE 0 END) AS has_email
+    FROM orders
+    ${whereSql}
+    GROUP BY ${keySql}
+  `;
+}
+
+async function paginatedCustomers(options = {}) {
+  const pagination = options.pagination || paginatedRequest({}, { defaultLimit: 50, maxLimit: 100 });
+  const listQuery = customerListQuery(options);
+  const groupedSql = customerGroupedSql(listQuery.whereSql);
+  const [rows, totalRow, summaryRow] = await Promise.all([
+    dbAll(`
+      SELECT *
+      FROM (${groupedSql}) customers
+      ORDER BY last_order_at DESC
+      ${limitOffsetClause(pagination)}
+    `, listQuery.params),
+    dbGet(`SELECT COUNT(*) AS count FROM (${groupedSql}) customers`, listQuery.params),
+    dbGet(`
+      SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(has_email), 0) AS with_email,
+        COALESCE(SUM(order_count), 0) AS orders_total,
+        COALESCE(SUM(total_spent), 0) AS total_spent
+      FROM (${groupedSql}) customers
+    `, listQuery.params)
+  ]);
+  return {
+    customers: rows.map((row) => ({
+      id: row.id,
+      name: cleanText(row.name),
+      phone: cleanText(row.phone),
+      email: cleanText(row.email),
+      city: cleanText(row.city),
+      address: cleanText(row.address),
+      marketing_status: row.marketing_status || "cliente",
+      order_count: Number(row.order_count || 0),
+      total_spent: money(row.total_spent || 0),
+      last_order_code: cleanText(row.last_order_code),
+      last_order_at: cleanText(row.last_order_at)
+    })),
+    pagination: paginationMeta(pagination, totalRow?.count),
+    summary: {
+      total: Number(summaryRow?.total || 0),
+      withEmail: Number(summaryRow?.with_email || 0),
+      ordersTotal: Number(summaryRow?.orders_total || 0),
+      totalSpent: money(summaryRow?.total_spent || 0)
+    }
+  };
 }
 
 function csvCell(value) {
@@ -2227,12 +2540,31 @@ app.get("/api/banners", asyncHandler(async (req, res) => {
 app.get("/api/image", asyncHandler(serveOptimizedLocalImage));
 
 app.get("/api/categories", asyncHandler(async (req, res) => {
-  const categories = (await dbAll("SELECT * FROM categories WHERE active = 1 ORDER BY name ASC")).map(categoryFromRow);
+  const categories = (await dbAll(`
+    SELECT c.*, COALESCE(pc.product_count, 0) AS product_count
+    FROM categories c
+    LEFT JOIN (
+      SELECT category_id, COUNT(*) AS product_count
+      FROM products
+      WHERE active = 1
+      GROUP BY category_id
+    ) pc ON pc.category_id = c.id
+    WHERE c.active = 1
+    ORDER BY c.name ASC
+  `)).map(categoryFromRow);
   res.json({ categories });
 }));
 
 app.get("/api/products", asyncHandler(async (req, res) => {
-  res.json({ products: await getProducts({ includeInactive: false }) });
+  const pagination = paginatedRequest(req.query, { defaultLimit: 48, maxLimit: 96 });
+  const result = await getProducts({
+    includeInactive: false,
+    pagination,
+    search: req.query.q || req.query.search,
+    category: req.query.category,
+    sort: req.query.sort
+  });
+  res.json(result);
 }));
 
 app.get("/api/products/:slug", asyncHandler(async (req, res, next) => {
@@ -2783,7 +3115,16 @@ async function validateAdminProductInput(body) {
 }
 
 app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
-  res.json({ products: await getProducts({ includeInactive: true, includePrivate: true }) });
+  const pagination = paginatedRequest(req.query, { defaultLimit: 50, maxLimit: 100 });
+  const result = await getProducts({
+    includeInactive: true,
+    includePrivate: true,
+    pagination,
+    search: req.query.q || req.query.search,
+    status: req.query.status,
+    sort: req.query.sort
+  });
+  res.json(result);
 }));
 
 app.post("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
@@ -2955,13 +3296,29 @@ app.get("/api/admin/cloudinary/status", requireAdmin, (req, res) => {
 });
 
 app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
-  const orders = (await dbAll("SELECT * FROM orders ORDER BY created_at DESC")).map(publicOrder);
-  res.json({ orders });
+  const pagination = paginatedRequest(req.query, { defaultLimit: 50, maxLimit: 100 });
+  res.json(await paginatedOrders({
+    pagination,
+    search: req.query.q || req.query.search,
+    status: req.query.status
+  }));
 }));
 
 app.get("/api/admin/customers", requireAdmin, asyncHandler(async (req, res) => {
-  const orders = await dbAll("SELECT * FROM orders ORDER BY created_at DESC");
-  res.json({ customers: customersFromOrders(orders) });
+  const pagination = paginatedRequest(req.query, { defaultLimit: 50, maxLimit: 100 });
+  res.json(await paginatedCustomers({
+    pagination,
+    search: req.query.q || req.query.search
+  }));
+}));
+
+app.get("/api/admin/email/orders", requireAdmin, asyncHandler(async (req, res) => {
+  const pagination = paginatedRequest(req.query, { defaultLimit: 50, maxLimit: 100 });
+  res.json(await paginatedOrders({
+    pagination,
+    search: req.query.q || req.query.search,
+    emailStatus: req.query.status || req.query.emailStatus || "all"
+  }));
 }));
 
 app.get("/api/admin/customers/export", requireAdmin, asyncHandler(async (req, res) => {

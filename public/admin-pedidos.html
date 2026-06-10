@@ -1,4 +1,4 @@
-Ôªø<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
-  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/styles.css?v=20260610-pagination">
+  <link rel="stylesheet" href="css/admin.css?v=20260610-pagination">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="orders">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, im√°genes, categor√≠as y pedidos en un panel hecho para operar sin tocar c√≥digo.</p>
+          <p>Inventario, im·genes, categorÌas y pedidos en un panel hecho para operar sin tocar cÛdigo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Im√°genes listas para Cloudinary</span>
+            <span>Im·genes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electr√≥nico
+            Correo electrÛnico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,20 +59,20 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegaci√≥n del panel">
+        <nav aria-label="NavegaciÛn del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categor√≠as</a>
+          <a href="/admin-categorias" data-nav-page="categories">CategorÌas</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operaci√≥n</span>
+          <span>OperaciÛn</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesi√≥n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÛn</button>
       </aside>
 
       <div class="admin-content">
@@ -87,16 +87,16 @@
           </div>
         </header>
 
-        <section class="admin-page-brief compact" aria-label="Gu√≠a de pedidos">
+        <section class="admin-page-brief compact" aria-label="GuÌa de pedidos">
           <div>
-            <span class="eyebrow">Atenci√≥n</span>
+            <span class="eyebrow">AtenciÛn</span>
             <h2>Primero confirma, luego prepara y cierra.</h2>
-            <p>Cada pedido muestra siguiente paso, datos de cliente, entrega, pago, productos y acci√≥n directa a WhatsApp.</p>
+            <p>Cada pedido muestra siguiente paso, datos de cliente, entrega, pago, productos y acciÛn directa a WhatsApp.</p>
           </div>
           <div class="admin-brief-stack">
             <span><strong>Nuevo</strong> Confirmar con la clienta</span>
             <span><strong>Preparando</strong> Separar productos</span>
-            <span><strong>Listo</strong> Coordinar env√≠o o retiro</span>
+            <span><strong>Listo</strong> Coordinar envÌo o retiro</span>
           </div>
         </section>
 
@@ -104,7 +104,7 @@
           <div class="admin-section-heading">
             <div>
               <span class="eyebrow">Seguimiento</span>
-              <h2>√ìrdenes recibidas</h2>
+              <h2>”rdenes recibidas</h2>
               <p>Confirma, prepara y cierra pedidos sin perder de vista pago, entrega y productos.</p>
             </div>
           </div>
@@ -127,6 +127,7 @@
             </article>
           </div>
           <div class="orders-list" id="ordersList"></div>
+          <div class="admin-pagination" id="ordersPagination" aria-label="Paginacion de pedidos"></div>
         </section>
       </div>
     </section>
@@ -134,7 +135,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
-  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin-money.js?v=20260610-pagination" defer></script>
+  <script src="js/admin.js?v=20260610-pagination" defer></script>
 </body>
 </html>

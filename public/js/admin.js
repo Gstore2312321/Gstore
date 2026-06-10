@@ -16,6 +16,18 @@ const adminState = {
   settings: { shippingCost: 0 },
   emailStatus: null,
   analytics: null,
+  summaries: {
+    products: null,
+    orders: null,
+    customers: null,
+    emails: null
+  },
+  pagination: {
+    products: { page: 1, limit: 50, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
+    orders: { page: 1, limit: 50, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
+    customers: { page: 1, limit: 50, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
+    emails: { page: 1, limit: 50, total: 0, totalPages: 1, hasNext: false, hasPrev: false }
+  },
   charts: {},
   productSearch: "",
   productStatusFilter: "all",
@@ -31,9 +43,11 @@ const adminState = {
 };
 
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:4321" : "";
+const ADMIN_PAGE_LIMIT = 50;
 const ADMIN_IMAGE_WIDTHS = [96, 140, 180, 260];
 const ADMIN_PREVIEW_WIDTHS = [260, 360, 520, 720];
 const adminMoney = window.GStoreAdminMoney;
+const searchDebounceTimers = {};
 
 const adminEls = {
   loginView: document.querySelector("#loginView"),
@@ -82,6 +96,7 @@ const adminEls = {
   productMessage: document.querySelector("#productMessage"),
   productCategorySelect: document.querySelector("#productCategorySelect"),
   productsTable: document.querySelector("#productsTable"),
+  productPagination: document.querySelector("#productPagination"),
   productShelfNotes: document.querySelector("#productShelfNotes"),
   productSearch: document.querySelector("#productSearch"),
   productStatusFilter: document.querySelector("#productStatusFilter"),
@@ -111,12 +126,14 @@ const adminEls = {
   categoryCreateButton: document.querySelector("#categoryCreateButton"),
   closeCategoryDrawer: document.querySelector("#closeCategoryDrawer"),
   ordersList: document.querySelector("#ordersList"),
+  ordersPagination: document.querySelector("#ordersPagination"),
   ordersNewCount: document.querySelector("#ordersNewCount"),
   ordersPendingCount: document.querySelector("#ordersPendingCount"),
   ordersDoneCount: document.querySelector("#ordersDoneCount"),
   ordersVisibleTotal: document.querySelector("#ordersVisibleTotal"),
   refreshOrdersButton: document.querySelector("#refreshOrdersButton"),
   customersList: document.querySelector("#customersList"),
+  customersPagination: document.querySelector("#customersPagination"),
   customersTotal: document.querySelector("#customersTotal"),
   customersWithEmail: document.querySelector("#customersWithEmail"),
   customersOrdersTotal: document.querySelector("#customersOrdersTotal"),
@@ -125,6 +142,7 @@ const adminEls = {
   refreshCustomersButton: document.querySelector("#refreshCustomersButton"),
   exportCustomersButton: document.querySelector("#exportCustomersButton"),
   emailsTable: document.querySelector("#emailsTable"),
+  emailPagination: document.querySelector("#emailPagination"),
   emailSearch: document.querySelector("#emailSearch"),
   emailStatusFilter: document.querySelector("#emailStatusFilter"),
   emailFailedCount: document.querySelector("#emailFailedCount"),
@@ -241,23 +259,28 @@ function bindAdminEvents() {
 
   on(adminEls.productSearch, "input", (event) => {
     adminState.productSearch = event.target.value.trim().toLowerCase();
-    renderProductsTable();
+    adminState.pagination.products.page = 1;
+    debounceAdminRefresh("products", () => refreshProducts().catch(showErrorToast));
   });
   on(adminEls.productStatusFilter, "change", (event) => {
     adminState.productStatusFilter = event.target.value;
-    renderProductsTable();
+    adminState.pagination.products.page = 1;
+    refreshProducts().catch(showErrorToast);
   });
   on(adminEls.customerSearch, "input", (event) => {
     adminState.customerSearch = event.target.value.trim().toLowerCase();
-    renderCustomers();
+    adminState.pagination.customers.page = 1;
+    debounceAdminRefresh("customers", () => refreshCustomers(false).catch(showErrorToast));
   });
   on(adminEls.emailSearch, "input", (event) => {
     adminState.emailSearch = event.target.value.trim().toLowerCase();
-    renderEmailModule();
+    adminState.pagination.emails.page = 1;
+    debounceAdminRefresh("emails", () => refreshEmailModule().catch(showErrorToast));
   });
   on(adminEls.emailStatusFilter, "change", (event) => {
     adminState.emailStatusFilter = event.target.value;
-    renderEmailModule();
+    adminState.pagination.emails.page = 1;
+    refreshEmailModule().catch(showErrorToast);
   });
 
   if (adminEls.productForm) {
@@ -388,6 +411,12 @@ function markActiveNav() {
 }
 
 function handleDocumentClick(event) {
+  const pageButton = event.target.closest("[data-admin-pagination]");
+  if (pageButton) {
+    changeAdminPage(pageButton.dataset.adminPagination, pageButton.dataset.pageDirection);
+    return;
+  }
+
   const optionButton = event.target.closest("[data-option-kind][data-option-value]");
   if (optionButton) {
     toggleProductOption(optionButton.dataset.optionKind, optionButton.dataset.optionValue);
@@ -464,6 +493,27 @@ function handleDocumentClick(event) {
   if (nextOrderStatus) {
     updateOrderStatus(Number(nextOrderStatus.dataset.orderId), nextOrderStatus.dataset.orderNextStatus);
   }
+}
+
+function debounceAdminRefresh(key, callback, delay = 260) {
+  window.clearTimeout(searchDebounceTimers[key]);
+  searchDebounceTimers[key] = window.setTimeout(callback, delay);
+}
+
+function changeAdminPage(kind, direction) {
+  const meta = adminState.pagination[kind];
+  if (!meta) return;
+  const delta = direction === "next" ? 1 : -1;
+  const nextPage = Math.max(1, Math.min(Number(meta.totalPages || 1), Number(meta.page || 1) + delta));
+  if (nextPage === meta.page) return;
+  meta.page = nextPage;
+  const refreshers = {
+    products: refreshProducts,
+    orders: refreshOrders,
+    customers: () => refreshCustomers(false),
+    emails: refreshEmailModule
+  };
+  refreshers[kind]?.().catch(showErrorToast);
 }
 
 function handleDocumentChange(event) {
@@ -633,9 +683,9 @@ async function refreshAll() {
   }
   if (["dashboard", "products", "categories"].includes(adminState.page)) tasks.push(refreshCategories());
   if (["dashboard", "products"].includes(adminState.page)) tasks.push(refreshProducts());
-  if (["dashboard", "reports", "orders", "emails"].includes(adminState.page)) tasks.push(refreshOrders(false));
+  if (["dashboard", "reports", "orders"].includes(adminState.page)) tasks.push(refreshOrders(false));
   if (adminState.page === "customers") tasks.push(refreshCustomers(false));
-  if (adminState.page === "emails") tasks.push(refreshEmailStatus());
+  if (adminState.page === "emails") tasks.push(refreshEmailModule());
   await Promise.all(tasks);
   renderInsights();
   renderReports();
@@ -668,8 +718,16 @@ async function refreshCategories() {
 }
 
 async function refreshProducts() {
-  const data = await adminApi("/api/admin/products");
+  const page = adminState.pagination.products.page || 1;
+  const data = await adminApi(buildAdminUrl("/api/admin/products", {
+    page,
+    limit: ADMIN_PAGE_LIMIT,
+    q: adminState.productSearch,
+    status: adminState.productStatusFilter
+  }));
   adminState.products = data.products || [];
+  adminState.pagination.products = normalizePagination(data.pagination, page);
+  adminState.summaries.products = data.summary || null;
   renderProductsTable();
   renderProductShelfNotes();
   renderInsights();
@@ -690,17 +748,29 @@ async function refreshStoreSettings() {
 }
 
 async function refreshOrders(updateSummary = true) {
-  const data = await adminApi("/api/admin/orders");
+  const page = adminState.pagination.orders.page || 1;
+  const data = await adminApi(buildAdminUrl("/api/admin/orders", {
+    page,
+    limit: ADMIN_PAGE_LIMIT
+  }));
   adminState.orders = data.orders || [];
+  adminState.pagination.orders = normalizePagination(data.pagination, page);
+  adminState.summaries.orders = data.summary || null;
   renderOrders();
-  renderEmailModule();
   renderInsights();
   if (updateSummary) await refreshSummary();
 }
 
 async function refreshCustomers(updateSummary = true) {
-  const data = await adminApi("/api/admin/customers");
+  const page = adminState.pagination.customers.page || 1;
+  const data = await adminApi(buildAdminUrl("/api/admin/customers", {
+    page,
+    limit: ADMIN_PAGE_LIMIT,
+    q: adminState.customerSearch
+  }));
   adminState.customers = data.customers || [];
+  adminState.pagination.customers = normalizePagination(data.pagination, page);
+  adminState.summaries.customers = data.summary || null;
   renderCustomers();
   if (updateSummary) renderCustomersOverview();
 }
@@ -709,27 +779,38 @@ async function refreshEmailStatus() {
   const data = await adminApi("/api/admin/email/status");
   adminState.emailStatus = data;
   renderEmailStatus();
-  renderEmailModule();
 }
 
 async function refreshEmailModule() {
-  await Promise.all([
-    refreshOrders(false),
+  const page = adminState.pagination.emails.page || 1;
+  const [ordersData] = await Promise.all([
+    adminApi(buildAdminUrl("/api/admin/email/orders", {
+      page,
+      limit: ADMIN_PAGE_LIMIT,
+      q: adminState.emailSearch,
+      status: adminState.emailStatusFilter
+    })),
     refreshEmailStatus()
   ]);
+  adminState.orders = ordersData.orders || [];
+  adminState.pagination.emails = normalizePagination(ordersData.pagination, page);
+  adminState.summaries.emails = ordersData.summary || null;
+  renderEmailModule();
 }
 
 function renderInsights() {
   const activeCategories = adminState.categories.filter((category) => category.active).length;
   const lowStock = adminState.products.filter((product) => Number(product.stock || 0) <= 2);
+  const productSummary = adminState.summaries.products || {};
+  const lowStockCount = Number(productSummary.lowStock ?? lowStock.length);
   const featured = adminState.products.filter((product) => product.featured).length;
   const latestOrder = adminState.orders[0];
-  const lowStockText = lowStock.length
-    ? `${lowStock.length} producto${lowStock.length === 1 ? "" : "s"} con 2 unidades o menos: ${lowStock.slice(0, 3).map((product) => product.name).join(", ")}.`
+  const lowStockText = lowStockCount
+    ? `${lowStockCount} producto${lowStockCount === 1 ? "" : "s"} con 2 unidades o menos${lowStock.length ? `: ${lowStock.slice(0, 3).map((product) => product.name).join(", ")}` : ""}.`
     : "Sin productos críticos. El inventario está tranquilo.";
 
   setText(adminEls.insightLowStock, lowStockText);
-  setText(adminEls.summaryLowStock, lowStock.length);
+  setText(adminEls.summaryLowStock, lowStockCount);
   setText(
     adminEls.stockActionText,
     lowStock.length
@@ -747,7 +828,7 @@ function renderInsights() {
     setText(adminEls.insightLatestOrder, "Cuando entre una orden aparecerá aquí.");
   }
 
-  setText(adminEls.sidebarStatus, lowStock.length ? `${lowStock.length} stock bajo` : "Lista");
+  setText(adminEls.sidebarStatus, lowStockCount ? `${lowStockCount} stock bajo` : "Lista");
 }
 
 function renderDashboardAnalytics() {
@@ -1245,11 +1326,14 @@ function renderStoreSettings() {
 
 function renderProductShelfNotes() {
   if (!adminEls.productShelfNotes) return;
-  const lowStock = adminState.products.filter((product) => Number(product.stock || 0) <= 2).length;
-  const hidden = adminState.products.filter((product) => !product.active).length;
-  const promos = adminState.products.filter((product) => (product.promo_type || "none") !== "none" || product.promo_label).length;
+  const summary = adminState.summaries.products || {};
+  const lowStock = Number(summary.lowStock ?? adminState.products.filter((product) => Number(product.stock || 0) <= 2).length);
+  const hidden = Number(summary.hidden ?? adminState.products.filter((product) => !product.active).length);
+  const promos = Number(summary.promos ?? adminState.products.filter((product) => (product.promo_type || "none") !== "none" || product.promo_label).length);
+  const total = Number(summary.total ?? adminState.pagination.products.total ?? adminState.products.length);
   adminEls.productShelfNotes.innerHTML = [
-    `<span class="shelf-note">${adminState.products.length} productos cargados</span>`,
+    `<span class="shelf-note">${total} productos registrados</span>`,
+    `<span class="shelf-note">${adminState.products.length} en esta pÃ¡gina</span>`,
     `<span class="shelf-note">${lowStock} con stock bajo</span>`,
     `<span class="shelf-note">${promos} con promo</span>`,
     hidden ? `<span class="shelf-note">${hidden} ocultos</span>` : ""
@@ -1258,7 +1342,7 @@ function renderProductShelfNotes() {
 
 function renderProductsTable() {
   if (!adminEls.productsTable) return;
-  const products = filteredProducts();
+  const products = adminState.products || [];
   adminEls.productsTable.innerHTML = products.map((product) => `
     <article class="product-admin-card ${product.active ? "" : "is-hidden-product"}">
       <div class="product-card-preview">
@@ -1291,6 +1375,29 @@ function renderProductsTable() {
       </div>
     </article>
   `).join("") || emptyAdminState("No hay productos para este filtro.", "Ajusta la búsqueda o agrega una pieza nueva.");
+  renderAdminPagination("products", adminEls.productPagination);
+}
+
+function renderAdminPagination(kind, container) {
+  if (!container) return;
+  const meta = adminState.pagination[kind] || {};
+  const total = Number(meta.total || 0);
+  if (!total) {
+    container.innerHTML = "";
+    return;
+  }
+  const limit = Number(meta.limit || ADMIN_PAGE_LIMIT);
+  const page = Number(meta.page || 1);
+  const start = (page - 1) * limit + 1;
+  const end = Math.min(total, start + limit - 1);
+  container.innerHTML = `
+    <span>Mostrando ${start}-${end} de ${total}</span>
+    <div>
+      <button class="small-button" data-admin-pagination="${kind}" data-page-direction="prev" type="button" ${meta.hasPrev ? "" : "disabled"}>Anterior</button>
+      <strong>PÃ¡gina ${page} de ${Number(meta.totalPages || 1)}</strong>
+      <button class="small-button" data-admin-pagination="${kind}" data-page-direction="next" type="button" ${meta.hasNext ? "" : "disabled"}>Siguiente</button>
+    </div>
+  `;
 }
 
 function productMetricCard(label, value, detail = "", className = "") {
@@ -1535,11 +1642,13 @@ function renderOrders() {
 }
 
 function renderOrdersOverview() {
+  renderAdminPagination("orders", adminEls.ordersPagination);
   const orders = adminState.orders || [];
-  const newCount = orders.filter((order) => order.status === "new").length;
-  const pendingCount = orders.filter((order) => ["new", "waiting_payment", "paid", "preparing", "ready", "sent"].includes(order.status)).length;
-  const doneCount = orders.filter((order) => ["completed", "cancelled"].includes(order.status)).length;
-  const visibleTotal = orders
+  const summary = adminState.summaries.orders || {};
+  const newCount = Number(summary.newCount ?? orders.filter((order) => order.status === "new").length);
+  const pendingCount = Number(summary.pendingCount ?? orders.filter((order) => ["new", "waiting_payment", "paid", "preparing", "ready", "sent"].includes(order.status)).length);
+  const doneCount = Number(summary.doneCount ?? orders.filter((order) => ["completed", "cancelled"].includes(order.status)).length);
+  const visibleTotal = summary.visibleTotal ?? orders
     .filter((order) => order.status !== "cancelled")
     .reduce((sum, order) => sum + Number(order.total || 0), 0);
   setText(adminEls.ordersNewCount, newCount);
@@ -2554,6 +2663,31 @@ function settleConfirm(value) {
   resolve(value);
 }
 
+function buildAdminUrl(path, params = {}) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    const text = String(value ?? "").trim();
+    if (text && text !== "all") searchParams.set(key, text);
+  });
+  const query = searchParams.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function normalizePagination(meta, fallbackPage = 1) {
+  const page = Math.max(1, Number(meta?.page || fallbackPage || 1));
+  const limit = Math.max(1, Number(meta?.limit || ADMIN_PAGE_LIMIT));
+  const total = Math.max(0, Number(meta?.total || 0));
+  const totalPages = Math.max(1, Number(meta?.totalPages || Math.ceil(total / limit) || 1));
+  return {
+    page: Math.min(page, totalPages),
+    limit,
+    total,
+    totalPages,
+    hasNext: Boolean(meta?.hasNext ?? page < totalPages),
+    hasPrev: Boolean(meta?.hasPrev ?? page > 1)
+  };
+}
+
 async function publicApi(url, options = {}) {
   return request(url, options, false);
 }
@@ -2802,17 +2936,19 @@ function renderEmailStatus() {
 function renderCustomers() {
   if (!adminEls.customersList) return;
   renderCustomersOverview();
-  const customers = filteredCustomers();
+  const customers = adminState.customers || [];
   adminEls.customersList.innerHTML = customers.map(renderCustomerRow).join("")
     || `<tr><td colspan="8">${emptyAdminState("Todavia no hay clientes guardados.", "Cuando entren pedidos con correo, apareceran aqui.")}</td></tr>`;
+  renderAdminPagination("customers", adminEls.customersPagination);
 }
 
 function renderCustomersOverview() {
   const customers = adminState.customers || [];
-  const withEmail = customers.filter((customer) => customer.email).length;
-  const ordersTotal = customers.reduce((sum, customer) => sum + Number(customer.order_count || 0), 0);
-  const totalSpent = customers.reduce((sum, customer) => sum + Number(customer.total_spent || 0), 0);
-  setText(adminEls.customersTotal, customers.length);
+  const summary = adminState.summaries.customers || {};
+  const withEmail = Number(summary.withEmail ?? customers.filter((customer) => customer.email).length);
+  const ordersTotal = Number(summary.ordersTotal ?? customers.reduce((sum, customer) => sum + Number(customer.order_count || 0), 0));
+  const totalSpent = Number(summary.totalSpent ?? customers.reduce((sum, customer) => sum + Number(customer.total_spent || 0), 0));
+  setText(adminEls.customersTotal, Number(summary.total ?? adminState.pagination.customers.total ?? customers.length));
   setText(adminEls.customersWithEmail, withEmail);
   setText(adminEls.customersOrdersTotal, ordersTotal);
   setText(adminEls.customersTotalSpent, formatCurrency(totalSpent));
@@ -2911,18 +3047,20 @@ function friendlyEmailErrorText(value) {
 function renderEmailModule() {
   if (!adminEls.emailsTable) return;
   renderEmailOverview();
-  const orders = filteredEmailOrders();
+  const orders = adminState.orders || [];
   adminEls.emailsTable.innerHTML = orders.map(renderEmailRow).join("")
     || `<tr><td colspan="7">${emptyAdminState("No hay correos para este filtro.", "Ajusta la busqueda o revisa los pedidos recientes.")}</td></tr>`;
+  renderAdminPagination("emails", adminEls.emailPagination);
 }
 
 function renderEmailOverview() {
   const orders = adminState.orders || [];
+  const summary = adminState.summaries.emails || {};
   const states = orders.map(emailOrderState);
-  setText(adminEls.emailFailedCount, states.filter((state) => state === "failed").length);
-  setText(adminEls.emailPendingCount, states.filter((state) => state === "pending").length);
-  setText(adminEls.emailSentCount, states.filter((state) => state === "sent").length);
-  setText(adminEls.emailTotalCount, orders.length);
+  setText(adminEls.emailFailedCount, Number(summary.failed ?? states.filter((state) => state === "failed").length));
+  setText(adminEls.emailPendingCount, Number(summary.pending ?? states.filter((state) => state === "pending").length));
+  setText(adminEls.emailSentCount, Number(summary.sent ?? states.filter((state) => state === "sent").length));
+  setText(adminEls.emailTotalCount, Number(summary.total ?? adminState.pagination.emails.total ?? orders.length));
 }
 
 function filteredEmailOrders() {

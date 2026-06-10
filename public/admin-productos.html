@@ -1,4 +1,4 @@
-Ôªø<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
-  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/styles.css?v=20260610-pagination">
+  <link rel="stylesheet" href="css/admin.css?v=20260610-pagination">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, im√°genes, categor√≠as y pedidos en un panel hecho para operar sin tocar c√≥digo.</p>
+          <p>Inventario, im·genes, categorÌas y pedidos en un panel hecho para operar sin tocar cÛdigo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Im√°genes listas para Cloudinary</span>
+            <span>Im·genes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electr√≥nico
+            Correo electrÛnico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,26 +59,26 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegaci√≥n del panel">
+        <nav aria-label="NavegaciÛn del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categor√≠as</a>
+          <a href="/admin-categorias" data-nav-page="categories">CategorÌas</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operaci√≥n</span>
+          <span>OperaciÛn</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesi√≥n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÛn</button>
       </aside>
 
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Mercader√≠a</span>
+            <span class="eyebrow">MercaderÌa</span>
             <h1>Productos</h1>
           </div>
           <div class="topbar-actions">
@@ -87,29 +87,29 @@
           </div>
         </header>
 
-        <section class="admin-page-brief" aria-label="Gu√≠a de productos">
+        <section class="admin-page-brief" aria-label="GuÌa de productos">
           <div>
             <span class="eyebrow">Vitrina</span>
-            <h2>Sube mercader√≠a sin perder el control.</h2>
-            <p>Cada ficha separa lo p√∫blico de lo privado: precio de venta, costo, stock, promo, tallas, colores e imagen.</p>
+            <h2>Sube mercaderÌa sin perder el control.</h2>
+            <p>Cada ficha separa lo p˙blico de lo privado: precio de venta, costo, stock, promo, tallas, colores e imagen.</p>
           </div>
           <div class="admin-brief-stack">
-            <span><strong>01</strong> Completa datos b√°sicos</span>
+            <span><strong>01</strong> Completa datos b·sicos</span>
             <span><strong>02</strong> Sube foto o conserva la actual</span>
-            <span><strong>03</strong> Activa promo si conviene vender r√°pido</span>
+            <span><strong>03</strong> Activa promo si conviene vender r·pido</span>
           </div>
         </section>
 
         <section class="admin-section products-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Cat√°logo</span>
+              <span class="eyebrow">Cat·logo</span>
               <h2>Inventario visible</h2>
             </div>
             <div class="section-actions">
               <label class="search-control">
                 <span class="sr-only">Buscar productos</span>
-                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU o categor√≠a">
+                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU o categorÌa">
               </label>
               <select id="productStatusFilter" aria-label="Filtrar productos">
                 <option value="all">Todos</option>
@@ -122,6 +122,7 @@
           </div>
           <div class="shelf-notes" id="productShelfNotes"></div>
           <div class="product-card-admin-grid" id="productsTable" aria-live="polite"></div>
+          <div class="admin-pagination" id="productPagination" aria-label="Paginacion de productos"></div>
         </section>
       </div>
     </section>
@@ -141,8 +142,8 @@
         </header>
 
         <div class="product-form-guide" id="productFormGuide" role="status" aria-live="polite">
-          <strong>Completa lo b√°sico</strong>
-          <span>Nombre, categor√≠a, precio, stock e imagen.</span>
+          <strong>Completa lo b·sico</strong>
+          <span>Nombre, categorÌa, precio, stock e imagen.</span>
         </div>
 
         <div class="drawer-body product-form-body">
@@ -151,8 +152,8 @@
             <div class="form-panel-heading">
               <span>01</span>
               <div>
-                <h3>Datos b√°sicos</h3>
-                <p>Nombre, categor√≠a y SKU para ubicarlo r√°pido.</p>
+                <h3>Datos b·sicos</h3>
+                <p>Nombre, categorÌa y SKU para ubicarlo r·pido.</p>
               </div>
             </div>
             <div class="form-grid">
@@ -162,7 +163,7 @@
                 <span class="field-error" id="productNameError" data-error-for="name"></span>
               </label>
               <label class="field-required" data-field-wrap="category_id">
-                Categor√≠a
+                CategorÌa
                 <select name="category_id" id="productCategorySelect" required aria-describedby="productCategoryError"></select>
                 <span class="field-error" id="productCategoryError" data-error-for="category_id"></span>
               </label>
@@ -201,8 +202,8 @@
                 <label class="discount-toggle">
                   <input name="has_discount" type="checkbox">
                   <span>
-                    <strong>¬øQuieres poner esto en descuento?</strong>
-                    <small>Act√≠valo solo si quieres mostrar un precio anterior en la tienda.</small>
+                    <strong>øQuieres poner esto en descuento?</strong>
+                    <small>ActÌvalo solo si quieres mostrar un precio anterior en la tienda.</small>
                   </span>
                 </label>
                 <label class="discount-field" id="discountPriceWrap" data-field-wrap="compare_price" hidden>
@@ -285,13 +286,13 @@
                 Promo
                 <select name="promo_type">
                   <option value="none">Sin promo</option>
-                  <option value="last_units">√öltimas unidades</option>
-                  <option value="new_arrival">Reci√©n llegado</option>
+                  <option value="last_units">⁄ltimas unidades</option>
+                  <option value="new_arrival">ReciÈn llegado</option>
                 </select>
               </label>
               <label>
                 Texto de promo
-                <input name="promo_label" maxlength="42" placeholder="Precio especial, √öltimas unidades...">
+                <input name="promo_label" maxlength="42" placeholder="Precio especial, ⁄ltimas unidades...">
               </label>
               <div class="option-picker full" data-option-picker="sizes">
                 <input type="hidden" name="sizes">
@@ -330,7 +331,7 @@
                   <button type="button" data-option-kind="colors" data-option-value="Nude">Nude</button>
                   <button type="button" data-option-kind="colors" data-option-value="Dorado">Dorado</button>
                   <button type="button" data-option-kind="colors" data-option-value="Champagne">Champagne</button>
-                  <button type="button" data-option-kind="colors" data-option-value="Caf√©">Caf√©</button>
+                  <button type="button" data-option-kind="colors" data-option-value="CafÈ">CafÈ</button>
                   <button type="button" data-option-kind="colors" data-option-value="Beige">Beige</button>
                   <button type="button" data-option-kind="colors" data-option-value="Rosa">Rosa</button>
                   <button type="button" data-option-kind="colors" data-option-value="Arena">Arena</button>
@@ -366,9 +367,9 @@
 
   <div class="confirm-overlay" id="confirmOverlay" hidden>
     <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <span class="eyebrow">Confirmaci√≥n</span>
-      <h2 id="confirmTitle">Confirmar acci√≥n</h2>
-      <p id="confirmMessage">Esta acci√≥n necesita confirmaci√≥n.</p>
+      <span class="eyebrow">ConfirmaciÛn</span>
+      <h2 id="confirmTitle">Confirmar acciÛn</h2>
+      <p id="confirmMessage">Esta acciÛn necesita confirmaciÛn.</p>
       <div class="confirm-actions">
         <button class="button ghost" id="confirmCancel" type="button">Cancelar</button>
         <button class="button danger" id="confirmAccept" type="button">Eliminar</button>
@@ -378,7 +379,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
-  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin-money.js?v=20260610-pagination" defer></script>
+  <script src="js/admin.js?v=20260610-pagination" defer></script>
 </body>
 </html>

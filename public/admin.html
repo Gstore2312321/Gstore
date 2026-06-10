@@ -1,4 +1,4 @@
-Ôªø<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
-  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/styles.css?v=20260610-pagination">
+  <link rel="stylesheet" href="css/admin.css?v=20260610-pagination">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="dashboard">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, im√°genes, categor√≠as y pedidos en un panel hecho para operar sin tocar c√≥digo.</p>
+          <p>Inventario, im·genes, categorÌas y pedidos en un panel hecho para operar sin tocar cÛdigo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Im√°genes listas para Cloudinary</span>
+            <span>Im·genes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -38,7 +38,7 @@
               <p>Usa el correo autorizado y la clave del panel.</p>
             </div>
             <label>
-              Correo electr√≥nico
+              Correo electrÛnico
               <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
             </label>
             <label>
@@ -46,13 +46,13 @@
               <input name="password" type="password" autocomplete="current-password" required placeholder="Escribe la clave">
             </label>
             <button class="button primary" type="submit">Entrar</button>
-            <button class="login-link-button" id="forgotPasswordButton" type="button">Olvid√© mi clave</button>
+            <button class="login-link-button" id="forgotPasswordButton" type="button">OlvidÈ mi clave</button>
             <p class="form-message" id="loginMessage"></p>
           </form>
 
           <form class="login-panel-form reset-panel" id="resetRequestForm" hidden>
             <div>
-              <span class="eyebrow">Recuperaci√≥n</span>
+              <span class="eyebrow">RecuperaciÛn</span>
               <h2>Enviar enlace</h2>
               <p>Te enviaremos un enlace temporal al correo autorizado del panel.</p>
             </div>
@@ -60,7 +60,7 @@
               Correo autorizado
               <input name="email" type="email" autocomplete="email" required placeholder="correo del admin">
             </label>
-            <button class="button primary" type="submit">Enviar recuperaci√≥n</button>
+            <button class="button primary" type="submit">Enviar recuperaciÛn</button>
             <button class="login-link-button" data-show-login type="button">Volver al acceso</button>
             <p class="form-message" id="resetRequestMessage"></p>
           </form>
@@ -69,12 +69,12 @@
             <div>
               <span class="eyebrow">Nueva clave</span>
               <h2>Cambiar acceso</h2>
-              <p>Escribe una clave nueva de m√≠nimo 12 caracteres.</p>
+              <p>Escribe una clave nueva de mÌnimo 12 caracteres.</p>
             </div>
             <input name="token" type="hidden">
             <label>
               Nueva clave
-              <input name="password" type="password" autocomplete="new-password" minlength="12" required placeholder="M√≠nimo 12 caracteres">
+              <input name="password" type="password" autocomplete="new-password" minlength="12" required placeholder="MÌnimo 12 caracteres">
             </label>
             <label>
               Confirmar clave
@@ -97,20 +97,20 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegaci√≥n del panel">
+        <nav aria-label="NavegaciÛn del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categor√≠as</a>
+          <a href="/admin-categorias" data-nav-page="categories">CategorÌas</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operaci√≥n</span>
+          <span>OperaciÛn</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesi√≥n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÛn</button>
       </aside>
 
       <div class="admin-content">
@@ -130,7 +130,7 @@
             <span class="eyebrow">Panel de trabajo</span>
             <h2>Lo importante primero.</h2>
             <p id="profitSummaryText">Calculando utilidad del negocio.</p>
-            <div class="brief-actions" aria-label="Acciones r√°pidas">
+            <div class="brief-actions" aria-label="Acciones r·pidas">
               <a class="button primary" href="/admin-pedidos">Revisar pedidos</a>
               <a class="button ghost" href="/admin-reportes">Ver reportes</a>
             </div>
@@ -149,9 +149,9 @@
           </div>
         </section>
 
-        <section class="summary-grid dashboard-summary-grid" aria-label="M√©tricas del negocio">
+        <section class="summary-grid dashboard-summary-grid" aria-label="MÈtricas del negocio">
           <article class="summary-card summary-card-catalog">
-            <span>Cat√°logo</span>
+            <span>Cat·logo</span>
             <strong id="summaryProducts">0</strong>
             <small><b id="summaryActive">0</b> productos activos</small>
           </article>
@@ -177,21 +177,21 @@
           </article>
         </section>
 
-        <section class="store-settings-admin" aria-label="Configuraci√≥n de tienda">
+        <section class="store-settings-admin" aria-label="ConfiguraciÛn de tienda">
           <div class="banner-admin-head">
             <div>
-              <span class="eyebrow">Configuraci√≥n</span>
+              <span class="eyebrow">ConfiguraciÛn</span>
               <h2>Entrega y cobros</h2>
             </div>
-            <span id="shippingCostBadge">$0.00 env√≠o</span>
+            <span id="shippingCostBadge">$0.00 envÌo</span>
           </div>
           <form id="storeSettingsForm" class="settings-form" novalidate>
             <label>
-              Costo de env√≠o
+              Costo de envÌo
               <input name="shipping_cost" inputmode="decimal" data-money-input placeholder="0.00">
             </label>
             <p class="form-message" id="storeSettingsMessage"></p>
-            <button class="button primary" type="submit">Guardar env√≠o</button>
+            <button class="button primary" type="submit">Guardar envÌo</button>
           </form>
         </section>
 
@@ -213,8 +213,8 @@
                 <input name="kicker" maxlength="42" placeholder="Oferta, nuevo, promo...">
               </label>
               <label>
-                T√≠tulo
-                <input name="title" maxlength="80" required placeholder="Nueva colecci√≥n disponible">
+                TÌtulo
+                <input name="title" maxlength="80" required placeholder="Nueva colecciÛn disponible">
               </label>
               <label class="full">
                 Texto corto
@@ -225,9 +225,9 @@
                 <input name="link_url" maxlength="260" placeholder="#catalogo o https://...">
               </label>
               <label class="full">
-                Categor√≠a destino
+                CategorÌa destino
                 <select name="category_slug" id="bannerCategorySelect">
-                  <option value="">Sin categor√≠a fija</option>
+                  <option value="">Sin categorÌa fija</option>
                 </select>
               </label>
               <label class="banner-file full">
@@ -281,41 +281,41 @@
                 <span class="eyebrow">Finanzas</span>
                 <h2>Ventas y utilidad de la semana</h2>
               </div>
-              <p>La barra marca venta y la l√≠nea muestra la utilidad estimada.</p>
+              <p>La barra marca venta y la lÌnea muestra la utilidad estimada.</p>
             </div>
             <div class="chart-wrap">
-              <canvas id="salesProfitChart" aria-label="Ventas y ganancia por d√≠a"></canvas>
+              <canvas id="salesProfitChart" aria-label="Ventas y ganancia por dÌa"></canvas>
             </div>
           </article>
 
-          <aside class="dashboard-decisions" aria-label="Pr√≥ximas decisiones">
+          <aside class="dashboard-decisions" aria-label="PrÛximas decisiones">
             <article class="decision-card">
               <span class="eyebrow">Inventario</span>
-              <h3>Atenci√≥n de stock</h3>
-              <p id="insightLowStock">Sin productos cr√≠ticos.</p>
+              <h3>AtenciÛn de stock</h3>
+              <p id="insightLowStock">Sin productos crÌticos.</p>
               <a class="button ghost" href="/admin-productos">Ajustar stock</a>
             </article>
             <article class="decision-card">
-              <span class="eyebrow">Cat√°logo</span>
-              <h3>Categor√≠as y destacados</h3>
-              <p id="insightActiveCategories">0 categor√≠as activas.</p>
-              <a class="button ghost" href="/admin-categorias">Ordenar cat√°logo</a>
+              <span class="eyebrow">Cat·logo</span>
+              <h3>CategorÌas y destacados</h3>
+              <p id="insightActiveCategories">0 categorÌas activas.</p>
+              <a class="button ghost" href="/admin-categorias">Ordenar cat·logo</a>
             </article>
             <article class="decision-card">
               <span class="eyebrow">Pedido reciente</span>
-              <h3 id="insightLatestOrderTitle">Sin pedidos a√∫n</h3>
-              <p id="insightLatestOrder">Cuando entre una orden aparecer√° aqu√©.</p>
+              <h3 id="insightLatestOrderTitle">Sin pedidos a˙n</h3>
+              <p id="insightLatestOrder">Cuando entre una orden aparecer· aquÈ.</p>
               <a class="button ghost" href="/admin-pedidos">Gestionar pedidos</a>
             </article>
           </aside>
         </section>
 
-        <section class="dashboard-mini-grid" aria-label="Lectura r√°pida">
+        <section class="dashboard-mini-grid" aria-label="Lectura r·pida">
           <article class="chart-panel dashboard-mini-chart">
             <div class="chart-heading">
               <div>
                 <span class="eyebrow">Productos</span>
-                <h2>Lo que m√°s deja</h2>
+                <h2>Lo que m·s deja</h2>
               </div>
             </div>
             <div class="chart-wrap">
@@ -331,7 +331,7 @@
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="categoryProfitChart" aria-label="Ganancia potencial por categor√≠a"></canvas>
+              <canvas id="categoryProfitChart" aria-label="Ganancia potencial por categorÌa"></canvas>
             </div>
           </article>
 
@@ -353,9 +353,9 @@
 
   <div class="confirm-overlay" id="confirmOverlay" hidden>
     <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <span class="eyebrow">Confirmaci√≥n</span>
-      <h2 id="confirmTitle">Confirmar acci√≥n</h2>
-      <p id="confirmMessage">Esta acci√≥n necesita confirmaci√≥n.</p>
+      <span class="eyebrow">ConfirmaciÛn</span>
+      <h2 id="confirmTitle">Confirmar acciÛn</h2>
+      <p id="confirmMessage">Esta acciÛn necesita confirmaciÛn.</p>
       <div class="confirm-actions">
         <button class="button ghost" id="confirmCancel" type="button">Cancelar</button>
         <button class="button danger" id="confirmAccept" type="button">Eliminar</button>
@@ -365,7 +365,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
-  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin-money.js?v=20260610-pagination" defer></script>
+  <script src="js/admin.js?v=20260610-pagination" defer></script>
 </body>
 </html>

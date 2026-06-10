@@ -1397,6 +1397,54 @@ tbody tr:last-child td {
   background: var(--admin-panel);
 }
 
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: 18px;
+  background: rgba(255, 251, 242, 0.76);
+  color: var(--admin-muted);
+  font-weight: 800;
+}
+
+.admin-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-pagination strong {
+  color: var(--admin-ink);
+  font-size: 0.92rem;
+}
+
+.admin-pagination .small-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+@media (max-width: 680px) {
+  .admin-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-pagination > div {
+    justify-content: space-between;
+  }
+
+  .admin-pagination .small-button {
+    flex: 1;
+  }
+}
+
 .small-button.danger,
 .button.danger {
   color: var(--admin-red);

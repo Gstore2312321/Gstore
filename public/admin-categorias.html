@@ -1,19 +1,19 @@
-Ôªø<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Panel privado de GStore para gestionar categor√≠as.">
-  <title>Categor√≠as | Panel GStore</title>
+  <meta name="description" content="Panel privado de GStore para gestionar categorÌas.">
+  <title>CategorÌas | Panel GStore</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260609-admin-cards">
-  <link rel="stylesheet" href="css/admin.css?v=20260609-admin-cards">
+  <link rel="stylesheet" href="css/styles.css?v=20260610-pagination">
+  <link rel="stylesheet" href="css/admin.css?v=20260610-pagination">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="categories">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, im√°genes, categor√≠as y pedidos en un panel hecho para operar sin tocar c√≥digo.</p>
+          <p>Inventario, im·genes, categorÌas y pedidos en un panel hecho para operar sin tocar cÛdigo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Im√°genes listas para Cloudinary</span>
+            <span>Im·genes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electr√≥nico
+            Correo electrÛnico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,39 +59,39 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegaci√≥n del panel">
+        <nav aria-label="NavegaciÛn del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categor√≠as</a>
+          <a href="/admin-categorias" data-nav-page="categories">CategorÌas</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operaci√≥n</span>
+          <span>OperaciÛn</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesi√≥n</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÛn</button>
       </aside>
 
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
             <span class="eyebrow">Orden</span>
-            <h1>Categor√≠as</h1>
+            <h1>CategorÌas</h1>
           </div>
           <div class="topbar-actions">
-            <button class="button primary" id="newCategoryButton" type="button">Nueva categor√≠a</button>
+            <button class="button primary" id="newCategoryButton" type="button">Nueva categorÌa</button>
             <a class="button ghost" href="/admin-productos">Ver productos</a>
           </div>
         </header>
 
-        <section class="admin-page-brief compact" aria-label="Gu√≠a de categor√≠as">
+        <section class="admin-page-brief compact" aria-label="GuÌa de categorÌas">
           <div>
             <span class="eyebrow">Estructura</span>
-            <h2>Una tienda peque√±a se entiende mejor por grupos claros.</h2>
-            <p>Activa solo las categor√≠as que deben aparecer en la tienda y mant√©n nombres cortos para que el filtro sea f√°cil en m√≥vil.</p>
+            <h2>Una tienda pequeÒa se entiende mejor por grupos claros.</h2>
+            <p>Activa solo las categorÌas que deben aparecer en la tienda y mantÈn nombres cortos para que el filtro sea f·cil en mÛvil.</p>
           </div>
           <div class="admin-brief-stack">
             <span><strong>Ropa</strong> Blusas, vestidos, conjuntos</span>
@@ -103,10 +103,10 @@
         <section class="admin-section categories-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Cat√°logo</span>
+              <span class="eyebrow">Cat·logo</span>
               <h2>Orden de tienda</h2>
             </div>
-            <button class="button primary" id="categoryCreateButton" type="button">Nueva categor√≠a</button>
+            <button class="button primary" id="categoryCreateButton" type="button">Nueva categorÌa</button>
           </div>
           <div class="category-admin-list" id="categoryAdminList"></div>
         </section>
@@ -120,8 +120,8 @@
         <input type="hidden" name="id">
         <header class="drawer-header">
           <div>
-            <span class="eyebrow" id="categoryDrawerKicker">Nueva categor√≠a</span>
-            <h2 id="categoryDrawerTitle">Ordenar cat√°logo</h2>
+            <span class="eyebrow" id="categoryDrawerKicker">Nueva categorÌa</span>
+            <h2 id="categoryDrawerTitle">Ordenar cat·logo</h2>
             <p>Define como se agrupan los productos en tienda.</p>
           </div>
           <button class="icon-close" id="closeCategoryDrawer" type="button" aria-label="Cerrar">Cerrar</button>
@@ -131,8 +131,8 @@
             <div class="form-panel-heading">
               <span>01</span>
               <div>
-                <h3>Categor√≠a</h3>
-                <p>Nombre corto y descripci√≥n clara para la administradora.</p>
+                <h3>CategorÌa</h3>
+                <p>Nombre corto y descripciÛn clara para la administradora.</p>
               </div>
             </div>
             <div class="form-grid one">
@@ -148,7 +148,7 @@
           <p class="form-message" id="categoryMessage"></p>
           <div>
             <button class="button ghost" id="resetCategoryForm" type="button">Limpiar</button>
-            <button class="button primary" type="submit">Guardar categor√≠a</button>
+            <button class="button primary" type="submit">Guardar categorÌa</button>
           </div>
         </footer>
       </form>
@@ -157,9 +157,9 @@
 
   <div class="confirm-overlay" id="confirmOverlay" hidden>
     <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <span class="eyebrow">Confirmaci√≥n</span>
-      <h2 id="confirmTitle">Confirmar acci√≥n</h2>
-      <p id="confirmMessage">Esta acci√≥n necesita confirmaci√≥n.</p>
+      <span class="eyebrow">ConfirmaciÛn</span>
+      <h2 id="confirmTitle">Confirmar acciÛn</h2>
+      <p id="confirmMessage">Esta acciÛn necesita confirmaciÛn.</p>
       <div class="confirm-actions">
         <button class="button ghost" id="confirmCancel" type="button">Cancelar</button>
         <button class="button danger" id="confirmAccept" type="button">Eliminar</button>
@@ -169,7 +169,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin-money.js?v=20260609-admin-cards" defer></script>
-  <script src="js/admin.js?v=20260609-admin-cards" defer></script>
+  <script src="js/admin-money.js?v=20260610-pagination" defer></script>
+  <script src="js/admin.js?v=20260610-pagination" defer></script>
 </body>
 </html>

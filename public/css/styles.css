@@ -1139,6 +1139,20 @@ a {
   color: var(--ink);
 }
 
+.catalog-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(1.2rem, 3vw, 2rem);
+}
+
+.catalog-pagination .button {
+  min-width: min(100%, 220px);
+}
+
+.catalog-pagination[hidden] {
+  display: none;
+}
+
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -3942,5 +3956,189 @@ body {
     background: var(--success);
     color: white;
     box-shadow: 0 12px 26px rgba(47, 122, 77, 0.18);
+  }
+}
+
+/* 2026 mobile polish: cleaner header, calmer feedback, even product cards. */
+.cart-button.is-bumped strong {
+  animation: cart-count-bump 360ms ease-out;
+}
+
+@keyframes cart-count-bump {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+@media (max-width: 640px) {
+  .catalog-only .site-header {
+    top: 0;
+    width: 100%;
+    min-height: 60px;
+    margin-top: 0;
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0 0 22px 22px;
+    padding: 0.36rem 0.52rem;
+  }
+
+  .catalog-only .desktop-nav {
+    flex: 0 0 auto;
+    display: flex;
+  }
+
+  .catalog-only .header-link {
+    min-height: 40px;
+    padding: 0.58rem 0.78rem;
+    font-size: 0.82rem;
+  }
+
+  .brand-logo {
+    width: 108px;
+    max-height: 48px;
+  }
+
+  .cart-button {
+    min-width: 58px;
+    min-height: 42px;
+    gap: 0.28rem;
+    padding: 0.22rem 0.32rem 0.22rem 0.22rem;
+  }
+
+  .cart-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .cart-button strong {
+    min-width: 24px;
+    height: 24px;
+    font-size: 0.86rem;
+  }
+
+  .catalog-only .page-shell {
+    padding-top: 0.54rem;
+  }
+
+  .catalog-only .catalog-heading h1 {
+    font-size: clamp(1.82rem, 9vw, 2.42rem);
+  }
+
+  .catalog-only .product-grid {
+    align-items: stretch;
+  }
+
+  .catalog-only .product-card {
+    height: 346px;
+    min-height: 346px;
+    grid-template-rows: 170px minmax(0, 1fr);
+  }
+
+  .catalog-only .product-media {
+    height: 170px;
+    aspect-ratio: auto;
+  }
+
+  .catalog-only .product-content {
+    min-height: 0;
+    grid-template-rows: 42px 2.22em 30px auto;
+    align-content: stretch;
+  }
+
+  .catalog-only .product-topline {
+    min-height: 0;
+  }
+
+  .catalog-only .price-stack {
+    min-height: 28px;
+  }
+
+  .catalog-only .saving-price {
+    display: none !important;
+  }
+
+  .catalog-only .product-content h3 {
+    min-height: 2.22em;
+  }
+
+  .catalog-only .variant-row {
+    min-height: 30px;
+    max-height: 30px;
+  }
+
+  .catalog-only .product-actions {
+    align-self: end;
+    margin-top: 0;
+  }
+
+  .catalog-only .promo-pill {
+    max-width: calc(100% - 0.72rem);
+    white-space: nowrap;
+  }
+
+  .toast {
+    top: auto;
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    width: max-content;
+    max-width: min(calc(100vw - 1.4rem), 330px);
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.68rem 0.92rem;
+    border: 1px solid rgba(255, 253, 247, 0.12);
+    border-radius: 999px;
+    background: rgba(21, 17, 7, 0.96);
+    color: var(--paper);
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.18;
+    text-align: center;
+    box-shadow: 0 14px 34px rgba(21, 17, 7, 0.22);
+    opacity: 0;
+    transform: translate(-50%, 18px);
+  }
+
+  .toast.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  .product-detail-media {
+    max-height: min(29dvh, 172px);
+  }
+
+  .detail-promo {
+    width: fit-content;
+    max-width: 100%;
+    justify-content: center;
+    padding: 0.42rem 0.74rem;
+    font-size: 0.78rem;
+    line-height: 1.15;
+  }
+
+  .detail-actions .button {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .catalog-only .product-card {
+    height: 334px;
+    min-height: 334px;
+    grid-template-rows: 158px minmax(0, 1fr);
+  }
+
+  .catalog-only .product-media {
+    height: 158px;
+  }
+
+  .catalog-only .header-link {
+    padding-inline: 0.62rem;
+  }
+
+  .brand-logo {
+    width: 98px;
   }
 }
