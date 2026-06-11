@@ -171,7 +171,7 @@ function shortUserAgent(req) {
 function cleanEnvSecret(name, value, fallback = "") {
   const secret = cleanText(value);
   if (IS_PRODUCTION && secret.length < 32) {
-    throw new Error(`${name} debe tener minimo 32 caracteres para produccion.`);
+    throw new Error(`${name} debe tener mínimo 32 caracteres para producción.`);
   }
   return secret || fallback;
 }
@@ -1244,7 +1244,10 @@ function productListQuery(options = {}) {
   const where = [];
   const params = [];
 
-  if (!includeInactive) where.push("p.active = 1");
+  if (!includeInactive) {
+    where.push("p.active = 1");
+    where.push("p.stock > 0");
+  }
   if (search) {
     const term = likeParam(search);
     where.push("(p.name LIKE ? ESCAPE '\\\\' OR p.sku LIKE ? ESCAPE '\\\\' OR c.name LIKE ? ESCAPE '\\\\' OR p.promo_label LIKE ? ESCAPE '\\\\')");
@@ -1274,19 +1277,23 @@ function productListQuery(options = {}) {
 
 async function getProductSummary(options = {}) {
   const includeInactive = Boolean(options.includeInactive);
-  const baseWhere = includeInactive ? "" : "WHERE active = 1";
-  const [total, active, hidden, lowStock, promos] = await Promise.all([
+  const baseWhere = includeInactive ? "" : "WHERE active = 1 AND stock > 0";
+  const activeWhere = includeInactive ? "WHERE active = 1" : "WHERE active = 1 AND stock > 0";
+  const stockWhere = includeInactive ? "WHERE" : "WHERE active = 1 AND stock > 0 AND";
+  const [total, active, hidden, lowStock, outOfStock, promos] = await Promise.all([
     dbGet(`SELECT COUNT(*) AS count FROM products ${baseWhere}`),
-    dbGet("SELECT COUNT(*) AS count FROM products WHERE active = 1"),
+    dbGet(`SELECT COUNT(*) AS count FROM products ${activeWhere}`),
     dbGet("SELECT COUNT(*) AS count FROM products WHERE active = 0"),
-    dbGet(`SELECT COUNT(*) AS count FROM products ${includeInactive ? "WHERE" : "WHERE active = 1 AND"} stock <= 2`),
-    dbGet(`SELECT COUNT(*) AS count FROM products ${includeInactive ? "WHERE" : "WHERE active = 1 AND"} (promo_type != 'none' OR promo_label != '' OR compare_price > price)`)
+    dbGet(`SELECT COUNT(*) AS count FROM products ${stockWhere} stock <= 2`),
+    dbGet(`SELECT COUNT(*) AS count FROM products ${includeInactive ? "WHERE" : "WHERE active = 1 AND"} stock <= 0`),
+    dbGet(`SELECT COUNT(*) AS count FROM products ${stockWhere} (promo_type != 'none' OR promo_label != '' OR compare_price > price)`)
   ]);
   return {
     total: Number(total?.count || 0),
     active: Number(active?.count || 0),
     hidden: Number(hidden?.count || 0),
     lowStock: Number(lowStock?.count || 0),
+    outOfStock: Number(outOfStock?.count || 0),
     promos: Number(promos?.count || 0)
   };
 }
@@ -2264,7 +2271,7 @@ function adminEmailMatches(value) {
 
 function localUpload(file) {
   if (IS_VERCEL || (IS_PRODUCTION && !RAILWAY_VOLUME_PATH && !process.env.UPLOAD_DIR)) {
-    throw httpError(400, "Falta configurar Cloudinary o un volumen persistente para subir imagenes en produccion.");
+    throw httpError(400, "Falta configurar Cloudinary o un volumen persistente para subir imágenes en producción.");
   }
   const original = path.basename(file.originalname || "imagen.jpg");
   const ext = path.extname(original).toLowerCase() || ".jpg";
@@ -2445,7 +2452,7 @@ async function uploadToCloudinary(file) {
     });
   } catch (error) {
     if (error.name === "AbortError") {
-      throw httpError(504, "Cloudinary tardo demasiado en responder. Intenta otra vez o sube una imagen mas liviana.");
+      throw httpError(504, "Cloudinary tardó demasiado en responder. Intenta otra vez o sube una imagen más liviana.");
     }
     throw error;
   } finally {
@@ -2503,12 +2510,12 @@ function validateProductionConfig() {
     missing.push("ADMIN_PASSWORD_HASH bcrypt valido");
   }
   if (!process.env.PUBLIC_BASE_URL || /localhost|127\.0\.0\.1/.test(process.env.PUBLIC_BASE_URL)) missing.push("PUBLIC_BASE_URL real");
-  if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imagenes persistentes");
+  if (IS_VERCEL && !cloudinaryConfigured()) missing.push("Cloudinary para imágenes persistentes");
   if (!MYSQL_CONNECTION_URL && !process.env.MYSQLHOST && !process.env.MYSQL_HOST) {
     missing.push("MYSQL_URL o variables MYSQL de Railway");
   }
   if (missing.length) {
-    throw new Error(`Configuracion de produccion incompleta: ${missing.join(", ")}.`);
+    throw new Error(`Configuración de producción incompleta: ${missing.join(", ")}.`);
   }
 }
 
@@ -2546,7 +2553,7 @@ app.get("/api/categories", asyncHandler(async (req, res) => {
     LEFT JOIN (
       SELECT category_id, COUNT(*) AS product_count
       FROM products
-      WHERE active = 1
+      WHERE active = 1 AND stock > 0
       GROUP BY category_id
     ) pc ON pc.category_id = c.id
     WHERE c.active = 1
@@ -2572,7 +2579,7 @@ app.get("/api/products/:slug", asyncHandler(async (req, res, next) => {
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
-    WHERE p.slug = ? AND p.active = 1
+    WHERE p.slug = ? AND p.active = 1 AND p.stock > 0
   `, [req.params.slug]);
   const product = productFromRow(row);
   if (!product) return next(httpError(404, "Producto no encontrado."));
@@ -3325,7 +3332,7 @@ app.get("/api/admin/customers/export", requireAdmin, asyncHandler(async (req, re
   const orders = await dbAll("SELECT * FROM orders ORDER BY created_at DESC");
   const customers = customersFromOrders(orders);
   const rows = [
-    ["Nombre", "Telefono", "Correo", "Ciudad", "Direccion", "Pedidos", "Total comprado", "Ultimo pedido", "Fecha ultimo pedido"],
+    ["Nombre", "Teléfono", "Correo", "Ciudad", "Dirección", "Pedidos", "Total comprado", "Último pedido", "Fecha último pedido"],
     ...customers.map((customer) => [
       customer.name,
       customer.phone,

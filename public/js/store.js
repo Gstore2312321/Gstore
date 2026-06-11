@@ -99,7 +99,7 @@ function bindEvents() {
 
   els.sortFilter?.addEventListener("change", (event) => {
     state.sortOrder = event.target.value || "default";
-    loadProducts({ reset: true }).catch((error) => showToast(error.message || "No pudimos ordenar el catÃ¡logo."));
+    loadProducts({ reset: true }).catch((error) => showToast(error.message || "No pudimos ordenar el catálogo."));
   });
 
   els.clearCatalogFilters?.addEventListener("click", () => {
@@ -114,7 +114,7 @@ function bindEvents() {
   });
 
   els.loadMoreProducts?.addEventListener("click", () => {
-    loadProducts({ append: true }).catch((error) => showToast(error.message || "No pudimos cargar mÃ¡s productos."));
+    loadProducts({ append: true }).catch((error) => showToast(error.message || "No pudimos cargar más productos."));
   });
 
   document.addEventListener("click", (event) => {
@@ -210,7 +210,7 @@ async function loadProducts(options = {}) {
   renderCatalogPagination();
   try {
     const data = await api(buildProductListUrl(nextPage));
-    const incoming = data.products || [];
+    const incoming = (data.products || []).filter((product) => Number(product.stock || 0) > 0);
     state.products = append && !reset ? [...state.products, ...incoming] : incoming;
     state.productsPagination = normalizeProductPagination(data.pagination, nextPage);
     renderCategories();
@@ -552,7 +552,9 @@ function sizeSortRank(size) {
 
 function renderProducts() {
   const filteredProducts = state.products.filter((product) => (
-    productMatchesCategory(product, state.activeCategory) && productMatchesActiveRefinements(product)
+    Number(product.stock || 0) > 0
+    && productMatchesCategory(product, state.activeCategory)
+    && productMatchesActiveRefinements(product)
   ));
   const products = sortProducts(filteredProducts);
 
@@ -580,7 +582,7 @@ function renderCatalogPagination() {
   const hasNext = Boolean(meta.hasNext);
   els.catalogPagination.hidden = !hasNext && !state.productsLoading;
   els.loadMoreProducts.disabled = state.productsLoading || !hasNext;
-  els.loadMoreProducts.textContent = state.productsLoading ? "Cargando..." : "Ver mas productos";
+  els.loadMoreProducts.textContent = state.productsLoading ? "Cargando..." : "Ver más productos";
 }
 
 function productMatchesCategory(product, categorySlug = "all") {

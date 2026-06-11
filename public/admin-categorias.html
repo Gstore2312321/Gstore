@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Panel privado de GStore para gestionar categorías.">
-  <title>Categorías | Panel GStore</title>
+  <meta name="description" content="Panel privado de GStore para gestionar categorÃ­as.">
+  <title>CategorÃ­as | Panel GStore</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <p>Inventario, imÃ¡genes, categorÃ­as y pedidos en un panel hecho para operar sin tocar cÃ³digo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Imágenes listas para Cloudinary</span>
+            <span>ImÃ¡genes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electrónico
+            Correo electrÃ³nico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,39 +59,39 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegación del panel">
+        <nav aria-label="NavegaciÃ³n del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categorías</a>
+          <a href="/admin-categorias" data-nav-page="categories">CategorÃ­as</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operación</span>
+          <span>OperaciÃ³n</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesión</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesiÃ³n</button>
       </aside>
 
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
             <span class="eyebrow">Orden</span>
-            <h1>Categorías</h1>
+            <h1>CategorÃ­as</h1>
           </div>
           <div class="topbar-actions">
-            <button class="button primary" id="newCategoryButton" type="button">Nueva categoría</button>
+            <button class="button primary" id="newCategoryButton" type="button">Nueva categorÃ­a</button>
             <a class="button ghost" href="/admin-productos">Ver productos</a>
           </div>
         </header>
 
-        <section class="admin-page-brief compact" aria-label="Guía de categorías">
+        <section class="admin-page-brief compact" aria-label="GuÃ­a de categorÃ­as">
           <div>
             <span class="eyebrow">Estructura</span>
-            <h2>Una tienda pequeña se entiende mejor por grupos claros.</h2>
-            <p>Activa solo las categorías que deben aparecer en la tienda y mantén nombres cortos para que el filtro sea fácil en móvil.</p>
+            <h2>Una tienda pequeÃ±a se entiende mejor por grupos claros.</h2>
+            <p>Activa solo las categorÃ­as que deben aparecer en la tienda y mantÃ©n nombres cortos para que el filtro sea fÃ¡cil en mÃ³vil.</p>
           </div>
           <div class="admin-brief-stack">
             <span><strong>Ropa</strong> Blusas, vestidos, conjuntos</span>
@@ -103,10 +103,10 @@
         <section class="admin-section categories-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Catálogo</span>
+              <span class="eyebrow">CatÃ¡logo</span>
               <h2>Orden de tienda</h2>
             </div>
-            <button class="button primary" id="categoryCreateButton" type="button">Nueva categoría</button>
+            <button class="button primary" id="categoryCreateButton" type="button">Nueva categorÃ­a</button>
           </div>
           <div class="category-admin-list" id="categoryAdminList"></div>
         </section>
@@ -120,8 +120,8 @@
         <input type="hidden" name="id">
         <header class="drawer-header">
           <div>
-            <span class="eyebrow" id="categoryDrawerKicker">Nueva categoría</span>
-            <h2 id="categoryDrawerTitle">Ordenar catálogo</h2>
+            <span class="eyebrow" id="categoryDrawerKicker">Nueva categorÃ­a</span>
+            <h2 id="categoryDrawerTitle">Ordenar catÃ¡logo</h2>
             <p>Define como se agrupan los productos en tienda.</p>
           </div>
           <button class="icon-close" id="closeCategoryDrawer" type="button" aria-label="Cerrar">Cerrar</button>
@@ -131,8 +131,8 @@
             <div class="form-panel-heading">
               <span>01</span>
               <div>
-                <h3>Categoría</h3>
-                <p>Nombre corto y descripción clara para la administradora.</p>
+                <h3>CategorÃ­a</h3>
+                <p>Nombre corto y descripciÃ³n clara para la administradora.</p>
               </div>
             </div>
             <div class="form-grid one">
@@ -148,7 +148,7 @@
           <p class="form-message" id="categoryMessage"></p>
           <div>
             <button class="button ghost" id="resetCategoryForm" type="button">Limpiar</button>
-            <button class="button primary" type="submit">Guardar categoría</button>
+            <button class="button primary" type="submit">Guardar categorÃ­a</button>
           </div>
         </footer>
       </form>
@@ -157,9 +157,9 @@
 
   <div class="confirm-overlay" id="confirmOverlay" hidden>
     <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <span class="eyebrow">Confirmación</span>
-      <h2 id="confirmTitle">Confirmar acción</h2>
-      <p id="confirmMessage">Esta acción necesita confirmación.</p>
+      <span class="eyebrow">ConfirmaciÃ³n</span>
+      <h2 id="confirmTitle">Confirmar acciÃ³n</h2>
+      <p id="confirmMessage">Esta acciÃ³n necesita confirmaciÃ³n.</p>
       <div class="confirm-actions">
         <button class="button ghost" id="confirmCancel" type="button">Cancelar</button>
         <button class="button danger" id="confirmAccept" type="button">Eliminar</button>

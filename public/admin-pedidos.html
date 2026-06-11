@@ -23,11 +23,11 @@
           <span class="brand-mark">G</span>
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, im醙enes, categor韆s y pedidos en un panel hecho para operar sin tocar c骴igo.</p>
+          <p>Inventario, im谩genes, categor铆as y pedidos en un panel hecho para operar sin tocar c贸digo.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Im醙enes listas para Cloudinary</span>
+            <span>Im谩genes listas para Cloudinary</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -37,7 +37,7 @@
             <p>Usa el correo autorizado y la clave del panel.</p>
           </div>
           <label>
-            Correo electr髇ico
+            Correo electr贸nico
             <input name="email" type="email" autocomplete="email" required placeholder="correo autorizado">
           </label>
           <label>
@@ -59,27 +59,28 @@
             <small>Panel privado</small>
           </span>
         </a>
-        <nav aria-label="Navegaci髇 del panel">
+        <nav aria-label="Navegaci贸n del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
           <a href="/admin-reportes" data-nav-page="reports">Reportes</a>
           <a href="/admin-productos" data-nav-page="products">Productos</a>
-          <a href="/admin-categorias" data-nav-page="categories">Categor韆s</a>
+          <a href="/admin-categorias" data-nav-page="categories">Categor铆as</a>
           <a href="/admin-pedidos" data-nav-page="orders">Pedidos</a>
           <a href="/admin-correos" data-nav-page="emails">Correos</a>
           <a href="/admin-clientes" data-nav-page="customers">Clientes</a>
         </nav>
         <div class="sidebar-status">
-          <span>Operaci髇</span>
+          <span>Operaci贸n</span>
           <strong id="sidebarStatus">Lista</strong>
         </div>
-        <button class="button ghost" id="logoutButton" type="button">Cerrar sesi髇</button>
+        <button class="button ghost" id="logoutButton" type="button">Cerrar sesi贸n</button>
       </aside>
 
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Ventas</span>
+            <span class="eyebrow">Panel de administraci贸n</span>
             <h1>Pedidos</h1>
+            <p class="admin-topbar-copy">Gestiona los pedidos de la tienda sin perder de vista pago, entrega y cliente.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="refreshOrdersButton" type="button">Actualizar pedidos</button>
@@ -87,24 +88,11 @@
           </div>
         </header>
 
-        <section class="admin-page-brief compact" aria-label="Gu韆 de pedidos">
-          <div>
-            <span class="eyebrow">Atenci髇</span>
-            <h2>Primero confirma, luego prepara y cierra.</h2>
-            <p>Cada pedido muestra siguiente paso, datos de cliente, entrega, pago, productos y acci髇 directa a WhatsApp.</p>
-          </div>
-          <div class="admin-brief-stack">
-            <span><strong>Nuevo</strong> Confirmar con la clienta</span>
-            <span><strong>Preparando</strong> Separar productos</span>
-            <span><strong>Listo</strong> Coordinar env韔 o retiro</span>
-          </div>
-        </section>
-
         <section class="admin-section orders-section">
           <div class="admin-section-heading">
             <div>
               <span class="eyebrow">Seguimiento</span>
-              <h2>觬denes recibidas</h2>
+              <h2>脫rdenes recibidas</h2>
               <p>Confirma, prepara y cierra pedidos sin perder de vista pago, entrega y productos.</p>
             </div>
           </div>
@@ -127,7 +115,7 @@
             </article>
           </div>
           <div class="orders-list" id="ordersList"></div>
-          <div class="admin-pagination" id="ordersPagination" aria-label="Paginacion de pedidos"></div>
+          <div class="admin-pagination" id="ordersPagination" aria-label="Paginaci贸n de pedidos"></div>
         </section>
       </div>
     </section>

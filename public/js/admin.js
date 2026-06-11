@@ -479,18 +479,32 @@ function handleDocumentClick(event) {
 
   const whatsappOrder = event.target.closest("[data-order-whatsapp]");
   if (whatsappOrder) {
+    event.preventDefault();
+    event.stopPropagation();
     openOrderWhatsapp(Number(whatsappOrder.dataset.orderWhatsapp));
+    return;
+  }
+
+  const printOrderLabelButton = event.target.closest("[data-order-print-label]");
+  if (printOrderLabelButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    printOrderLabel(Number(printOrderLabelButton.dataset.orderPrintLabel));
     return;
   }
 
   const emailOrder = event.target.closest("[data-order-email]");
   if (emailOrder) {
+    event.preventDefault();
+    event.stopPropagation();
     resendOrderEmail(Number(emailOrder.dataset.orderEmail));
     return;
   }
 
   const nextOrderStatus = event.target.closest("[data-order-next-status]");
   if (nextOrderStatus) {
+    event.preventDefault();
+    event.stopPropagation();
     updateOrderStatus(Number(nextOrderStatus.dataset.orderId), nextOrderStatus.dataset.orderNextStatus);
   }
 }
@@ -1328,16 +1342,25 @@ function renderProductShelfNotes() {
   if (!adminEls.productShelfNotes) return;
   const summary = adminState.summaries.products || {};
   const lowStock = Number(summary.lowStock ?? adminState.products.filter((product) => Number(product.stock || 0) <= 2).length);
+  const outOfStock = Number(summary.outOfStock ?? adminState.products.filter((product) => Number(product.stock || 0) <= 0).length);
   const hidden = Number(summary.hidden ?? adminState.products.filter((product) => !product.active).length);
   const promos = Number(summary.promos ?? adminState.products.filter((product) => (product.promo_type || "none") !== "none" || product.promo_label).length);
   const total = Number(summary.total ?? adminState.pagination.products.total ?? adminState.products.length);
   adminEls.productShelfNotes.innerHTML = [
     `<span class="shelf-note">${total} productos registrados</span>`,
-    `<span class="shelf-note">${adminState.products.length} en esta pÃ¡gina</span>`,
+    `<span class="shelf-note">${adminState.products.length} en esta página</span>`,
+    outOfStock ? `<span class="shelf-note">${outOfStock} sin stock</span>` : "",
     `<span class="shelf-note">${lowStock} con stock bajo</span>`,
     `<span class="shelf-note">${promos} con promo</span>`,
     hidden ? `<span class="shelf-note">${hidden} ocultos</span>` : ""
   ].filter(Boolean).join("");
+}
+
+function productStockAdminNote(product) {
+  const stock = Number(product.stock || 0);
+  if (stock <= 0) return "No hay este artículo en stock";
+  if (stock <= 2) return "Stock bajo";
+  return "Disponible";
 }
 
 function renderProductsTable() {
@@ -1358,7 +1381,7 @@ function renderProductsTable() {
       <div class="product-admin-metrics">
         ${productMetricCard("Venta", formatCurrency(product.price), Number(product.compare_price || 0) > Number(product.price || 0) ? `Antes ${formatCurrency(product.compare_price)}` : "")}
         ${productMetricCard("Ganancia", formatCurrency(productProfitAmount(product)), `${productMarginPercent(product)}% margen`, productProfitAmount(product) < 0 ? "is-negative" : "is-profit")}
-        ${productMetricCard("Stock", Number(product.stock || 0), Number(product.stock || 0) <= 2 ? "Stock bajo" : "Disponible")}
+        ${productMetricCard("Stock", Number(product.stock || 0), productStockAdminNote(product), Number(product.stock || 0) <= 0 ? "is-negative" : "")}
       </div>
       <div class="product-admin-meta">
         <div class="status-stack">
@@ -1394,7 +1417,7 @@ function renderAdminPagination(kind, container) {
     <span>Mostrando ${start}-${end} de ${total}</span>
     <div>
       <button class="small-button" data-admin-pagination="${kind}" data-page-direction="prev" type="button" ${meta.hasPrev ? "" : "disabled"}>Anterior</button>
-      <strong>PÃ¡gina ${page} de ${Number(meta.totalPages || 1)}</strong>
+      <strong>Página ${page} de ${Number(meta.totalPages || 1)}</strong>
       <button class="small-button" data-admin-pagination="${kind}" data-page-direction="next" type="button" ${meta.hasNext ? "" : "disabled"}>Siguiente</button>
     </div>
   `;
@@ -1636,9 +1659,10 @@ function promoTypeLabel(type) {
 function renderOrders() {
   if (!adminEls.ordersList) return;
   renderOrdersOverview();
-  adminEls.ordersList.innerHTML = adminState.orders.map((order) => `
-    ${renderOrderCard(order)}
-  `).join("") || emptyAdminState("Todavía no hay pedidos.", "Cuando una clienta complete checkout, la orden aparecerá aquí.");
+  const orders = adminState.orders || [];
+  adminEls.ordersList.innerHTML = orders.length
+    ? groupOrdersByDay(orders).map(renderOrdersDayGroup).join("")
+    : emptyAdminState("Todavía no hay pedidos.", "Cuando una clienta complete checkout, la orden aparecerá aquí.");
 }
 
 function renderOrdersOverview() {
@@ -1657,79 +1681,149 @@ function renderOrdersOverview() {
   setText(adminEls.ordersVisibleTotal, formatCurrency(visibleTotal));
 }
 
+function groupOrdersByDay(orders) {
+  const groups = [];
+  const index = new Map();
+  orders.forEach((order) => {
+    const key = orderDateKey(order.created_at);
+    if (!index.has(key)) {
+      const group = {
+        key,
+        label: orderDateGroupLabel(order.created_at),
+        orders: [],
+        total: 0
+      };
+      index.set(key, group);
+      groups.push(group);
+    }
+    const group = index.get(key);
+    group.orders.push(order);
+    group.total += Number(order.total || 0);
+  });
+  return groups;
+}
+
+function renderOrdersDayGroup(group) {
+  const count = group.orders.length;
+  return `
+    <section class="orders-day-group" aria-label="${escapeAttr(group.label)}">
+      <div class="orders-day-heading">
+        <strong>${escapeHtml(group.label)}</strong>
+        <span>${count} pedido${count === 1 ? "" : "s"} · ${formatCurrency(group.total)} total</span>
+      </div>
+      <div class="orders-day-list">
+        ${group.orders.map(renderOrderCard).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderOrderCard(order) {
   const nextAction = orderNextAction(order);
   const finalState = orderFinalState(order);
+  const itemCount = order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const primaryItem = order.items[0]?.name || "Sin productos";
+  const address = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Sin dirección adicional";
+  const payment = paymentLabel(order.payment_method, order.payment_status);
+  const canAdvance = Boolean(nextAction.status);
+  const clientLine = [order.customer_name || "Cliente sin nombre", order.customer_phone || "Sin teléfono"].filter(Boolean).join(" · ");
   return `
-    <article class="order-card order-status-${escapeAttr(order.status || "new")}">
-      <div class="order-head">
-        <div class="order-title-block">
-          <span class="order-kicker">${escapeHtml(formatDate(order.created_at))}</span>
-          <h3>${escapeHtml(order.order_code)}</h3>
-          <p>${escapeHtml(order.customer_name)} · ${escapeHtml(order.customer_phone)}</p>
-        </div>
-        <div class="order-total">
-          <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
-          <strong>${formatCurrency(order.total)}</strong>
-          <small>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</small>
-        </div>
-      </div>
-
-      <div class="order-next-step">
-        <span>Siguiente paso</span>
-        <strong>${escapeHtml(nextAction.text)}</strong>
-      </div>
-
-      <div class="order-info-grid">
-        <div class="order-info-card">
-          <span>Cliente</span>
-          <strong>${escapeHtml(order.customer_name)}</strong>
-          <small>${escapeHtml(order.customer_email || "Sin correo registrado")}</small>
-        </div>
-        <div class="order-info-card">
-          <span>Entrega</span>
-          <strong>${escapeHtml(orderDeliveryLabel(order))}</strong>
-          <small>${escapeHtml([order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Sin dirección adicional")}</small>
-        </div>
-        <div class="order-info-card">
-          <span>Pago</span>
-          <strong>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</strong>
-          <small>${escapeHtml(order.payment_status === "paid" ? "Pago confirmado" : "Pendiente de confirmación")}</small>
-        </div>
-      </div>
-
-      <div class="order-items-panel">
-        <div class="order-items-heading">
-          <span>Productos</span>
-          <strong>${order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0)} unidad${order.items.length === 1 ? "" : "es"}</strong>
-        </div>
-        <div class="order-items-list">
-          ${order.items.map((item) => renderOrderItem(item)).join("")}
-        </div>
-      </div>
-
-      ${order.notes ? `
-        <div class="order-note">
-          <span>Nota</span>
-          <p>${escapeHtml(order.notes)}</p>
-        </div>
-      ` : ""}
-
-      ${finalState ? renderOrderFinalState(finalState) : `
-        <div class="order-actions">
-          <label class="order-status-control">
-            Estado del pedido
-            <select data-order-status="${order.id}">
-              ${Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${order.status === value ? "selected" : ""}>${label}</option>`).join("")}
-            </select>
-          </label>
-          <div class="order-action-buttons">
-            ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
-            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Coordinar por WhatsApp</button>
+    <details class="order-card order-status-${escapeAttr(order.status || "new")}">
+      <summary class="order-summary">
+        <div class="order-summary-main">
+          <div class="order-code-block">
+            <h3>${escapeHtml(order.order_code)}</h3>
+            <span>${escapeHtml(orderTimeLabel(order.created_at))}</span>
+            <small>${escapeHtml(address)}</small>
+          </div>
+          <div class="order-snapshot">
+            <div class="order-summary-badges">
+              <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
+              <span class="status-pill">${escapeHtml(orderDeliveryLabel(order))}</span>
+              <span class="status-pill ${order.payment_status === "paid" ? "success" : "warning"}">${escapeHtml(paymentMethodLabel(order.payment_method))}</span>
+              <span class="status-pill ${order.payment_status === "paid" ? "success" : "warning"}">${escapeHtml(order.payment_status === "paid" ? "Pago confirmado" : "Pago pendiente")}</span>
+            </div>
+            <p>${escapeHtml(clientLine)}</p>
+            <small>${itemCount} unidad${itemCount === 1 ? "" : "es"} · ${escapeHtml(primaryItem)}</small>
           </div>
         </div>
-      `}
-    </article>
+        <div class="order-summary-side">
+          <strong>${formatCurrency(order.total)}</strong>
+          <div class="order-summary-actions">
+            ${canAdvance ? `<button class="button primary compact-action" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
+            <button class="button ghost compact-action" data-order-whatsapp="${order.id}" type="button">WhatsApp</button>
+            <button class="small-button icon-action" data-order-print-label="${order.id}" type="button" aria-label="Imprimir etiqueta">Imprimir</button>
+          </div>
+        </div>
+      </summary>
+
+      <div class="order-detail-body">
+        <div class="order-detail-layout">
+          <div class="order-detail-main">
+            <div class="order-items-panel">
+              <div class="order-items-heading">
+                <span>Productos</span>
+                <strong>${itemCount} unidad${itemCount === 1 ? "" : "es"}</strong>
+              </div>
+              <div class="order-items-list">
+                ${order.items.map((item) => renderOrderItem(item)).join("")}
+              </div>
+              <div class="order-detail-total">
+                <span>Total</span>
+                <strong>${formatCurrency(order.total)}</strong>
+              </div>
+            </div>
+
+            ${order.notes ? `
+              <div class="order-note">
+                <span>Nota del pedido</span>
+                <p>${escapeHtml(order.notes)}</p>
+              </div>
+            ` : ""}
+          </div>
+
+          <div class="order-detail-side">
+            <div class="order-info-card">
+              <span>Datos del cliente</span>
+              <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
+              <small>${escapeHtml(order.customer_phone || "Sin teléfono")}</small>
+              <small>${escapeHtml(order.customer_email || "Sin correo registrado")}</small>
+            </div>
+            <div class="order-info-card">
+              <span>Entrega</span>
+              <strong>${escapeHtml(orderDeliveryLabel(order))}</strong>
+              <small>${escapeHtml(address)}</small>
+            </div>
+            <div class="order-info-card">
+              <span>Pago</span>
+              <strong>${escapeHtml(payment)}</strong>
+              <small>${escapeHtml(order.payment_status === "paid" ? "Pago confirmado" : "Pendiente de confirmación")}</small>
+            </div>
+            <div class="order-next-step">
+              <span>Siguiente paso</span>
+              <strong>${escapeHtml(nextAction.text)}</strong>
+            </div>
+          </div>
+        </div>
+
+        ${finalState ? renderOrderFinalState(finalState) : ""}
+        <div class="order-actions ${finalState ? "is-final" : ""}">
+          ${finalState ? "" : `
+            <label class="order-status-control">
+              Estado del pedido
+              <select data-order-status="${order.id}">
+                ${Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${order.status === value ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+            </label>
+          `}
+          <div class="order-action-buttons">
+            ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
+            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Mensaje al cliente</button>
+            <button class="button ghost" data-order-print-label="${order.id}" type="button">Imprimir etiqueta</button>
+          </div>
+        </div>
+      </div>
+    </details>
   `;
 }
 
@@ -2448,6 +2542,89 @@ async function openOrderWhatsapp(id) {
   }
 }
 
+function printOrderLabel(id) {
+  const order = adminState.orders.find((item) => Number(item.id) === Number(id));
+  if (!order) {
+    showToast("No encontré ese pedido para imprimir.");
+    return;
+  }
+  const address = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Retiro / coordinar por WhatsApp";
+  const products = (order.items || []).map((item) => {
+    const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`].filter(Boolean).join(" · ");
+    return `<li><strong>${Number(item.quantity || 0)}x</strong> ${escapeHtml(item.name)}${variants ? `<small>${escapeHtml(variants)}</small>` : ""}</li>`;
+  }).join("");
+  const printWindow = window.open("", "_blank", "width=420,height=640,noopener");
+  if (!printWindow) {
+    showToast("El navegador bloqueó la ventana de impresión.");
+    return;
+  }
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>Etiqueta ${escapeHtml(order.order_code)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 18px; color: #17130a; font-family: Arial, sans-serif; }
+        .label { width: 100%; max-width: 380px; min-height: 520px; border: 2px solid #17130a; border-radius: 18px; padding: 18px; display: grid; gap: 14px; }
+        .brand { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid #d8c8a9; padding-bottom: 12px; }
+        .brand strong { font-size: 28px; letter-spacing: 0.08em; }
+        .code { text-align: right; font-weight: 800; }
+        h1 { margin: 0; font-size: 22px; }
+        p { margin: 0; line-height: 1.35; }
+        .block { border: 1px solid #e5d6b7; border-radius: 12px; padding: 12px; }
+        .block span { display: block; color: #86631d; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+        .block strong { display: block; margin-top: 4px; font-size: 18px; }
+        ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+        li { display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 1px dashed #d8c8a9; }
+        li small { color: #63594b; }
+        .footer { margin-top: auto; display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #63594b; }
+        @media print {
+          body { padding: 0; }
+          .label { border-radius: 0; max-width: none; min-height: auto; page-break-inside: avoid; }
+        }
+      </style>
+    </head>
+    <body>
+      <section class="label">
+        <div class="brand">
+          <div>
+            <strong>GSTORE</strong>
+            <p>Etiqueta de paquete</p>
+          </div>
+          <div class="code">
+            ${escapeHtml(order.order_code)}<br>
+            ${escapeHtml(statusLabels[order.status] || order.status)}
+          </div>
+        </div>
+        <div class="block">
+          <span>Cliente</span>
+          <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
+          <p>${escapeHtml(order.customer_phone || "Sin teléfono")}</p>
+        </div>
+        <div class="block">
+          <span>Entrega</span>
+          <strong>${escapeHtml(orderDeliveryLabel(order))}</strong>
+          <p>${escapeHtml(address)}</p>
+        </div>
+        <div class="block">
+          <span>Productos</span>
+          <ul>${products || "<li>Sin productos registrados</li>"}</ul>
+        </div>
+        ${order.notes ? `<div class="block"><span>Nota</span><p>${escapeHtml(order.notes)}</p></div>` : ""}
+        <div class="footer">
+          <span>${escapeHtml(formatDate(order.created_at))}</span>
+          <strong>${formatCurrency(order.total)}</strong>
+        </div>
+      </section>
+      <script>window.onload = () => { window.focus(); window.print(); };</script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
 async function resendOrderEmail(id) {
   try {
     const data = await adminApi(`/api/admin/orders/${id}/email`, { method: "POST" });
@@ -2887,6 +3064,11 @@ function paymentLabel(method, paymentStatus) {
   return `${methodLabel}, ${status}`;
 }
 
+function paymentMethodLabel(method) {
+  if (method === "paypal") return "PayPal";
+  return "WhatsApp";
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 }
@@ -2907,6 +3089,36 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function orderDateKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "sin-fecha";
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function orderDateGroupLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  return new Intl.DateTimeFormat("es-EC", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(date).toUpperCase();
+}
+
+function orderTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-EC", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function renderEmailStatus() {
@@ -2980,10 +3192,10 @@ function renderCustomerRow(customer) {
       </td>
       <td data-label="Contacto">
         <strong>${escapeHtml(customer.email || "Sin correo")}</strong>
-        <small>${escapeHtml(customer.phone || "Sin telefono")}</small>
+        <small>${escapeHtml(customer.phone || "Sin teléfono")}</small>
       </td>
       <td data-label="Ciudad">${escapeHtml(customer.city || "Sin ciudad")}</td>
-      <td data-label="Direccion">${escapeHtml(customer.address || "Sin direccion")}</td>
+      <td data-label="Dirección">${escapeHtml(customer.address || "Sin dirección")}</td>
       <td data-label="Pedidos">${Number(customer.order_count || 0)}</td>
       <td data-label="Total"><strong>${formatCurrency(customer.total_spent)}</strong></td>
       <td data-label="Ultimo pedido">
@@ -3109,7 +3321,7 @@ function renderEmailRow(order) {
       </td>
       <td data-label="Cliente">
         <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
-        <small>${escapeHtml(order.customer_phone || "Sin telefono")}</small>
+        <small>${escapeHtml(order.customer_phone || "Sin teléfono")}</small>
       </td>
       <td data-label="Cliente email">
         <span class="status-pill ${emailStatusClass(order.customer_email_status)}">${escapeHtml(customerStatus)}</span>

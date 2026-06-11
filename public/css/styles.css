@@ -3546,7 +3546,7 @@ body {
   z-index: 1;
 }
 
-/* Ajuste desktop: la barra de filtros no debe abrir un globo vacio cuando hay pocas categorias. */
+/* Ajuste desktop: la barra de filtros no debe abrir un globo vacío cuando hay pocas categorías. */
 @media (min-width: 861px) {
   .catalog-only .catalog-tools {
     width: max-content;

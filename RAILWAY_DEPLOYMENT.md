@@ -74,7 +74,7 @@ Cloudinary acepta dos formas:
 - Variables separadas: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
 - O una sola variable: `CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME`.
 
-Si aparece `Invalid Signature`, casi siempre `CLOUDINARY_API_SECRET` no pertenece a la misma cuenta que el API key, se pego el API key en lugar del API secret, o la variable quedo con comillas/espacios. Entra al panel y abre `/api/admin/cloudinary/status` para ver el diagnostico privado sin exponer secretos.
+Si aparece `Invalid Signature`, casi siempre `CLOUDINARY_API_SECRET` no pertenece a la misma cuenta que el API key, se pegó el API key en lugar del API secret, o la variable quedó con comillas/espacios. Entra al panel y abre `/api/admin/cloudinary/status` para ver el diagnóstico privado sin exponer secretos.
 
 ## Base de datos
 

@@ -62,7 +62,7 @@ Crea un `.env` local desde `.env.example` solo si vas a probar en tu máquina. P
   - `ERROR_ALERT_EMAIL`
   - `ERROR_ALERT_MINUTES`
 - Backups:
-  - `MYSQL_BACKUP_URL` opcional si usarÃ¡s un usuario distinto al de la app
+  - `MYSQL_BACKUP_URL` opcional si usarás un usuario distinto al de la app
   - `BACKUP_DIR` para la carpeta temporal/local
   - `BACKUP_COPY_DIR` para copiar el backup fuera del servidor
   - `BACKUP_RETENTION_DAYS`
@@ -173,7 +173,7 @@ BACKUP_COPY_DIR=
 BACKUP_RETENTION_DAYS=30
 ```
 
-Si Cloudinary muestra `Invalid Signature`, revisa que el API key y API secret sean de la misma cuenta. El panel tiene diagnostico privado en `/api/admin/cloudinary/status`; muestra valores enmascarados, carpeta y advertencias sin exponer secretos.
+Si Cloudinary muestra `Invalid Signature`, revisa que el API key y API secret sean de la misma cuenta. El panel tiene diagnóstico privado en `/api/admin/cloudinary/status`; muestra valores enmascarados, carpeta y advertencias sin exponer secretos.
 
 La app crea sola las tablas `categories`, `products` y `orders` cuando arranca.
 Tambien crea `audit_logs`, `app_settings` y `password_reset_tokens`.
@@ -198,6 +198,6 @@ npm run hash:admin -- "tu-clave-larga"
 npm run backup:mysql
 ```
 
-En producciÃ³n, no dejes el Ãºnico backup dentro del mismo servidor. Configura `BACKUP_COPY_DIR` si corres el backup desde una mÃ¡quina externa, o usa un job externo con `MYSQL_BACKUP_URL` para guardar el `.json.gz` fuera de Railway.
+En producción, no dejes el único backup dentro del mismo servidor. Configura `BACKUP_COPY_DIR` si corres el backup desde una máquina externa, o usa un job externo con `MYSQL_BACKUP_URL` para guardar el `.json.gz` fuera de Railway.
 
 Lee `RAILWAY_DEPLOYMENT.md` antes de publicar.
