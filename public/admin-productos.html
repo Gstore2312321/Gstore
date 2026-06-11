@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -6,21 +6,21 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="description" content="Panel privado de GStore para gestionar productos.">
   <title>Productos | Panel GStore</title>
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/gstore-mark.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260610-pagination">
-  <link rel="stylesheet" href="css/admin.css?v=20260610-pagination">
+  <link rel="stylesheet" href="css/styles.css?v=20260611-products-list">
+  <link rel="stylesheet" href="css/admin.css?v=20260611-products-list">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
     <section class="login-view" id="loginView">
       <form class="login-card" id="loginForm">
         <div class="login-brand-panel">
-          <span class="brand-mark">G</span>
+          <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
           <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
@@ -52,12 +52,8 @@
 
     <section class="dashboard" id="dashboardView" hidden>
       <aside class="admin-sidebar">
-        <a class="brand" href="/admin" aria-label="Panel GStore">
-          <span class="brand-mark">G</span>
-          <span>
-            <strong>GStore</strong>
-            <small>Panel privado</small>
-          </span>
+        <a class="brand admin-logo-link" href="/admin" aria-label="Panel GStore">
+          <img class="admin-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="128" height="61" decoding="async">
         </a>
         <nav aria-label="Navegación del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
@@ -107,21 +103,29 @@
               <h2>Inventario visible</h2>
             </div>
             <div class="section-actions">
-              <label class="search-control">
+              <label class="search-control product-search-control">
                 <span class="sr-only">Buscar productos</span>
-                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU o categoría">
+                <input id="productSearch" type="search" placeholder="Buscar por nombre, SKU, marca o categoría">
               </label>
+              <select id="productCategoryFilter" aria-label="Filtrar por categoría">
+                <option value="all">Todas las categorías</option>
+              </select>
+              <select id="productBrandFilter" aria-label="Filtrar por marca">
+                <option value="all">Todas las marcas</option>
+              </select>
               <select id="productStatusFilter" aria-label="Filtrar productos">
                 <option value="all">Todos</option>
                 <option value="active">Activos</option>
                 <option value="hidden">Ocultos</option>
                 <option value="low">Stock bajo</option>
+                <option value="out">Sin stock</option>
+                <option value="promo">Con promo</option>
               </select>
               <button class="button primary" id="productCreateButton" type="button">Nuevo producto</button>
             </div>
           </div>
           <div class="shelf-notes" id="productShelfNotes"></div>
-          <div class="product-card-admin-grid" id="productsTable" aria-live="polite"></div>
+          <div class="product-admin-list" id="productsTable" aria-live="polite"></div>
           <div class="admin-pagination" id="productPagination" aria-label="Paginación de productos"></div>
         </section>
       </div>
@@ -379,7 +383,12 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin-money.js?v=20260610-pagination" defer></script>
-  <script src="js/admin.js?v=20260610-pagination" defer></script>
+  <script src="js/admin-money.js?v=20260611-products-list" defer></script>
+  <script src="js/admin.js?v=20260611-products-list" defer></script>
 </body>
 </html>
+
+
+
+
+

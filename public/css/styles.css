@@ -637,7 +637,7 @@ a {
 
 .store-banner-carousel {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 24px;
 }
 
@@ -655,15 +655,16 @@ a {
 
 .store-banner {
   position: relative;
-  min-height: clamp(320px, 39vw, 520px);
+  aspect-ratio: 16 / 7;
+  min-height: 0;
   flex: 0 0 100%;
   display: grid;
-  align-items: end;
+  place-items: center;
   overflow: hidden;
   isolation: isolate;
   border: 1px solid rgba(199, 150, 47, 0.22);
   border-radius: 24px;
-  background: var(--ink);
+  background: #fbf6eb;
   color: var(--paper);
   text-decoration: none;
   scroll-snap-align: start;
@@ -671,11 +672,10 @@ a {
 }
 
 .store-banner.is-featured {
-  min-height: clamp(340px, 41vw, 540px);
+  min-height: 0;
 }
 
-.store-banner img,
-.store-banner-shade {
+.store-banner img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -683,46 +683,10 @@ a {
 }
 
 .store-banner img {
-  z-index: -2;
-  object-fit: cover;
-  transform: scale(1.01);
-}
-
-.store-banner-shade {
-  z-index: -1;
-  background:
-    linear-gradient(180deg, rgba(23, 19, 10, 0.02), rgba(23, 19, 10, 0.64)),
-    linear-gradient(90deg, rgba(23, 19, 10, 0.52), transparent 70%);
-}
-
-.store-banner-copy {
-  display: grid;
-  gap: 0.42rem;
-  max-width: 42rem;
-  padding: clamp(1.2rem, 4vw, 3.2rem);
-}
-
-.store-banner-copy small {
-  color: var(--gold-2);
-  font-size: 0.75rem;
-  font-style: normal;
-  font-weight: 900;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.store-banner-copy strong {
-  font-size: clamp(2.2rem, 6vw, 5.6rem);
-  line-height: 0.94;
-}
-
-.store-banner-copy em {
-  max-width: 32ch;
-  color: rgba(255, 253, 248, 0.78);
-  font-size: clamp(0.95rem, 1.6vw, 1.2rem);
-  font-style: normal;
-  font-weight: 700;
-  line-height: 1.3;
+  object-fit: contain !important;
+  object-position: center center !important;
+  transform: none !important;
+  background: #fbf6eb;
 }
 
 .store-banner[href] {
@@ -737,24 +701,23 @@ a {
 }
 
 .store-banner-controls {
-  position: absolute;
-  right: clamp(0.7rem, 2vw, 1rem);
-  bottom: clamp(0.7rem, 2vw, 1rem);
-  z-index: 3;
-  display: inline-flex;
+  position: static;
+  width: max-content;
+  margin: 0.7rem auto 0;
+  display: flex;
   align-items: center;
   gap: 0.45rem;
   padding: 0.4rem;
-  border: 1px solid rgba(255, 253, 248, 0.3);
+  border: 1px solid rgba(199, 150, 47, 0.22);
   border-radius: 999px;
-  background: rgba(15, 12, 5, 0.72);
-  color: var(--paper);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  background: #fbf6eb;
+  color: var(--ink);
+  box-shadow: 0 10px 24px rgba(73, 52, 18, 0.08);
 }
 
 .store-banner-controls span {
   padding: 0 0.35rem;
-  color: rgba(255, 253, 248, 0.82);
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -765,8 +728,8 @@ a {
   height: 36px;
   border: 0;
   border-radius: 50%;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
   font-size: 1.35rem;
   font-weight: 900;
   cursor: pointer;
@@ -3329,33 +3292,17 @@ body {
   }
 
   .catalog-only .store-banner {
-    min-height: clamp(300px, 78vw, 420px);
+    aspect-ratio: 16 / 7;
+    min-height: 0;
     border-radius: 16px;
   }
 
   .catalog-only .store-banner.is-featured {
-    min-height: clamp(318px, 82vw, 440px);
-  }
-
-  .catalog-only .store-banner-copy {
-    padding: 1.05rem 1.05rem 4.3rem;
-  }
-
-  .catalog-only .store-banner-copy strong {
-    font-size: clamp(1.9rem, 11.6vw, 3.1rem);
-  }
-
-  .catalog-only .store-banner-copy em {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    font-size: 0.82rem;
+    min-height: 0;
   }
 
   .store-banner-controls {
-    right: 0.6rem;
-    bottom: 0.6rem;
+    margin-top: 0.5rem;
   }
 
   .store-banner-controls span {
@@ -4141,4 +4088,18 @@ body {
   .brand-logo {
     width: 98px;
   }
+}
+
+/* Final brand pass for utility pages. */
+.success-logo {
+  width: min(154px, 54vw);
+  height: auto;
+  display: block;
+  margin-bottom: 0.15rem;
+  border-radius: 14px;
+}
+
+.legal-page .brand-logo {
+  width: min(152px, 44vw);
+  max-height: none;
 }

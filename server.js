@@ -512,6 +512,41 @@ function publicOrder(order) {
   };
 }
 
+const KNOWN_PRODUCT_BRANDS = [
+  { label: "Victoria's Secret", terms: ["victoria's secret", "victorias secret", "victoria secret"] },
+  { label: "Banana Republic", terms: ["banana republic"] },
+  { label: "Tommy Hilfiger", terms: ["tommy hilfiger", "tommy"] },
+  { label: "Calvin Klein", terms: ["calvin klein"] },
+  { label: "Mont Blanc", terms: ["mont blanc", "montblanc"] },
+  { label: "Nautica", terms: ["nautica", "náutica"] },
+  { label: "Guess", terms: ["guess"] },
+  { label: "Fossil", terms: ["fossil"] },
+  { label: "Levi's", terms: ["levi's", "levis"] },
+  { label: "Nike", terms: ["nike"] },
+  { label: "RBX", terms: ["rbx"] }
+];
+
+function normalizeBrandText(value) {
+  return cleanText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function inferProductBrand(source = {}) {
+  const text = normalizeBrandText([
+    source.name,
+    source.sku,
+    source.category_name,
+    source.category?.name
+  ].filter(Boolean).join(" "));
+  if (!text) return "";
+  const match = KNOWN_PRODUCT_BRANDS.find((brand) => (
+    brand.terms.some((term) => text.includes(normalizeBrandText(term)))
+  ));
+  return match ? match.label : "";
+}
+
 function productFromRow(row, options = {}) {
   if (!row) return null;
   const product = {
@@ -532,6 +567,7 @@ function productFromRow(row, options = {}) {
     colors: parseJsonList(row.colors_json),
     active: Boolean(row.active),
     featured: Boolean(row.featured),
+    brand: inferProductBrand(row),
     promo_type: normalizePromoType(row.promo_type),
     promo_label: row.promo_label || "",
     category: row.category_id ? {
@@ -995,7 +1031,7 @@ async function ensureSchema() {
     await dbRun(`
       UPDATE products
       SET promo_type = 'last_units', promo_label = 'Últimas unidades'
-      WHERE stock <= 2
+      WHERE stock > 0 AND stock <= 2
     `);
   }
 
@@ -1241,6 +1277,7 @@ function productListQuery(options = {}) {
   const search = cleanSearchText(options.search);
   const status = cleanText(options.status || "all").toLowerCase();
   const category = cleanText(options.category || "all").toLowerCase();
+  const brand = cleanSearchText(options.brand || "all");
   const where = [];
   const params = [];
 
@@ -1257,9 +1294,15 @@ function productListQuery(options = {}) {
     where.push("c.slug = ?");
     params.push(category);
   }
+  if (brand && brand.toLowerCase() !== "all") {
+    const term = likeParam(brand);
+    where.push("(p.name LIKE ? ESCAPE '\\\\' OR p.sku LIKE ? ESCAPE '\\\\')");
+    params.push(term, term);
+  }
   if (status === "active") where.push("p.active = 1");
   if (status === "hidden") where.push("p.active = 0");
-  if (status === "low") where.push("p.stock <= 2");
+  if (status === "low") where.push("p.stock > 0 AND p.stock <= 2");
+  if (status === "out") where.push("p.stock <= 0");
   if (status === "promo") where.push("(p.promo_type != 'none' OR p.promo_label != '' OR p.compare_price > p.price)");
 
   const sort = cleanText(options.sort || "default").toLowerCase();
@@ -1284,7 +1327,7 @@ async function getProductSummary(options = {}) {
     dbGet(`SELECT COUNT(*) AS count FROM products ${baseWhere}`),
     dbGet(`SELECT COUNT(*) AS count FROM products ${activeWhere}`),
     dbGet("SELECT COUNT(*) AS count FROM products WHERE active = 0"),
-    dbGet(`SELECT COUNT(*) AS count FROM products ${stockWhere} stock <= 2`),
+    dbGet(`SELECT COUNT(*) AS count FROM products ${stockWhere} stock > 0 AND stock <= 2`),
     dbGet(`SELECT COUNT(*) AS count FROM products ${includeInactive ? "WHERE" : "WHERE active = 1 AND"} stock <= 0`),
     dbGet(`SELECT COUNT(*) AS count FROM products ${stockWhere} (promo_type != 'none' OR promo_label != '' OR compare_price > price)`)
   ]);
@@ -1298,8 +1341,42 @@ async function getProductSummary(options = {}) {
   };
 }
 
-async function getProducts({ includeInactive = false, includePrivate = false, pagination = null, search = "", status = "all", category = "all", sort = "default" } = {}) {
-  const listQuery = productListQuery({ includeInactive, search, status, category, sort });
+async function getProductFilterOptions(options = {}) {
+  const includeInactive = Boolean(options.includeInactive);
+  const productWhere = includeInactive ? "" : "WHERE active = 1 AND stock > 0";
+  const categoryJoinFilter = includeInactive ? "" : "AND p.active = 1 AND p.stock > 0";
+  const [categoryRows, productRows] = await Promise.all([
+    dbAll(`
+      SELECT c.*, COUNT(p.id) AS product_count
+      FROM categories c
+      LEFT JOIN products p ON p.category_id = c.id ${categoryJoinFilter}
+      GROUP BY c.id, c.name, c.slug, c.description, c.active, c.created_at, c.updated_at
+      ORDER BY c.name ASC
+    `),
+    dbAll(`
+      SELECT name, sku, category_id
+      FROM products
+      ${productWhere}
+      ORDER BY name ASC
+    `)
+  ]);
+  const brands = new Map();
+  productRows.forEach((row) => {
+    const label = inferProductBrand(row);
+    if (!label) return;
+    const current = brands.get(label) || 0;
+    brands.set(label, current + 1);
+  });
+  return {
+    categories: categoryRows.map(categoryFromRow),
+    brands: Array.from(brands.entries())
+      .map(([name, count]) => ({ name, slug: slugify(name), count }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"))
+  };
+}
+
+async function getProducts({ includeInactive = false, includePrivate = false, pagination = null, search = "", status = "all", category = "all", brand = "all", sort = "default" } = {}) {
+  const listQuery = productListQuery({ includeInactive, search, status, category, brand, sort });
   const sql = `
     SELECT p.*, c.name AS category_name, c.slug AS category_slug
     FROM products p
@@ -1321,10 +1398,15 @@ async function getProducts({ includeInactive = false, includePrivate = false, pa
   ]);
   const products = rows.map((row) => productFromRow(row, { includePrivate }));
   if (!pagination) return products;
+  const [summary, filters] = await Promise.all([
+    getProductSummary({ includeInactive }),
+    getProductFilterOptions({ includeInactive })
+  ]);
   return {
     products,
     pagination: paginationMeta(pagination, totalRow?.count),
-    summary: await getProductSummary({ includeInactive })
+    summary,
+    filters
   };
 }
 
@@ -1797,6 +1879,50 @@ function getWhatsappUrl(order) {
   const phone = normalizePhone(process.env.WHATSAPP_ADMIN_PHONE);
   if (!phone) throw httpError(503, "WhatsApp no está disponible por ahora.");
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order))}`;
+}
+
+function normalizeWhatsappRecipientPhone(value) {
+  const digits = normalizePhone(value).replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("593")) return digits;
+  if (digits.length === 10 && digits.startsWith("0")) return `593${digits.slice(1)}`;
+  if (digits.length === 9) return `593${digits}`;
+  return digits;
+}
+
+function buildCustomerOrderFollowupMessage(order) {
+  const deliveryMethod = normalizeDeliveryMethod(order.delivery_method);
+  const items = parseJsonList(order.items_json)
+    .map((item) => {
+      const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`]
+        .filter(Boolean)
+        .join(", ");
+      return `- ${item.quantity} x ${item.name}${variants ? ` (${variants})` : ""}`;
+    })
+    .join("\n");
+  const firstName = cleanText(order.customer_name).split(/\s+/)[0] || "cliente";
+
+  return [
+    `Hola ${firstName}, soy de ${STORE_NAME}.`,
+    "",
+    `Te escribo por tu pedido ${order.order_code}.`,
+    "Tenemos registrado:",
+    items,
+    "",
+    `Total: $${formatMoney(order.total)} ${CURRENCY}`,
+    `Entrega: ${deliveryMethod === "pickup" ? "Retiro coordinado" : "Envío a domicilio"}`,
+    order.customer_city ? `Ciudad: ${order.customer_city}` : "",
+    deliveryMethod === "delivery" && order.customer_address ? `Dirección: ${order.customer_address}` : "",
+    order.notes ? `Nota: ${order.notes}` : "",
+    "",
+    "¿Me confirmas por favor si estos datos están correctos para preparar tu pedido?"
+  ].filter(Boolean).join("\n");
+}
+
+function getCustomerWhatsappUrl(order) {
+  const phone = normalizeWhatsappRecipientPhone(order.customer_phone);
+  if (!phone) throw httpError(422, "Este pedido no tiene teléfono válido para WhatsApp.");
+  return `https://wa.me/${phone}?text=${encodeURIComponent(buildCustomerOrderFollowupMessage(order))}`;
 }
 
 function resendConfigured() {
@@ -3129,6 +3255,8 @@ app.get("/api/admin/products", requireAdmin, asyncHandler(async (req, res) => {
     pagination,
     search: req.query.q || req.query.search,
     status: req.query.status,
+    category: req.query.category,
+    brand: req.query.brand,
     sort: req.query.sort
   });
   res.json(result);
@@ -3406,7 +3534,7 @@ app.get("/api/admin/orders/:id/whatsapp", requireAdmin, asyncHandler(async (req,
   const order = await getOrderById(Number(req.params.id));
   if (!order) return next(httpError(404, "Pedido no encontrado."));
   if (isFinalOrderStatus(order.status)) throw httpError(409, "Este pedido ya está cerrado.");
-  res.json({ whatsappUrl: getWhatsappUrl(order) });
+  res.json({ whatsappUrl: getCustomerWhatsappUrl(order) });
 }));
 
 app.use((req, res, next) => {

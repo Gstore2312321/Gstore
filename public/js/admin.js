@@ -31,6 +31,9 @@ const adminState = {
   charts: {},
   productSearch: "",
   productStatusFilter: "all",
+  productCategoryFilter: "all",
+  productBrandFilter: "all",
+  productFilters: { categories: [], brands: [] },
   customerSearch: "",
   emailSearch: "",
   emailStatusFilter: "all",
@@ -100,6 +103,8 @@ const adminEls = {
   productShelfNotes: document.querySelector("#productShelfNotes"),
   productSearch: document.querySelector("#productSearch"),
   productStatusFilter: document.querySelector("#productStatusFilter"),
+  productCategoryFilter: document.querySelector("#productCategoryFilter"),
+  productBrandFilter: document.querySelector("#productBrandFilter"),
   productDrawer: document.querySelector("#productDrawer"),
   productDrawerTitle: document.querySelector("#productDrawerTitle"),
   productDrawerKicker: document.querySelector("#productDrawerKicker"),
@@ -264,6 +269,16 @@ function bindAdminEvents() {
   });
   on(adminEls.productStatusFilter, "change", (event) => {
     adminState.productStatusFilter = event.target.value;
+    adminState.pagination.products.page = 1;
+    refreshProducts().catch(showErrorToast);
+  });
+  on(adminEls.productCategoryFilter, "change", (event) => {
+    adminState.productCategoryFilter = event.target.value;
+    adminState.pagination.products.page = 1;
+    refreshProducts().catch(showErrorToast);
+  });
+  on(adminEls.productBrandFilter, "change", (event) => {
+    adminState.productBrandFilter = event.target.value;
     adminState.pagination.products.page = 1;
     refreshProducts().catch(showErrorToast);
   });
@@ -727,6 +742,7 @@ async function refreshCategories() {
   const data = await adminApi("/api/admin/categories");
   adminState.categories = data.categories || [];
   renderCategorySelect();
+  renderProductFilterOptions();
   renderCategories();
   renderInsights();
 }
@@ -737,11 +753,15 @@ async function refreshProducts() {
     page,
     limit: ADMIN_PAGE_LIMIT,
     q: adminState.productSearch,
-    status: adminState.productStatusFilter
+    status: adminState.productStatusFilter,
+    category: adminState.productCategoryFilter,
+    brand: adminState.productBrandFilter
   }));
   adminState.products = data.products || [];
   adminState.pagination.products = normalizePagination(data.pagination, page);
   adminState.summaries.products = data.summary || null;
+  adminState.productFilters = data.filters || adminState.productFilters || { categories: [], brands: [] };
+  renderProductFilterOptions();
   renderProductsTable();
   renderProductShelfNotes();
   renderInsights();
@@ -1338,22 +1358,75 @@ function renderStoreSettings() {
   setText(adminEls.shippingCostBadge, `${formatCurrency(amount)} envío`);
 }
 
+function renderProductFilterOptions() {
+  const filters = adminState.productFilters || {};
+  const categories = filters.categories?.length ? filters.categories : adminState.categories;
+  if (adminEls.productCategoryFilter) {
+    const selected = adminState.productCategoryFilter || "all";
+    const options = categories
+      .filter((category) => category?.slug)
+      .map((category) => {
+        const count = Number(category.product_count || 0);
+        const countText = count ? ` (${count})` : "";
+        return `<option value="${escapeAttr(category.slug)}">${escapeHtml(category.name)}${countText}</option>`;
+      });
+    adminEls.productCategoryFilter.innerHTML = [
+      `<option value="all">Todas las categorías</option>`,
+      ...options
+    ].join("");
+    adminEls.productCategoryFilter.value = selected;
+    if (adminEls.productCategoryFilter.value !== selected) {
+      adminState.productCategoryFilter = "all";
+      adminEls.productCategoryFilter.value = "all";
+    }
+  }
+  if (adminEls.productBrandFilter) {
+    const selected = adminState.productBrandFilter || "all";
+    const brands = filters.brands || [];
+    adminEls.productBrandFilter.innerHTML = [
+      `<option value="all">Todas las marcas</option>`,
+      ...brands.map((brand) => {
+        const count = Number(brand.count || 0);
+        const countText = count ? ` (${count})` : "";
+        return `<option value="${escapeAttr(brand.name)}">${escapeHtml(brand.name)}${countText}</option>`;
+      })
+    ].join("");
+    adminEls.productBrandFilter.value = selected;
+    if (adminEls.productBrandFilter.value !== selected) {
+      adminState.productBrandFilter = "all";
+      adminEls.productBrandFilter.value = "all";
+    }
+  }
+}
+
 function renderProductShelfNotes() {
   if (!adminEls.productShelfNotes) return;
   const summary = adminState.summaries.products || {};
-  const lowStock = Number(summary.lowStock ?? adminState.products.filter((product) => Number(product.stock || 0) <= 2).length);
+  const lowStock = Number(summary.lowStock ?? adminState.products.filter((product) => Number(product.stock || 0) > 0 && Number(product.stock || 0) <= 2).length);
   const outOfStock = Number(summary.outOfStock ?? adminState.products.filter((product) => Number(product.stock || 0) <= 0).length);
   const hidden = Number(summary.hidden ?? adminState.products.filter((product) => !product.active).length);
   const promos = Number(summary.promos ?? adminState.products.filter((product) => (product.promo_type || "none") !== "none" || product.promo_label).length);
+  const active = Number(summary.active ?? adminState.products.filter((product) => product.active).length);
   const total = Number(summary.total ?? adminState.pagination.products.total ?? adminState.products.length);
-  adminEls.productShelfNotes.innerHTML = [
-    `<span class="shelf-note">${total} productos registrados</span>`,
-    `<span class="shelf-note">${adminState.products.length} en esta página</span>`,
-    outOfStock ? `<span class="shelf-note">${outOfStock} sin stock</span>` : "",
-    `<span class="shelf-note">${lowStock} con stock bajo</span>`,
-    `<span class="shelf-note">${promos} con promo</span>`,
-    hidden ? `<span class="shelf-note">${hidden} ocultos</span>` : ""
-  ].filter(Boolean).join("");
+  adminEls.productShelfNotes.innerHTML = `
+    <div class="inventory-summary-grid" aria-label="Totales de inventario">
+      ${inventorySummaryCard("Registrados", total, `${active} activos`)}
+      ${inventorySummaryCard("Sin stock", outOfStock, "No salen en catálogo", outOfStock ? "is-warning" : "")}
+      ${inventorySummaryCard("Stock bajo", lowStock, "Reponer pronto", lowStock ? "is-warning" : "")}
+      ${inventorySummaryCard("Con promo", promos, "Ofertas activas")}
+      ${inventorySummaryCard("Ocultos", hidden, "Solo admin", hidden ? "is-muted" : "")}
+    </div>
+  `;
+}
+
+function inventorySummaryCard(label, value, detail = "", className = "") {
+  return `
+    <article class="inventory-summary-card ${className}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+    </article>
+  `;
 }
 
 function productStockAdminNote(product) {
@@ -1366,39 +1439,79 @@ function productStockAdminNote(product) {
 function renderProductsTable() {
   if (!adminEls.productsTable) return;
   const products = adminState.products || [];
-  adminEls.productsTable.innerHTML = products.map((product) => `
-    <article class="product-admin-card ${product.active ? "" : "is-hidden-product"}">
-      <div class="product-card-preview">
-        <div class="table-product">
-          <img ${imageAttrs(product.image_url, { width: 260, sizes: "(max-width: 760px) 78px, 96px" })} ${imageFrameAttrs(product, { includeZoom: false })} alt="${escapeAttr(product.name)}">
-          <div>
-            <strong>${escapeHtml(product.name)}</strong>
-            <span>${escapeHtml(product.sku || "Sin SKU")}</span>
-          </div>
+  adminEls.productsTable.innerHTML = products.length ? `
+    <div class="product-list-head" aria-hidden="true">
+      <span>Producto</span>
+      <span>Categoría / marca</span>
+      <span>Precio</span>
+      <span>Ganancia</span>
+      <span>Stock</span>
+      <span>Acciones</span>
+    </div>
+    ${products.map(renderProductListRow).join("")}
+  ` : emptyAdminState("No hay productos para este filtro.", "Ajusta la búsqueda o agrega una pieza nueva.");
+  renderAdminPagination("products", adminEls.productPagination);
+}
+
+function renderProductListRow(product) {
+  const stock = Number(product.stock || 0);
+  const hasDiscount = Number(product.compare_price || 0) > Number(product.price || 0);
+  const profit = productProfitAmount(product);
+  const brand = cleanProductBrand(product);
+  const variants = [...(product.sizes || []), ...(product.colors || [])].filter(Boolean).slice(0, 3);
+  const stockClass = stock <= 0 ? "is-critical" : stock <= 2 ? "is-warning" : "";
+  const rowClass = [
+    product.active ? "" : "is-hidden-product",
+    stock <= 0 ? "is-out-product" : ""
+  ].filter(Boolean).join(" ");
+  return `
+    <article class="product-list-row ${rowClass}">
+      <div class="product-list-main">
+        <img ${imageAttrs(product.image_url, { width: 180, sizes: "(max-width: 760px) 72px, 74px" })} ${imageFrameAttrs(product, { includeZoom: false })} alt="${escapeAttr(product.name)}">
+        <div>
+          <strong>${escapeHtml(product.name)}</strong>
+          <span>${escapeHtml(product.sku || "Sin SKU")}</span>
+          ${variants.length ? `<div class="product-row-variants">${variants.map((item) => `<small>${escapeHtml(item)}</small>`).join("")}</div>` : ""}
         </div>
-        <span class="product-admin-category">${escapeHtml(product.category?.name || "Sin categoría")}</span>
       </div>
-      <div class="product-admin-metrics">
-        ${productMetricCard("Venta", formatCurrency(product.price), Number(product.compare_price || 0) > Number(product.price || 0) ? `Antes ${formatCurrency(product.compare_price)}` : "")}
-        ${productMetricCard("Ganancia", formatCurrency(productProfitAmount(product)), `${productMarginPercent(product)}% margen`, productProfitAmount(product) < 0 ? "is-negative" : "is-profit")}
-        ${productMetricCard("Stock", Number(product.stock || 0), productStockAdminNote(product), Number(product.stock || 0) <= 0 ? "is-negative" : "")}
+      <div class="product-list-cell product-list-taxonomy">
+        <small>Categoría</small>
+        <strong>${escapeHtml(product.category?.name || "Sin categoría")}</strong>
+        ${brand ? `<span>${escapeHtml(brand)}</span>` : `<span>Sin marca registrada</span>`}
       </div>
-      <div class="product-admin-meta">
+      <div class="product-list-cell">
+        <small>Venta</small>
+        <strong>${formatCurrency(product.price)}</strong>
+        ${hasDiscount ? `<span>Antes ${formatCurrency(product.compare_price)}</span>` : ""}
+      </div>
+      <div class="product-list-cell ${profit < 0 ? "is-negative" : "is-profit"}">
+        <small>Ganancia</small>
+        <strong>${Number(product.cost_price || 0) > 0 ? formatCurrency(profit) : "-"}</strong>
+        <span>${Number(product.cost_price || 0) > 0 ? `${productMarginPercent(product)}% margen` : "Sin costo privado"}</span>
+      </div>
+      <div class="product-list-cell ${stockClass}">
+        <small>Stock</small>
+        <strong>${stock}</strong>
+        <span>${escapeHtml(productStockAdminNote(product))}</span>
+      </div>
+      <div class="product-list-status">
         <div class="status-stack">
           <span class="status-pill ${product.active ? "" : "off"}">${product.active ? "Activo" : "Oculto"}</span>
+          ${stock <= 0 ? `<span class="status-pill off">Sin stock</span>` : ""}
           ${productPromoAdmin(product)}
         </div>
         <span class="product-admin-private">${productCostAdmin(product)}</span>
-      </div>
-      <div class="product-admin-actions">
-        <div class="row-actions">
+        <div class="row-actions product-list-actions">
           <button class="small-button" data-edit-product="${product.id}" type="button">Editar</button>
           <button class="small-button danger" data-delete-product="${product.id}" type="button">Eliminar</button>
         </div>
       </div>
     </article>
-  `).join("") || emptyAdminState("No hay productos para este filtro.", "Ajusta la búsqueda o agrega una pieza nueva.");
-  renderAdminPagination("products", adminEls.productPagination);
+  `;
+}
+
+function cleanProductBrand(product) {
+  return String(product.brand || "").trim();
 }
 
 function renderAdminPagination(kind, container) {
@@ -1592,7 +1705,9 @@ function filteredProducts() {
       filter === "all" ||
       (filter === "active" && product.active) ||
       (filter === "hidden" && !product.active) ||
-      (filter === "low" && Number(product.stock || 0) <= 2);
+      (filter === "low" && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= 2) ||
+      (filter === "out" && Number(product.stock || 0) <= 0) ||
+      (filter === "promo" && ((product.promo_type || "none") !== "none" || product.promo_label || Number(product.compare_price || 0) > Number(product.price || 0)));
     return matchesQuery && matchesFilter;
   });
 }
@@ -1721,12 +1836,16 @@ function renderOrdersDayGroup(group) {
 function renderOrderCard(order) {
   const nextAction = orderNextAction(order);
   const finalState = orderFinalState(order);
-  const itemCount = order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const primaryItem = order.items[0]?.name || "Sin productos";
+  const items = Array.isArray(order.items) ? order.items : [];
+  const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const primaryItem = items[0]?.name || "Sin productos";
+  const extraItems = items.length > 1 ? ` + ${items.length - 1} más` : "";
   const address = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Sin dirección adicional";
   const payment = paymentLabel(order.payment_method, order.payment_status);
-  const canAdvance = Boolean(nextAction.status);
-  const clientLine = [order.customer_name || "Cliente sin nombre", order.customer_phone || "Sin teléfono"].filter(Boolean).join(" · ");
+  const clientName = order.customer_name || "Cliente sin nombre";
+  const clientPhone = order.customer_phone || "Sin teléfono";
+  const productSummary = `${itemCount} unidad${itemCount === 1 ? "" : "es"} · ${primaryItem}${extraItems}`;
+  const paymentStateLabel = order.payment_status === "paid" ? "Pago confirmado" : "Pago pendiente";
   return `
     <details class="order-card order-status-${escapeAttr(order.status || "new")}">
       <summary class="order-summary">
@@ -1740,20 +1859,15 @@ function renderOrderCard(order) {
             <div class="order-summary-badges">
               <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
               <span class="status-pill">${escapeHtml(orderDeliveryLabel(order))}</span>
-              <span class="status-pill ${order.payment_status === "paid" ? "success" : "warning"}">${escapeHtml(paymentMethodLabel(order.payment_method))}</span>
-              <span class="status-pill ${order.payment_status === "paid" ? "success" : "warning"}">${escapeHtml(order.payment_status === "paid" ? "Pago confirmado" : "Pago pendiente")}</span>
+              <span class="status-pill ${order.payment_status === "paid" ? "success" : "warning"}">${escapeHtml(paymentStateLabel)}</span>
             </div>
-            <p>${escapeHtml(clientLine)}</p>
-            <small>${itemCount} unidad${itemCount === 1 ? "" : "es"} · ${escapeHtml(primaryItem)}</small>
+            <p><strong>${escapeHtml(clientName)}</strong><span>${escapeHtml(clientPhone)}</span></p>
+            <small>${escapeHtml(productSummary)}</small>
           </div>
         </div>
-        <div class="order-summary-side">
+        <div class="order-summary-total">
+          <small>Total</small>
           <strong>${formatCurrency(order.total)}</strong>
-          <div class="order-summary-actions">
-            ${canAdvance ? `<button class="button primary compact-action" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
-            <button class="button ghost compact-action" data-order-whatsapp="${order.id}" type="button">WhatsApp</button>
-            <button class="small-button icon-action" data-order-print-label="${order.id}" type="button" aria-label="Imprimir etiqueta">Imprimir</button>
-          </div>
         </div>
       </summary>
 
@@ -1766,7 +1880,7 @@ function renderOrderCard(order) {
                 <strong>${itemCount} unidad${itemCount === 1 ? "" : "es"}</strong>
               </div>
               <div class="order-items-list">
-                ${order.items.map((item) => renderOrderItem(item)).join("")}
+                ${items.map((item) => renderOrderItem(item)).join("")}
               </div>
               <div class="order-detail-total">
                 <span>Total</span>
@@ -1818,7 +1932,7 @@ function renderOrderCard(order) {
           `}
           <div class="order-action-buttons">
             ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
-            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Mensaje al cliente</button>
+            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Contactar cliente</button>
             <button class="button ghost" data-order-print-label="${order.id}" type="button">Imprimir etiqueta</button>
           </div>
         </div>
@@ -1887,7 +2001,7 @@ function orderStatusClass(status) {
 function orderNextAction(order) {
   const delivery = order.delivery_method === "pickup" ? "retiro" : "envío";
   const map = {
-    new: { status: "preparing", label: "Confirmar y preparar", text: `Confirmar con la clienta y preparar el ${delivery}.` },
+    new: { status: "preparing", label: "Confirmar y preparar", text: `Contactar al cliente, confirmar datos y preparar el ${delivery}.` },
     waiting_payment: { status: "paid", label: "Marcar pagado", text: "Revisar el pago antes de preparar." },
     paid: { status: "preparing", label: "Preparar pedido", text: `Preparar productos para ${delivery}.` },
     preparing: { status: "ready", label: "Marcar listo", text: "Dejar el pedido listo para entrega." },
@@ -2542,23 +2656,14 @@ async function openOrderWhatsapp(id) {
   }
 }
 
-function printOrderLabel(id) {
-  const order = adminState.orders.find((item) => Number(item.id) === Number(id));
-  if (!order) {
-    showToast("No encontré ese pedido para imprimir.");
-    return;
-  }
+function buildOrderLabelHtml(order) {
   const address = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Retiro / coordinar por WhatsApp";
   const products = (order.items || []).map((item) => {
     const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`].filter(Boolean).join(" · ");
     return `<li><strong>${Number(item.quantity || 0)}x</strong> ${escapeHtml(item.name)}${variants ? `<small>${escapeHtml(variants)}</small>` : ""}</li>`;
   }).join("");
-  const printWindow = window.open("", "_blank", "width=420,height=640,noopener");
-  if (!printWindow) {
-    showToast("El navegador bloqueó la ventana de impresión.");
-    return;
-  }
-  printWindow.document.write(`
+
+  return `
     <!doctype html>
     <html lang="es">
     <head>
@@ -2566,6 +2671,7 @@ function printOrderLabel(id) {
       <title>Etiqueta ${escapeHtml(order.order_code)}</title>
       <style>
         * { box-sizing: border-box; }
+        @page { size: 100mm 150mm; margin: 6mm; }
         body { margin: 0; padding: 18px; color: #17130a; font-family: Arial, sans-serif; }
         .label { width: 100%; max-width: 380px; min-height: 520px; border: 2px solid #17130a; border-radius: 18px; padding: 18px; display: grid; gap: 14px; }
         .brand { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid #d8c8a9; padding-bottom: 12px; }
@@ -2610,7 +2716,7 @@ function printOrderLabel(id) {
         </div>
         <div class="block">
           <span>Productos</span>
-          <ul>${products || "<li>Sin productos registrados</li>"}</ul>
+          <ul>${products || "<li>Sin productos en el pedido</li>"}</ul>
         </div>
         ${order.notes ? `<div class="block"><span>Nota</span><p>${escapeHtml(order.notes)}</p></div>` : ""}
         <div class="footer">
@@ -2618,11 +2724,45 @@ function printOrderLabel(id) {
           <strong>${formatCurrency(order.total)}</strong>
         </div>
       </section>
-      <script>window.onload = () => { window.focus(); window.print(); };</script>
     </body>
     </html>
-  `);
+  `;
+}
+
+function openOrderLabelPrintWindow(html) {
+  const printWindow = window.open("", "_blank", "width=420,height=640");
+  if (!printWindow) {
+    showToast("El navegador bloqueó la impresión. Permite ventanas emergentes para imprimir la etiqueta.");
+    return;
+  }
+  try {
+    printWindow.opener = null;
+  } catch {
+    // Some browsers lock this property; the print window still works.
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
   printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => {
+    try {
+      printWindow.print();
+    } catch {
+      showToast("No se pudo abrir el diálogo de impresión.");
+    }
+  }, 180);
+  showToast("Etiqueta abierta para imprimir.");
+}
+
+function printOrderLabel(id) {
+  const order = adminState.orders.find((item) => Number(item.id) === Number(id));
+  if (!order) {
+    showToast("No encontré ese pedido para imprimir.");
+    return;
+  }
+
+  const html = buildOrderLabelHtml(order);
+  openOrderLabelPrintWindow(html);
 }
 
 async function resendOrderEmail(id) {

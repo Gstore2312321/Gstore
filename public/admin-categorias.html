@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -6,21 +6,21 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="description" content="Panel privado de GStore para gestionar categorías.">
   <title>Categorías | Panel GStore</title>
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/gstore-mark.svg" type="image/svg+xml">
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260610-pagination">
-  <link rel="stylesheet" href="css/admin.css?v=20260610-pagination">
+  <link rel="stylesheet" href="css/styles.css?v=20260610-print-label">
+  <link rel="stylesheet" href="css/admin.css?v=20260610-print-label">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="categories">
   <main class="admin-shell">
     <section class="login-view" id="loginView">
       <form class="login-card" id="loginForm">
         <div class="login-brand-panel">
-          <span class="brand-mark">G</span>
+          <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
           <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
@@ -52,12 +52,8 @@
 
     <section class="dashboard" id="dashboardView" hidden>
       <aside class="admin-sidebar">
-        <a class="brand" href="/admin" aria-label="Panel GStore">
-          <span class="brand-mark">G</span>
-          <span>
-            <strong>GStore</strong>
-            <small>Panel privado</small>
-          </span>
+        <a class="brand admin-logo-link" href="/admin" aria-label="Panel GStore">
+          <img class="admin-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="128" height="61" decoding="async">
         </a>
         <nav aria-label="Navegación del panel">
           <a href="/admin" data-nav-page="dashboard">Resumen</a>
@@ -169,7 +165,12 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/admin-money.js?v=20260610-pagination" defer></script>
-  <script src="js/admin.js?v=20260610-pagination" defer></script>
+  <script src="js/admin-money.js?v=20260610-print-label" defer></script>
+  <script src="js/admin.js?v=20260610-print-label" defer></script>
 </body>
 </html>
+
+
+
+
+

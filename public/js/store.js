@@ -378,7 +378,7 @@ function bannerLinkExtraAttrs(url) {
 
 function renderStoreBanners() {
   if (!els.storeBanners) return;
-  const banners = state.banners.filter((banner) => banner?.image_url && banner?.title).slice(0, 6);
+  const banners = state.banners.filter((banner) => banner?.image_url).slice(0, 6);
   els.storeBanners.hidden = banners.length === 0;
   if (!banners.length) {
     els.storeBanners.innerHTML = "";
@@ -398,13 +398,7 @@ function renderStoreBanners() {
           sizes: "(max-width: 760px) 92vw, 1120px",
           loading: index === 0 ? "eager" : "lazy",
           fetchPriority: index === 0 ? "high" : "low"
-        })} ${imageFrameAttrs(banner)} alt="${escapeAttr(banner.title)}">
-        <span class="store-banner-shade" aria-hidden="true"></span>
-        <span class="store-banner-copy">
-          <small>${escapeHtml(banner.kicker || "Promo")}</small>
-          <strong>${escapeHtml(banner.title)}</strong>
-          ${banner.text ? `<em>${escapeHtml(banner.text)}</em>` : ""}
-        </span>
+        })} ${imageFrameAttrs({ ...banner, image_fit: "contain", image_zoom: 1 }, { includeZoom: false })} alt="${escapeAttr(banner.title || "Banner de tienda")}">
       </${tag}>
     `;
   }).join("");
