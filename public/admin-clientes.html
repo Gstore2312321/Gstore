@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260610-print-label">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="customers">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, pedidos, clientes y reportes en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Clientes guardados</span>
-            <span>Tabla de clientes</span>
-            <span>Exportacion CSV</span>
+            <span>Historial de clientes</span>
+            <span>Exportaci?n CSV</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -74,8 +74,9 @@
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Marketing</span>
-            <h1>Clientes</h1>
+            <span class="eyebrow">Clientes</span>
+            <h1>Clientes y seguimiento</h1>
+            <p class="admin-topbar-copy">Contacto, compras y actividad reciente en una ficha rápida para atender mejor a cada cliente.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="refreshCustomersButton" type="button">Actualizar clientes</button>
@@ -86,9 +87,9 @@
         <section class="admin-section customers-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Lista privada</span>
-              <h2>Base de clientes</h2>
-              <p>Datos consolidados por cliente para seguimiento comercial.</p>
+              <span class="eyebrow">Historial comercial</span>
+              <h2>Historial de clientes</h2>
+              <p>Busca por nombre, teléfono, correo, ciudad o número de pedido. Abre la ficha para ver el historial completo.</p>
             </div>
           </div>
 
@@ -114,41 +115,41 @@
           <div class="customer-toolbar">
             <label>
               Buscar cliente
-              <input id="customerSearch" type="search" placeholder="Nombre, teléfono, correo o ciudad">
+              <input id="customerSearch" type="search" placeholder="Nombre, teléfono, correo, ciudad o pedido">
             </label>
           </div>
 
-          <div class="table-wrap customer-table-wrap">
-            <table class="customers-table">
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th>Contacto</th>
-                  <th>Ciudad</th>
-                  <th>Direccion</th>
-                  <th>Pedidos</th>
-                  <th>Total</th>
-                  <th>Ultimo pedido</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="customersList"></tbody>
-            </table>
-          </div>
+          <div class="customer-list" id="customersList" aria-live="polite"></div>
           <div class="admin-pagination" id="customersPagination" aria-label="Paginación de clientes"></div>
         </section>
       </div>
     </section>
   </main>
 
+  <div class="customer-modal" id="customerModal" hidden>
+    <div class="customer-modal-backdrop" data-close-customer-modal></div>
+    <section class="customer-modal-panel" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle">
+      <header class="customer-modal-header">
+        <div>
+          <span class="eyebrow">Perfil de cliente</span>
+          <h2 id="customerModalTitle">Cliente</h2>
+        </div>
+        <button class="icon-close customer-modal-close" id="closeCustomerModal" data-close-customer-modal type="button">Cerrar</button>
+      </header>
+      <div class="customer-modal-body" id="customerModalBody">
+        <div class="empty-state">
+          <strong>Cargando cliente</strong>
+          <span>Estamos preparando el historial.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260610-print-label" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
-
-
-
 
 

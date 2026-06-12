@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260611-order-email-v2">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="orders">
   <main class="admin-shell">
@@ -23,7 +23,7 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
@@ -74,9 +74,9 @@
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Panel de administración</span>
+            <span class="eyebrow">Operación diaria</span>
             <h1>Pedidos</h1>
-            <p class="admin-topbar-copy">Gestiona los pedidos de la tienda sin perder de vista pago, entrega y cliente.</p>
+            <p class="admin-topbar-copy">Primero aparecen los pedidos que requieren acción. Los completados y cancelados se consultan aparte.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="refreshOrdersButton" type="button">Actualizar pedidos</button>
@@ -87,9 +87,9 @@
         <section class="admin-section orders-section">
           <div class="admin-section-heading">
             <div>
-              <span class="eyebrow">Seguimiento</span>
-              <h2>Órdenes recibidas</h2>
-              <p>Confirma, prepara y cierra pedidos sin perder de vista pago, entrega y productos.</p>
+              <span class="eyebrow">Atención</span>
+              <h2>Pedidos por procesar</h2>
+              <p>Cliente, pago, entrega y productos en una vista compacta. Abre una orden solo cuando necesites revisar el detalle.</p>
             </div>
           </div>
           <div class="orders-filter-bar" aria-label="Filtros de pedidos">
@@ -103,7 +103,7 @@
                 <option value="all">Todo el tiempo</option>
                 <option value="24h">Últimas 24 horas</option>
                 <option value="7d">Últimos 7 días</option>
-                <option value="30d">Últimos 30 días</option>
+                <option value="30d" selected>Últimos 30 días</option>
                 <option value="90d">Últimos 90 días</option>
               </select>
             </label>
@@ -141,11 +141,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260611-order-email-v2" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
-
-
 
 
 

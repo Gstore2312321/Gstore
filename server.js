@@ -55,16 +55,6 @@ const MAX_STORE_BANNERS = 6;
 const MYSQL_CONNECTION_URL = cleanText(process.env.MYSQL_URL || process.env.MYSQL_PUBLIC_URL || process.env.DATABASE_URL);
 const ORDER_STATUSES = ["new", "waiting_payment", "paid", "preparing", "ready", "sent", "completed", "cancelled"];
 const FINAL_ORDER_STATUSES = new Set(["completed", "cancelled"]);
-const ORDER_STATUS_LABELS = {
-  new: "Nuevo",
-  waiting_payment: "Esperando pago",
-  paid: "Pagado",
-  preparing: "Preparando",
-  ready: "Listo para entregar",
-  sent: "Enviado",
-  completed: "Entregado",
-  cancelled: "Cancelado"
-};
 const ERROR_ALERT_MINUTES = Math.max(1, Number(process.env.ERROR_ALERT_MINUTES || 15));
 let db;
 
@@ -91,7 +81,7 @@ app.post("/api/admin/orders/:id/email", requireAdmin, asyncHandler(async (req, r
     action: "order.email_resend",
     entityType: "order",
     entityId: String(order.id),
-    summary: `Correo procesado para ${orderDisplayLabel(order)}`,
+    summary: `Correo procesado para ${order.order_code}`,
     metadata: {
       admin_email_status: updatedOrder.admin_email_status || "pending",
       customer_email_status: updatedOrder.customer_email_status || "pending",
@@ -404,15 +394,6 @@ function boolToInt(value) {
 
 function cleanText(value, fallback = "") {
   return String(value || fallback).trim();
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 function cleanSearchText(value) {
@@ -1464,11 +1445,12 @@ async function getProductById(id, options = {}) {
 }
 
 async function getOrderByCode(code) {
-  const text = cleanText(code);
-  if (/^\d+$/.test(text)) {
-    return dbGet("SELECT * FROM orders WHERE id = ? OR order_code = ?", [Number(text), text]);
+  const numericId = Number(code);
+  if (Number.isInteger(numericId) && numericId > 0) {
+    const byId = await getOrderById(numericId);
+    if (byId) return byId;
   }
-  return dbGet("SELECT * FROM orders WHERE order_code = ?", [text]);
+  return dbGet("SELECT * FROM orders WHERE order_code = ?", [code]);
 }
 
 async function getOrderById(id) {
@@ -1478,8 +1460,7 @@ async function getOrderById(id) {
 function orderListQuery(options = {}) {
   const search = cleanSearchText(options.search);
   const status = cleanText(options.status || "all").toLowerCase();
-  const scope = cleanText(options.scope || (status && status !== "all" ? "all" : "active")).toLowerCase();
-  const dateRange = cleanText(options.dateRange || options.range || "all").toLowerCase();
+  const range = cleanText(options.range || options.dateRange || "all").toLowerCase();
   const emailStatus = cleanText(options.emailStatus || "all").toLowerCase();
   const where = [];
   const params = [];
@@ -1489,21 +1470,16 @@ function orderListQuery(options = {}) {
     where.push("(CAST(id AS CHAR) LIKE ? ESCAPE '\\\\' OR order_code LIKE ? ESCAPE '\\\\' OR customer_name LIKE ? ESCAPE '\\\\' OR customer_phone LIKE ? ESCAPE '\\\\' OR customer_email LIKE ? ESCAPE '\\\\' OR customer_city LIKE ? ESCAPE '\\\\')");
     params.push(term, term, term, term, term, term);
   }
-  if (status && status !== "all" && ORDER_STATUSES.includes(status)) {
+  if (status === "active") {
+    where.push("status NOT IN ('completed', 'cancelled')");
+  } else if (status && status !== "all" && ORDER_STATUSES.includes(status)) {
     where.push("status = ?");
     params.push(status);
-  } else if (scope === "completed") {
-    where.push("status = 'completed'");
-  } else if (scope === "cancelled") {
-    where.push("status = 'cancelled'");
-  } else if (scope !== "all") {
-    where.push("status NOT IN ('completed', 'cancelled')");
   }
-
-  const rangeStart = orderDateRangeStart(dateRange);
-  if (rangeStart) {
+  const since = orderRangeStart(range);
+  if (since) {
     where.push("created_at >= ?");
-    params.push(rangeStart);
+    params.push(since);
   }
   if (emailStatus && emailStatus !== "all") {
     const emailStateSql = orderEmailStateSql();
@@ -1517,16 +1493,16 @@ function orderListQuery(options = {}) {
   };
 }
 
-function orderDateRangeStart(range) {
-  const daysByRange = {
-    "24h": 1,
-    "7d": 7,
-    "30d": 30,
-    "90d": 90
+function orderRangeStart(range) {
+  const hoursByRange = {
+    "24h": 24,
+    "7d": 24 * 7,
+    "30d": 24 * 30,
+    "90d": 24 * 90
   };
-  const days = daysByRange[range];
-  if (!days) return "";
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const hours = hoursByRange[range];
+  if (!hours) return "";
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
 function orderEmailStateSql() {
@@ -1562,7 +1538,7 @@ async function orderSummary(options = {}) {
 }
 
 async function emailSummary(options = {}) {
-  const listQuery = orderListQuery({ search: options.search, scope: "all" });
+  const listQuery = orderListQuery({ search: options.search });
   const rows = await dbAll(`
     SELECT email_state, COUNT(*) AS count
     FROM (
@@ -1597,12 +1573,14 @@ async function paginatedOrders(options = {}) {
   return {
     orders: rows.map(publicOrder),
     pagination: paginationMeta(pagination, totalRow?.count),
-    summary: options.emailStatus ? await emailSummary({ search: options.search, scope: "all" }) : await orderSummary(options)
+    summary: options.emailStatus ? await emailSummary({ search: options.search }) : await orderSummary(options)
   };
 }
 
 function createOrderCode() {
-  return `PENDING-${crypto.randomBytes(10).toString("hex").toUpperCase()}`;
+  const stamp = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+  const random = crypto.randomBytes(8).toString("hex").toUpperCase();
+  return `GS-${stamp}-${random}`;
 }
 
 function normalizeDeliveryMethod(value) {
@@ -1869,8 +1847,7 @@ async function migrateLegacyOrderStockFlags() {
 }
 
 async function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paymentStatus, status, source, paypalOrderId = "" }) {
-  const code = createOrderCode();
-  const createdAt = now();
+  const code = `PENDING-${crypto.randomUUID()}`;
   const result = await dbRun(`
     INSERT INTO orders (
       order_code, customer_name, customer_phone, customer_email, customer_address, customer_city, delivery_method,
@@ -1896,8 +1873,8 @@ async function insertOrder({ customer, cart, deliveryMethod, paymentMethod, paym
     status,
     source,
     paypalOrderId,
-    createdAt,
-    createdAt
+    now(),
+    now()
   ]);
 
   await dbRun("UPDATE orders SET order_code = ?, updated_at = ? WHERE id = ?", [String(result.insertId), now(), result.insertId]);
@@ -1918,7 +1895,7 @@ function buildWhatsappMessage(order) {
   return [
     `Hola, quiero hacer este pedido en ${STORE_NAME}:`,
     "",
-    `Pedido: ${orderDisplayLabel(order)}`,
+    `Pedido: ${order.order_code}`,
     items,
     "",
     `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
@@ -1964,9 +1941,10 @@ function buildCustomerOrderFollowupMessage(order) {
   const firstName = cleanText(order.customer_name).split(/\s+/)[0] || "cliente";
 
   return [
-    `Hola ${firstName}, te saluda ${STORE_NAME}.`,
+    `Hola ${firstName}, soy de ${STORE_NAME}.`,
     "",
-    `Ya recibimos tu pedido ${orderDisplayLabel(order)} y queremos confirmar los datos antes de prepararlo:`,
+    `Te escribo por tu pedido ${order.order_code}.`,
+    "Tenemos registrado:",
     items,
     "",
     `Total: $${formatMoney(order.total)} ${CURRENCY}`,
@@ -1975,7 +1953,7 @@ function buildCustomerOrderFollowupMessage(order) {
     deliveryMethod === "delivery" && order.customer_address ? `Dirección: ${order.customer_address}` : "",
     order.notes ? `Nota: ${order.notes}` : "",
     "",
-    "¿Nos confirmas si todo está correcto para dejarlo listo?"
+    "¿Me confirmas por favor si estos datos están correctos para preparar tu pedido?"
   ].filter(Boolean).join("\n");
 }
 
@@ -2006,7 +1984,7 @@ async function sendResendEmail({ to, subject, text, html, replyTo }) {
       reply_to: replyTo || undefined,
       subject,
       text,
-      html: html || undefined
+      html
     })
   });
 
@@ -2033,269 +2011,10 @@ const sendServerErrorAlert = createErrorAlerter({
   storeName: STORE_NAME
 });
 
-function orderEmailItems(order) {
-  return parseJsonList(order.items_json).map((item) => ({
-    quantity: Number(item.quantity || 0),
-    name: cleanText(item.name, "Producto"),
-    sku: cleanText(item.sku),
-    size: cleanText(item.size),
-    color: cleanText(item.color),
-    price: money(item.price || 0),
-    line_total: money(item.line_total || Number(item.price || 0) * Number(item.quantity || 0))
-  }));
-}
-
-function orderItemVariantText(item) {
-  return [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`, item.sku && `SKU ${item.sku}`]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function orderEmailLines(order) {
-  return orderEmailItems(order)
-    .map((item) => {
-      const variants = orderItemVariantText(item);
-      return `${item.quantity} x ${item.name}${variants ? ` (${variants})` : ""} - $${formatMoney(item.line_total)} ${CURRENCY}`;
-    })
+  return parseJsonList(order.items_json)
+    .map((item) => `${item.quantity} x ${item.name} - $${formatMoney(item.line_total)}`)
     .join("\n");
-}
-
-function orderEmailDate(value) {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) return cleanText(value);
-  return new Intl.DateTimeFormat("es-EC", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: STORE_TIME_ZONE
-  }).format(date);
-}
-
-function orderDeliveryEmailLabel(order) {
-  return normalizeDeliveryMethod(order.delivery_method) === "pickup"
-    ? "Retiro coordinado por WhatsApp"
-    : "Envío a domicilio";
-}
-
-function orderPaymentMethodLabel(order) {
-  return order.payment_method === "paypal" ? "PayPal" : "WhatsApp";
-}
-
-function orderPaymentStatusLabel(order) {
-  return order.payment_status === "paid" ? "Pagado" : "Pendiente de confirmación";
-}
-
-function emailInfoRow(label, value) {
-  if (!cleanText(value)) return "";
-  return `
-    <tr>
-      <td style="padding:7px 0;color:#7a6954;font-size:13px;">${escapeHtml(label)}</td>
-      <td style="padding:7px 0;color:#151007;font-size:13px;font-weight:700;text-align:right;">${escapeHtml(value)}</td>
-    </tr>
-  `;
-}
-
-function orderItemsTableHtml(order) {
-  const rows = orderEmailItems(order).map((item) => `
-    <tr>
-      <td style="padding:14px 0;border-bottom:1px solid #eadfc8;">
-        <strong style="display:block;color:#151007;font-size:15px;">${escapeHtml(item.name)}</strong>
-        <span style="display:block;margin-top:4px;color:#7a6954;font-size:12px;">${escapeHtml(orderItemVariantText(item) || "Sin variante")}</span>
-      </td>
-      <td style="padding:14px 8px;border-bottom:1px solid #eadfc8;color:#151007;font-weight:800;text-align:center;">${item.quantity}</td>
-      <td style="padding:14px 0;border-bottom:1px solid #eadfc8;color:#151007;font-weight:800;text-align:right;">$${formatMoney(item.line_total)}</td>
-    </tr>
-  `).join("");
-
-  return `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-      <thead>
-        <tr>
-          <th align="left" style="padding:0 0 8px;color:#9a7228;font-size:11px;letter-spacing:.08em;text-transform:uppercase;">Producto</th>
-          <th align="center" style="padding:0 8px 8px;color:#9a7228;font-size:11px;letter-spacing:.08em;text-transform:uppercase;">Cant.</th>
-          <th align="right" style="padding:0 0 8px;color:#9a7228;font-size:11px;letter-spacing:.08em;text-transform:uppercase;">Total</th>
-        </tr>
-      </thead>
-      <tbody>${rows || `<tr><td colspan="3" style="padding:14px 0;color:#7a6954;">Sin productos en el pedido.</td></tr>`}</tbody>
-    </table>
-  `;
-}
-
-function orderTotalsHtml(order) {
-  return `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:18px;">
-      ${emailInfoRow("Subtotal", `$${formatMoney(order.subtotal)} ${CURRENCY}`)}
-      ${emailInfoRow("Envío", `$${formatMoney(order.shipping)} ${CURRENCY}`)}
-      <tr>
-        <td style="padding:13px 0 0;border-top:2px solid #151007;color:#151007;font-size:16px;font-weight:900;">Total</td>
-        <td style="padding:13px 0 0;border-top:2px solid #151007;color:#151007;font-size:24px;font-weight:900;text-align:right;">$${formatMoney(order.total)} ${CURRENCY}</td>
-      </tr>
-    </table>
-  `;
-}
-
-function orderEmailShell({ preheader, title, intro, bodyHtml, footer }) {
-  return `<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)}</title>
-</head>
-<body style="margin:0;background:#f8f3e9;color:#151007;font-family:Arial,Helvetica,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;color:transparent;">${escapeHtml(preheader || title)}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8f3e9;padding:24px 12px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border:1px solid #eadfc8;border-radius:22px;overflow:hidden;">
-          <tr>
-            <td style="padding:26px 28px;background:#151007;color:#fffdf8;">
-              <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#f1c85f;font-weight:900;">${escapeHtml(STORE_NAME)}</div>
-              <h1 style="margin:10px 0 0;font-size:30px;line-height:1.05;">${escapeHtml(title)}</h1>
-              ${intro ? `<p style="margin:12px 0 0;color:#f5ead7;font-size:15px;line-height:1.45;">${escapeHtml(intro)}</p>` : ""}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:26px 28px;">
-              ${bodyHtml}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:18px 28px;background:#fbf6ec;border-top:1px solid #eadfc8;color:#7a6954;font-size:12px;line-height:1.5;">
-              ${escapeHtml(footer || "Gracias por comprar en GStore.")}
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-function customerInvoiceEmail(order) {
-  const code = orderDisplayLabel(order);
-  const paid = order.payment_status === "paid";
-  const title = paid ? `Recibo de pago ${code}` : `Confirmación de pedido ${code}`;
-  const intro = paid
-    ? "Tu pago fue registrado correctamente. Este es el resumen de tu compra."
-    : "Recibimos tu pedido. Este es el resumen para que tengas todo claro.";
-  const bodyHtml = `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-bottom:22px;">
-      ${emailInfoRow("Pedido", code)}
-      ${emailInfoRow("Fecha", orderEmailDate(order.created_at))}
-      ${emailInfoRow("Cliente", order.customer_name)}
-      ${emailInfoRow("Teléfono", order.customer_phone)}
-      ${emailInfoRow("Entrega", orderDeliveryEmailLabel(order))}
-      ${emailInfoRow("Dirección", normalizeDeliveryMethod(order.delivery_method) === "delivery" ? [order.customer_city, order.customer_address].filter(Boolean).join(" · ") : "Retiro coordinado")}
-      ${emailInfoRow("Pago", `${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`)}
-    </table>
-    <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffaf1;">
-      ${orderItemsTableHtml(order)}
-      ${orderTotalsHtml(order)}
-    </div>
-    ${order.notes ? `<p style="margin:18px 0 0;color:#5b5144;"><strong>Nota:</strong> ${escapeHtml(order.notes)}</p>` : ""}
-  `;
-  const text = [
-    `${title}`,
-    "",
-    `Pedido: ${code}`,
-    `Fecha: ${orderEmailDate(order.created_at)}`,
-    `Cliente: ${order.customer_name}`,
-    `Teléfono: ${order.customer_phone}`,
-    `Entrega: ${orderDeliveryEmailLabel(order)}`,
-    normalizeDeliveryMethod(order.delivery_method) === "delivery" ? `Dirección: ${[order.customer_city, order.customer_address].filter(Boolean).join(" · ")}` : "",
-    `Pago: ${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`,
-    "",
-    orderEmailLines(order),
-    "",
-    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
-    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
-    `Total: $${formatMoney(order.total)} ${CURRENCY}`,
-    order.notes ? `Nota: ${order.notes}` : "",
-    "",
-    paid ? "Gracias por tu compra." : "Te contactaremos para confirmar los detalles."
-  ].filter(Boolean).join("\n");
-  return {
-    subject: `${STORE_NAME}: ${title}`,
-    text,
-    html: orderEmailShell({
-      preheader: `${title} por $${formatMoney(order.total)} ${CURRENCY}`,
-      title,
-      intro,
-      bodyHtml,
-      footer: paid
-        ? "Conserva este correo como comprobante de tu compra."
-        : "Este pedido queda pendiente de confirmación por WhatsApp o por el medio que coordinemos contigo."
-    })
-  };
-}
-
-function adminPurchaseOrderEmail(order) {
-  const code = orderDisplayLabel(order);
-  const address = normalizeDeliveryMethod(order.delivery_method) === "delivery"
-    ? [order.customer_city, order.customer_address].filter(Boolean).join(" · ")
-    : "Retiro coordinado por WhatsApp";
-  const bodyHtml = `
-    <div style="display:grid;gap:14px;">
-      <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffaf1;">
-        <h2 style="margin:0 0 12px;font-size:18px;">Datos para preparar</h2>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-          ${emailInfoRow("Pedido", code)}
-          ${emailInfoRow("Fecha", orderEmailDate(order.created_at))}
-          ${emailInfoRow("Estado", ORDER_STATUS_LABELS[order.status] || order.status)}
-          ${emailInfoRow("Pago", `${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`)}
-          ${emailInfoRow("Entrega", orderDeliveryEmailLabel(order))}
-          ${emailInfoRow("Dirección", address)}
-        </table>
-      </div>
-      <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffdf8;">
-        <h2 style="margin:0 0 12px;font-size:18px;">Cliente</h2>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-          ${emailInfoRow("Nombre", order.customer_name)}
-          ${emailInfoRow("Teléfono", order.customer_phone)}
-          ${emailInfoRow("Correo", order.customer_email)}
-        </table>
-      </div>
-      <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffaf1;">
-        <h2 style="margin:0 0 12px;font-size:18px;">Productos solicitados</h2>
-        ${orderItemsTableHtml(order)}
-        ${orderTotalsHtml(order)}
-      </div>
-      ${order.notes ? `<div style="border:1px solid #f0c995;border-radius:16px;padding:16px;background:#fff6e8;"><strong>Nota del cliente</strong><p style="margin:8px 0 0;">${escapeHtml(order.notes)}</p></div>` : ""}
-    </div>
-  `;
-  const text = [
-    `Orden de compra ${code}`,
-    "",
-    `Fecha: ${orderEmailDate(order.created_at)}`,
-    `Cliente: ${order.customer_name}`,
-    `Teléfono: ${order.customer_phone}`,
-    order.customer_email ? `Correo: ${order.customer_email}` : "",
-    `Entrega: ${orderDeliveryEmailLabel(order)}`,
-    `Dirección: ${address}`,
-    `Pago: ${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`,
-    `Estado: ${ORDER_STATUS_LABELS[order.status] || order.status}`,
-    "",
-    orderEmailLines(order),
-    "",
-    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
-    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
-    `Total: $${formatMoney(order.total)} ${CURRENCY}`,
-    order.notes ? `Nota: ${order.notes}` : "",
-    "",
-    "Siguiente paso: confirmar con el cliente, preparar productos e imprimir etiqueta."
-  ].filter(Boolean).join("\n");
-  return {
-    subject: `${STORE_NAME}: orden de compra ${code}`,
-    text,
-    html: orderEmailShell({
-      preheader: `Orden ${code}: ${order.customer_name} · $${formatMoney(order.total)} ${CURRENCY}`,
-      title: `Orden de compra ${code}`,
-      intro: "Resumen interno para preparar el paquete y contactar al cliente.",
-      bodyHtml,
-      footer: "Acción sugerida: confirma datos, prepara el pedido e imprime la etiqueta desde el panel."
-    })
-  };
 }
 
 function emailStatusFromResult(result) {
@@ -2384,7 +2103,7 @@ function customersFromOrders(orders) {
     current.total_spent += Number(order.total || 0);
     if (!current.last_order_at || String(order.created_at || "") > current.last_order_at) {
       current.last_order_at = order.created_at || "";
-      current.last_order_code = orderDisplayCode(order);
+      current.last_order_code = order.order_code || "";
     }
     groups.set(key, current);
   }
@@ -2475,8 +2194,231 @@ async function paginatedCustomers(options = {}) {
   };
 }
 
+function customerIdentityFilter(rawId) {
+  const id = cleanText(rawId);
+  if (!id) throw httpError(400, "Cliente inválido.");
+  if (id.startsWith("order:")) {
+    const orderId = Number(id.slice(6));
+    if (!Number.isInteger(orderId) || orderId <= 0) throw httpError(400, "Cliente inválido.");
+    return { whereSql: "id = ?", params: [orderId] };
+  }
+  if (id.includes("@")) return { whereSql: "LOWER(customer_email) = ?", params: [id.toLowerCase()] };
+  return { whereSql: "customer_phone = ?", params: [id] };
+}
+
+async function customerDetail(rawId) {
+  const filter = customerIdentityFilter(rawId);
+  const [summary, orders] = await Promise.all([
+    dbGet(`
+      SELECT
+        COUNT(*) AS order_count,
+        COALESCE(SUM(total), 0) AS total_spent,
+        COALESCE(AVG(total), 0) AS average_order,
+        MIN(created_at) AS first_order_at,
+        MAX(created_at) AS last_order_at
+      FROM orders
+      WHERE ${filter.whereSql}
+    `, filter.params),
+    dbAll(`
+      SELECT *
+      FROM orders
+      WHERE ${filter.whereSql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT 30
+    `, filter.params)
+  ]);
+  if (!orders.length) return null;
+  const grouped = customersFromOrders(orders)[0] || {};
+  const latestOrder = orders[0] || {};
+  return {
+    customer: {
+      ...grouped,
+      order_count: Number(summary?.order_count || grouped.order_count || 0),
+      total_spent: money(summary?.total_spent || grouped.total_spent || 0),
+      average_order: money(summary?.average_order || 0),
+      first_order_at: cleanText(summary?.first_order_at),
+      last_order_at: cleanText(summary?.last_order_at || grouped.last_order_at),
+      last_order_code: orderDisplayCode(latestOrder),
+      last_order_status: latestOrder.status || "",
+      preferred_delivery_method: normalizeDeliveryMethod(latestOrder.delivery_method) === "pickup" ? "Retiro coordinado" : "Envío a domicilio",
+      last_payment_method: latestOrder.payment_method || "whatsapp",
+      last_payment_status: latestOrder.payment_status || "pending"
+    },
+    orders: orders.map(publicOrder)
+  };
+}
+
 function csvCell(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function orderEmailCode(order) {
+  return orderDisplayLabel(order);
+}
+
+function orderDeliveryEmailLabel(order) {
+  return normalizeDeliveryMethod(order.delivery_method) === "pickup" ? "Retiro coordinado" : "Envío a domicilio";
+}
+
+function orderPaymentMethodLabel(order) {
+  return order.payment_method === "paypal" ? "PayPal" : "WhatsApp";
+}
+
+function orderPaymentStatusLabel(order) {
+  return order.payment_status === "paid" ? "Pagado" : "Pendiente de confirmación";
+}
+
+function orderEmailDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  return new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: STORE_TIME_ZONE }).format(date);
+}
+
+function emailInfoRow(label, value) {
+  return `<tr><td style="padding:8px 0;color:#7a6954;font-size:13px;">${escapeHtml(label)}</td><td style="padding:8px 0;text-align:right;font-weight:700;color:#151007;">${escapeHtml(value || "-")}</td></tr>`;
+}
+
+function orderEmailLines(order) {
+  return parseJsonList(order.items_json)
+    .map((item) => {
+      const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`].filter(Boolean).join(", ");
+      return `${item.quantity} x ${item.name}${variants ? ` (${variants})` : ""} - $${formatMoney(item.line_total)} ${CURRENCY}`;
+    })
+    .join("\n");
+}
+
+function orderItemsTableHtml(order) {
+  const rows = parseJsonList(order.items_json).map((item) => {
+    const variants = [item.size, item.color].filter(Boolean).join(" · ") || item.sku || "Sin variante";
+    return `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #eadfc8;">
+          <strong style="display:block;color:#151007;">${escapeHtml(item.quantity)} x ${escapeHtml(item.name)}</strong>
+          <span style="color:#7a6954;font-size:12px;">${escapeHtml(variants)}</span>
+        </td>
+        <td style="padding:10px 0;border-bottom:1px solid #eadfc8;text-align:right;font-weight:700;color:#151007;">$${formatMoney(item.line_total)} ${CURRENCY}</td>
+      </tr>`;
+  }).join("");
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table>`;
+}
+
+function orderTotalsHtml(order) {
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:14px;">
+      ${emailInfoRow("Subtotal", `$${formatMoney(order.subtotal)} ${CURRENCY}`)}
+      ${emailInfoRow("Envío", `$${formatMoney(order.shipping)} ${CURRENCY}`)}
+      <tr><td style="padding:12px 0 0;border-top:2px solid #151007;font-size:16px;font-weight:800;color:#151007;">Total</td><td style="padding:12px 0 0;border-top:2px solid #151007;text-align:right;font-size:18px;font-weight:900;color:#151007;">$${formatMoney(order.total)} ${CURRENCY}</td></tr>
+    </table>`;
+}
+
+function orderEmailShell({ title, preheader, intro, bodyHtml, footer }) {
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title></head>
+<body style="margin:0;background:#f8f3e9;color:#151007;font-family:Arial,Helvetica,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;color:transparent;">${escapeHtml(preheader || title)}</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8f3e9;padding:24px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border:1px solid #eadfc8;border-radius:22px;overflow:hidden;">
+<tr><td style="padding:26px 28px;background:#151007;color:#fffdf8;"><div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#f1c85f;font-weight:900;">${escapeHtml(STORE_NAME)}</div><h1 style="margin:10px 0 0;font-size:30px;line-height:1.05;">${escapeHtml(title)}</h1>${intro ? `<p style="margin:12px 0 0;color:#f5ead7;font-size:15px;line-height:1.45;">${escapeHtml(intro)}</p>` : ""}</td></tr>
+<tr><td style="padding:26px 28px;">${bodyHtml}</td></tr>
+<tr><td style="padding:18px 28px;background:#fbf6ec;border-top:1px solid #eadfc8;color:#7a6954;font-size:12px;line-height:1.5;">${escapeHtml(footer || "Gracias por comprar en GStore.")}</td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+function customerInvoiceEmail(order) {
+  const code = orderEmailCode(order);
+  const paid = order.payment_status === "paid";
+  const title = paid ? `Recibo de pago ${code}` : `Confirmación de pedido ${code}`;
+  const deliveryAddress = normalizeDeliveryMethod(order.delivery_method) === "delivery"
+    ? [order.customer_city, order.customer_address].filter(Boolean).join(" · ")
+    : "Retiro coordinado";
+  const bodyHtml = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-bottom:22px;">
+      ${emailInfoRow("Pedido", code)}
+      ${emailInfoRow("Fecha", orderEmailDate(order.created_at))}
+      ${emailInfoRow("Cliente", order.customer_name)}
+      ${emailInfoRow("Teléfono", order.customer_phone)}
+      ${emailInfoRow("Entrega", orderDeliveryEmailLabel(order))}
+      ${emailInfoRow("Dirección", deliveryAddress)}
+      ${emailInfoRow("Pago", `${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`)}
+    </table>
+    <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffaf1;">${orderItemsTableHtml(order)}${orderTotalsHtml(order)}</div>
+    ${order.notes ? `<p style="margin:18px 0 0;color:#5b5144;"><strong>Nota:</strong> ${escapeHtml(order.notes)}</p>` : ""}`;
+  const text = [
+    title,
+    "",
+    `Pedido: ${code}`,
+    `Fecha: ${orderEmailDate(order.created_at)}`,
+    `Cliente: ${order.customer_name}`,
+    `Teléfono: ${order.customer_phone}`,
+    `Entrega: ${orderDeliveryEmailLabel(order)}`,
+    normalizeDeliveryMethod(order.delivery_method) === "delivery" ? `Dirección: ${deliveryAddress}` : "",
+    `Pago: ${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`,
+    "",
+    orderEmailLines(order),
+    "",
+    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
+    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
+    `Total: $${formatMoney(order.total)} ${CURRENCY}`,
+    order.notes ? `Nota: ${order.notes}` : "",
+    "",
+    paid ? "Gracias por tu compra." : "Te contactaremos para confirmar los detalles."
+  ].filter(Boolean).join("\n");
+  return {
+    subject: `${STORE_NAME}: ${title}`,
+    text,
+    html: orderEmailShell({
+      preheader: `${title} por $${formatMoney(order.total)} ${CURRENCY}`,
+      title,
+      intro: paid ? "Tu pago fue registrado correctamente. Este es el resumen de tu compra." : "Recibimos tu pedido. Este es el resumen para que tengas todo claro.",
+      bodyHtml,
+      footer: paid ? "Conserva este correo como comprobante de tu compra." : "Este pedido queda pendiente de confirmación."
+    })
+  };
+}
+
+function adminPurchaseOrderEmail(order) {
+  const code = orderEmailCode(order);
+  const address = normalizeDeliveryMethod(order.delivery_method) === "delivery"
+    ? [order.customer_city, order.customer_address].filter(Boolean).join(" · ")
+    : "Retiro coordinado por WhatsApp";
+  const bodyHtml = `
+    <div style="display:grid;gap:14px;">
+      <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffaf1;"><h2 style="margin:0 0 12px;font-size:18px;">Datos para preparar</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${emailInfoRow("Pedido", code)}${emailInfoRow("Fecha", orderEmailDate(order.created_at))}${emailInfoRow("Estado", ORDER_STATUS_LABELS[order.status] || order.status)}${emailInfoRow("Pago", `${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`)}${emailInfoRow("Entrega", orderDeliveryEmailLabel(order))}${emailInfoRow("Dirección", address)}</table></div>
+      <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffdf8;"><h2 style="margin:0 0 12px;font-size:18px;">Cliente</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${emailInfoRow("Nombre", order.customer_name)}${emailInfoRow("Teléfono", order.customer_phone)}${emailInfoRow("Correo", order.customer_email)}</table></div>
+      <div style="border:1px solid #eadfc8;border-radius:16px;padding:18px;background:#fffaf1;"><h2 style="margin:0 0 12px;font-size:18px;">Productos solicitados</h2>${orderItemsTableHtml(order)}${orderTotalsHtml(order)}</div>
+      ${order.notes ? `<div style="border:1px solid #f0c995;border-radius:16px;padding:16px;background:#fff6e8;"><strong>Nota del cliente</strong><p style="margin:8px 0 0;">${escapeHtml(order.notes)}</p></div>` : ""}
+    </div>`;
+  const text = [
+    `Orden de compra ${code}`,
+    "",
+    `Fecha: ${orderEmailDate(order.created_at)}`,
+    `Cliente: ${order.customer_name}`,
+    `Teléfono: ${order.customer_phone}`,
+    order.customer_email ? `Correo: ${order.customer_email}` : "",
+    `Entrega: ${orderDeliveryEmailLabel(order)}`,
+    `Dirección: ${address}`,
+    `Pago: ${orderPaymentMethodLabel(order)} · ${orderPaymentStatusLabel(order)}`,
+    `Estado: ${ORDER_STATUS_LABELS[order.status] || order.status}`,
+    "",
+    orderEmailLines(order),
+    "",
+    `Subtotal: $${formatMoney(order.subtotal)} ${CURRENCY}`,
+    `Envío: $${formatMoney(order.shipping)} ${CURRENCY}`,
+    `Total: $${formatMoney(order.total)} ${CURRENCY}`,
+    order.notes ? `Nota: ${order.notes}` : "",
+    "",
+    "Siguiente paso: confirmar con el cliente, preparar productos e imprimir etiqueta."
+  ].filter(Boolean).join("\n");
+  return {
+    subject: `${STORE_NAME}: orden de compra ${code}`,
+    text,
+    html: orderEmailShell({
+      preheader: `Orden ${code}: ${order.customer_name} · $${formatMoney(order.total)} ${CURRENCY}`,
+      title: `Orden de compra ${code}`,
+      intro: "Resumen interno para preparar el paquete y contactar al cliente.",
+      bodyHtml,
+      footer: "Acción sugerida: confirma datos, prepara el pedido e imprime la etiqueta desde el panel."
+    })
+  };
 }
 
 async function sendOrderEmail(order) {
@@ -2489,38 +2431,20 @@ async function sendOrderEmail(order) {
 
   const adminEmail = adminPurchaseOrderEmail(order);
   const customerEmail = customerInvoiceEmail(order);
-
   const results = {};
   if (ownerEmail) {
-    results.admin = await sendResendEmail({
-      to: ownerEmail,
-      replyTo: replyToEmail || undefined,
-      subject: adminEmail.subject,
-      text: adminEmail.text,
-      html: adminEmail.html
-    });
+    results.admin = await sendResendEmail({ to: ownerEmail, replyTo: replyToEmail || undefined, subject: adminEmail.subject, text: adminEmail.text, html: adminEmail.html });
   } else {
     results.admin = { skipped: true, message: "No hay correo admin configurado." };
   }
   if (order.customer_email) {
-    results.customer = await sendResendEmail({
-      to: order.customer_email,
-      replyTo: ownerEmail || undefined,
-      subject: customerEmail.subject,
-      text: customerEmail.text,
-      html: customerEmail.html
-    });
+    results.customer = await sendResendEmail({ to: order.customer_email, replyTo: ownerEmail || undefined, subject: customerEmail.subject, text: customerEmail.text, html: customerEmail.html });
   } else {
     results.customer = { skipped: true, message: "El pedido no tiene correo de cliente." };
   }
 
   const error = emailErrorSummary(results);
-  await updateOrderEmailStatus(order.id, {
-    admin: emailStatusFromResult(results.admin),
-    customer: emailStatusFromResult(results.customer),
-    error
-  });
-
+  await updateOrderEmailStatus(order.id, { admin: emailStatusFromResult(results.admin), customer: emailStatusFromResult(results.customer), error });
   return { ok: !error, results };
 }
 
@@ -2558,8 +2482,6 @@ async function paypalAccessToken() {
 
 async function createPaypalOrder(order) {
   const token = await paypalAccessToken();
-  const orderCode = orderDisplayCode(order);
-  const orderLabel = orderDisplayLabel(order);
   const response = await fetch(`${paypalBaseUrl()}/v2/checkout/orders`, {
     method: "POST",
     headers: {
@@ -2570,9 +2492,9 @@ async function createPaypalOrder(order) {
       intent: "CAPTURE",
       purchase_units: [
         {
-          reference_id: orderCode,
-          custom_id: orderCode,
-          description: `${STORE_NAME} ${orderLabel}`,
+          reference_id: order.order_code,
+          custom_id: order.order_code,
+          description: `${STORE_NAME} ${order.order_code}`,
           amount: {
             currency_code: CURRENCY,
             value: formatMoney(order.total)
@@ -2583,8 +2505,8 @@ async function createPaypalOrder(order) {
         brand_name: STORE_NAME,
         user_action: "PAY_NOW",
         shipping_preference: "NO_SHIPPING",
-        return_url: `${PUBLIC_BASE_URL}/success?paypal=1&order=${encodeURIComponent(orderCode)}`,
-        cancel_url: `${PUBLIC_BASE_URL}/success?cancelled=1&order=${encodeURIComponent(orderCode)}`
+        return_url: `${PUBLIC_BASE_URL}/success?paypal=1&order=${encodeURIComponent(order.order_code)}`,
+        cancel_url: `${PUBLIC_BASE_URL}/success?cancelled=1&order=${encodeURIComponent(order.order_code)}`
       }
     })
   });
@@ -3049,18 +2971,10 @@ app.post("/api/paypal/create-order", checkoutLimiter, asyncHandler(async (req, r
     paymentMethod: "paypal",
     paymentStatus: "pending",
     status: "waiting_payment",
-    source: "storefront",
-    paypalOrderId: ""
+    source: "storefront"
   });
 
-  let paypalOrder;
-  try {
-    paypalOrder = await createPaypalOrder(order);
-  } catch (error) {
-    await dbRun("UPDATE orders SET status = 'cancelled', updated_at = ? WHERE id = ?", [now(), order.id]);
-    throw error;
-  }
-
+  const paypalOrder = await createPaypalOrder(order);
   await dbRun("UPDATE orders SET paypal_order_id = ?, updated_at = ? WHERE id = ?", [paypalOrder.paypalOrderId, now(), order.id]);
 
   res.status(201).json({
@@ -3729,8 +3643,7 @@ app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
     pagination,
     search: req.query.q || req.query.search,
     status: req.query.status,
-    scope: req.query.scope,
-    dateRange: req.query.range || req.query.dateRange
+    range: req.query.range || req.query.dateRange
   }));
 }));
 
@@ -3747,8 +3660,7 @@ app.get("/api/admin/email/orders", requireAdmin, asyncHandler(async (req, res) =
   res.json(await paginatedOrders({
     pagination,
     search: req.query.q || req.query.search,
-    emailStatus: req.query.status || req.query.emailStatus || "all",
-    scope: "all"
+    emailStatus: req.query.status || req.query.emailStatus || "all"
   }));
 }));
 
@@ -3773,6 +3685,12 @@ app.get("/api/admin/customers/export", requireAdmin, asyncHandler(async (req, re
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="gstore-clientes-${new Date().toISOString().slice(0, 10)}.csv"`);
   res.send(`\ufeff${csv}`);
+}));
+
+app.get("/api/admin/customers/:id", requireAdmin, asyncHandler(async (req, res) => {
+  const detail = await customerDetail(req.params.id);
+  if (!detail) throw httpError(404, "Cliente no encontrado.");
+  res.json(detail);
 }));
 
 app.get("/api/admin/email/status", requireAdmin, (req, res) => {
@@ -3815,9 +3733,9 @@ app.patch("/api/admin/orders/:id/status", requireAdmin, asyncHandler(async (req,
     action: "order.status_update",
     entityType: "order",
     entityId: String(id),
-    summary: `Pedido ${orderDisplayLabel(updatedOrder)}: ${order.status} -> ${updatedOrder.status}`,
+    summary: `Pedido ${updatedOrder.order_code}: ${order.status} -> ${updatedOrder.status}`,
     metadata: {
-      order_code: orderDisplayCode(updatedOrder),
+      order_code: updatedOrder.order_code,
       before: { status: order.status, payment_status: order.payment_status },
       after: { status: updatedOrder.status, payment_status: updatedOrder.payment_status },
       stock_restored: stockRestored

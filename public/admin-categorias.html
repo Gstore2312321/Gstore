@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260610-print-label">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="categories">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
-            <span>Imágenes listas para Cloudinary</span>
+            <span>Reportes de venta</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -76,6 +76,7 @@
           <div>
             <span class="eyebrow">Orden</span>
             <h1>Categorías</h1>
+            <p class="admin-topbar-copy">Mantén filtros claros para que el cliente encuentre rápido lo que quiere comprar.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="newCategoryButton" type="button">Nueva categoría</button>
@@ -86,8 +87,8 @@
         <section class="admin-page-brief compact" aria-label="Guía de categorías">
           <div>
             <span class="eyebrow">Estructura</span>
-            <h2>Una tienda pequeña se entiende mejor por grupos claros.</h2>
-            <p>Activa solo las categorías que deben aparecer en la tienda y mantén nombres cortos para que el filtro sea fácil en móvil.</p>
+            <h2>Categorías simples, catálogo fácil de navegar.</h2>
+            <p>Activa solo los grupos que el cliente necesita ver y usa nombres cortos para móvil.</p>
           </div>
           <div class="admin-brief-stack">
             <span><strong>Ropa</strong> Blusas, vestidos, conjuntos</span>
@@ -166,7 +167,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260610-print-label" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
 

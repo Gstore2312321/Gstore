@@ -35,9 +35,11 @@ const adminState = {
   productBrandFilter: "all",
   productFilters: { categories: [], brands: [] },
   orderSearch: "",
-  orderDateRange: "all",
-  orderStatusScope: "active",
+  orderScope: "active",
+  orderDateRange: "30d",
   customerSearch: "",
+  activeCustomer: null,
+  activeCustomerOrders: [],
   emailSearch: "",
   emailStatusFilter: "all",
   productOptions: {
@@ -142,7 +144,6 @@ const adminEls = {
   refreshOrdersButton: document.querySelector("#refreshOrdersButton"),
   orderSearch: document.querySelector("#orderSearch"),
   orderDateRange: document.querySelector("#orderDateRange"),
-  orderScopeButtons: document.querySelectorAll("[data-order-scope]"),
   customersList: document.querySelector("#customersList"),
   customersPagination: document.querySelector("#customersPagination"),
   customersTotal: document.querySelector("#customersTotal"),
@@ -152,6 +153,10 @@ const adminEls = {
   customerSearch: document.querySelector("#customerSearch"),
   refreshCustomersButton: document.querySelector("#refreshCustomersButton"),
   exportCustomersButton: document.querySelector("#exportCustomersButton"),
+  customerModal: document.querySelector("#customerModal"),
+  customerModalTitle: document.querySelector("#customerModalTitle"),
+  customerModalBody: document.querySelector("#customerModalBody"),
+  closeCustomerModal: document.querySelector("#closeCustomerModal"),
   emailsTable: document.querySelector("#emailsTable"),
   emailPagination: document.querySelector("#emailPagination"),
   emailSearch: document.querySelector("#emailSearch"),
@@ -222,23 +227,6 @@ function bindAdminEvents() {
   on(adminEls.resetProductForm, "click", () => resetProductForm());
   on(adminEls.resetCategoryForm, "click", () => resetCategoryForm());
   on(adminEls.refreshOrdersButton, "click", () => refreshOrders().catch(showErrorToast));
-  on(adminEls.orderSearch, "input", (event) => {
-    adminState.orderSearch = event.target.value.trim().toLowerCase();
-    adminState.pagination.orders.page = 1;
-    debounceAdminRefresh("orders", () => refreshOrders().catch(showErrorToast));
-  });
-  on(adminEls.orderDateRange, "change", (event) => {
-    adminState.orderDateRange = event.target.value;
-    adminState.pagination.orders.page = 1;
-    refreshOrders().catch(showErrorToast);
-  });
-  adminEls.orderScopeButtons?.forEach((button) => {
-    on(button, "click", () => {
-      adminState.orderStatusScope = button.dataset.orderScope || "active";
-      adminState.pagination.orders.page = 1;
-      refreshOrders().catch(showErrorToast);
-    });
-  });
   on(adminEls.refreshCustomersButton, "click", () => refreshCustomers().catch(showErrorToast));
   on(adminEls.exportCustomersButton, "click", exportCustomers);
   on(adminEls.refreshEmailStatusButton, "click", () => refreshEmailModule().catch(showErrorToast));
@@ -309,6 +297,24 @@ function bindAdminEvents() {
     adminState.customerSearch = event.target.value.trim().toLowerCase();
     adminState.pagination.customers.page = 1;
     debounceAdminRefresh("customers", () => refreshCustomers(false).catch(showErrorToast));
+  });
+  on(adminEls.orderSearch, "input", (event) => {
+    adminState.orderSearch = event.target.value.trim().toLowerCase();
+    adminState.pagination.orders.page = 1;
+    debounceAdminRefresh("orders", () => refreshOrders(false).catch(showErrorToast));
+  });
+  on(adminEls.orderDateRange, "change", (event) => {
+    adminState.orderDateRange = event.target.value || "30d";
+    adminState.pagination.orders.page = 1;
+    refreshOrders(false).catch(showErrorToast);
+  });
+  document.querySelectorAll("[data-order-scope]").forEach((button) => {
+    on(button, "click", () => {
+      adminState.orderScope = button.dataset.orderScope || "active";
+      adminState.pagination.orders.page = 1;
+      renderOrderScopeButtons();
+      refreshOrders(false).catch(showErrorToast);
+    });
   });
   on(adminEls.emailSearch, "input", (event) => {
     adminState.emailSearch = event.target.value.trim().toLowerCase();
@@ -449,15 +455,23 @@ function markActiveNav() {
 }
 
 function handleDocumentClick(event) {
-  const phoneLink = event.target.closest(".order-phone-link");
-  if (phoneLink && phoneLink.tagName === "A") {
-    event.stopPropagation();
-    return;
-  }
-
   const pageButton = event.target.closest("[data-admin-pagination]");
   if (pageButton) {
     changeAdminPage(pageButton.dataset.adminPagination, pageButton.dataset.pageDirection);
+    return;
+  }
+
+  const closeCustomerModalButton = event.target.closest("[data-close-customer-modal]");
+  if (closeCustomerModalButton) {
+    event.preventDefault();
+    closeCustomerModal();
+    return;
+  }
+
+  const customerOpen = event.target.closest("[data-customer-open]");
+  if (customerOpen) {
+    event.preventDefault();
+    openCustomerModal(customerOpen.dataset.customerOpen).catch(showErrorToast);
     return;
   }
 
@@ -591,6 +605,7 @@ function handleKeydown(event) {
 
   if (event.key !== "Escape") return;
   if (!isHidden(adminEls.confirmOverlay)) settleConfirm(false);
+  else if (!isHidden(adminEls.customerModal)) closeCustomerModal();
   else if (!isHidden(adminEls.productDrawer)) closeProductDrawer();
   else if (!isHidden(adminEls.categoryDrawer)) closeCategoryDrawer();
 }
@@ -812,20 +827,28 @@ async function refreshStoreSettings() {
 
 async function refreshOrders(updateSummary = true) {
   const page = adminState.pagination.orders.page || 1;
-  const isOrdersPage = adminState.page === "orders";
   const data = await adminApi(buildAdminUrl("/api/admin/orders", {
     page,
     limit: ADMIN_PAGE_LIMIT,
-    q: isOrdersPage ? adminState.orderSearch : "",
-    range: isOrdersPage ? adminState.orderDateRange : "all",
-    scope: isOrdersPage ? adminState.orderStatusScope : "all"
+    q: adminState.orderSearch,
+    status: adminState.orderScope,
+    range: adminState.orderDateRange
   }));
   adminState.orders = data.orders || [];
   adminState.pagination.orders = normalizePagination(data.pagination, page);
   adminState.summaries.orders = data.summary || null;
+  renderOrderScopeButtons();
   renderOrders();
   renderInsights();
   if (updateSummary) await refreshSummary();
+}
+
+function renderOrderScopeButtons() {
+  document.querySelectorAll("[data-order-scope]").forEach((button) => {
+    const active = button.dataset.orderScope === adminState.orderScope;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 }
 
 async function refreshCustomers(updateSummary = true) {
@@ -888,11 +911,11 @@ function renderInsights() {
   setText(adminEls.insightActiveCategories, `${activeCategories} activa${activeCategories === 1 ? "" : "s"} de ${adminState.categories.length || 0}. ${featured} producto${featured === 1 ? "" : "s"} destacado${featured === 1 ? "" : "s"}.`);
 
   if (latestOrder) {
-    setText(adminEls.insightLatestOrderTitle, orderDisplayTitle(latestOrder));
+    setText(adminEls.insightLatestOrderTitle, latestOrder.order_code);
     setText(adminEls.insightLatestOrder, `${latestOrder.customer_name}, ${formatCurrency(latestOrder.total)}, ${statusLabels[latestOrder.status] || latestOrder.status}.`);
   } else {
-    setText(adminEls.insightLatestOrderTitle, "Sin pedidos aún");
-    setText(adminEls.insightLatestOrder, "Cuando entre una orden aparecerá aquí.");
+    setText(adminEls.insightLatestOrderTitle, "Sin pedidos abiertos");
+    setText(adminEls.insightLatestOrder, "Las nuevas órdenes aparecerán aquí para preparar rápido.");
   }
 
   setText(adminEls.sidebarStatus, lowStockCount ? `${lowStockCount} stock bajo` : "Lista");
@@ -915,7 +938,7 @@ function renderDashboardAnalytics() {
     adminEls.profitSummaryText,
     sales > 0
       ? `${formatCurrency(sales)} en ventas, ${formatCurrency(profit)} de ganancia estimada y ${formatCurrency(pendingProfit)} pendiente por cobrar.`
-      : "Aún no hay ventas registradas. Cuando entren pedidos, aquí verás utilidad, margen y tendencia."
+      : "Sin ventas registradas. Cuando haya pedidos, aquí verás utilidad, margen y tendencia."
   );
 
   renderDashboardCharts(analytics);
@@ -1060,7 +1083,7 @@ function renderReports() {
     adminEls.reportsSummaryText,
     orderCount
       ? `${orderCount} pedido${orderCount === 1 ? "" : "s"} activo${orderCount === 1 ? "" : "s"}, ${formatCurrency(profit)} de ganancia estimada y ${formatPercent(margin)} de margen.`
-      : "Aún no hay pedidos activos. Cuando entren ventas, este panel mostrará utilidad, margen y movimiento."
+      : "Sin pedidos activos. Cuando haya ventas, este panel mostrará utilidad, margen y movimiento."
   );
 
   renderReportCharts(analytics);
@@ -1190,7 +1213,7 @@ function renderReportRecentOrders() {
     <div class="report-row">
       <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
       <div>
-        <strong>${escapeHtml(orderDisplayTitle(order))}</strong>
+        <strong>${escapeHtml(order.order_code)}</strong>
         <small>${escapeHtml(order.customer_name)} · ${formatDate(order.created_at)}</small>
       </div>
       <div class="report-row-number">
@@ -1198,7 +1221,7 @@ function renderReportRecentOrders() {
         <small>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</small>
       </div>
     </div>
-  `).join("") || emptyAdminState("Sin pedidos recientes.", "Cuando entre una compra, aparecerá en este reporte.");
+  `).join("") || emptyAdminState("Sin pedidos recientes.", "Las compras nuevas aparecerán en este reporte.");
 }
 
 function loadChartJs() {
@@ -1482,7 +1505,7 @@ function renderProductsTable() {
       <span>Acciones</span>
     </div>
     ${products.map(renderProductListRow).join("")}
-  ` : emptyAdminState("No hay productos para este filtro.", "Ajusta la búsqueda o agrega una pieza nueva.");
+  ` : emptyAdminState("No hay productos para este filtro.", "Cambia los filtros o agrega un producto nuevo.");
   renderAdminPagination("products", adminEls.productPagination);
 }
 
@@ -1645,7 +1668,7 @@ function renderBannerPreview(src, banner = {}) {
   if (!adminEls.bannerPreview) return;
   const imageUrl = src || banner.image_url || "";
   if (!imageUrl) {
-    adminEls.bannerPreview.innerHTML = "<span>Vista previa del banner</span>";
+    adminEls.bannerPreview.innerHTML = "<span>Imagen del banner</span>";
     return;
   }
   const frameSource = Object.keys(banner).length ? banner : currentBannerImageFrame();
@@ -1814,7 +1837,6 @@ function renderOrders() {
 }
 
 function renderOrdersOverview() {
-  renderOrderFilters();
   renderAdminPagination("orders", adminEls.ordersPagination);
   const orders = adminState.orders || [];
   const summary = adminState.summaries.orders || {};
@@ -1828,20 +1850,6 @@ function renderOrdersOverview() {
   setText(adminEls.ordersPendingCount, pendingCount);
   setText(adminEls.ordersDoneCount, doneCount);
   setText(adminEls.ordersVisibleTotal, formatCurrency(visibleTotal));
-}
-
-function renderOrderFilters() {
-  if (adminEls.orderSearch && adminEls.orderSearch.value !== adminState.orderSearch) {
-    adminEls.orderSearch.value = adminState.orderSearch;
-  }
-  if (adminEls.orderDateRange && adminEls.orderDateRange.value !== adminState.orderDateRange) {
-    adminEls.orderDateRange.value = adminState.orderDateRange;
-  }
-  adminEls.orderScopeButtons?.forEach((button) => {
-    const isActive = button.dataset.orderScope === adminState.orderStatusScope;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-pressed", String(isActive));
-  });
 }
 
 function groupOrdersByDay(orders) {
@@ -1894,23 +1902,24 @@ function renderOrderCard(order) {
   const clientPhone = order.customer_phone || "Sin teléfono";
   const productSummary = `${itemCount} unidad${itemCount === 1 ? "" : "es"} · ${primaryItem}${extraItems}`;
   const paymentStateLabel = order.payment_status === "paid" ? "Pago confirmado" : "Pago pendiente";
-  const orderTitle = orderDisplayTitle(order);
+  const subtotal = Number(order.subtotal ?? order.total ?? 0);
+  const shipping = Number(order.shipping ?? 0);
   return `
     <details class="order-card order-status-${escapeAttr(order.status || "new")}">
       <summary class="order-summary">
         <div class="order-summary-main">
           <div class="order-code-block">
-            <h3>${escapeHtml(orderTitle)}</h3>
+            <h3>${escapeHtml(order.order_code)}</h3>
             <span>${escapeHtml(orderTimeLabel(order.created_at))}</span>
             <small>${escapeHtml(address)}</small>
           </div>
           <div class="order-snapshot">
             <div class="order-summary-badges">
-              ${renderOrderBadge("Estado", statusLabels[order.status] || order.status, orderStatusClass(order.status))}
-              ${renderOrderBadge("Entrega", orderDeliveryShortLabel(order), "")}
+              ${renderOrderBadge("Estado", statusLabels[order.status] || order.status || "Nuevo", orderStatusClass(order.status))}
+              ${renderOrderBadge("Entrega", order.delivery_method === "pickup" ? "Retiro" : "Domicilio")}
               ${renderOrderBadge("Pago", paymentStateLabel, order.payment_status === "paid" ? "success" : "warning")}
             </div>
-            <p><strong>${escapeHtml(clientName)}</strong>${renderCustomerPhoneLink(clientPhone)}</p>
+            <p><strong>${escapeHtml(clientName)}</strong><span>${renderOrderPhoneLink(clientPhone)}</span></p>
             <small>${escapeHtml(productSummary)}</small>
           </div>
         </div>
@@ -1931,7 +1940,20 @@ function renderOrderCard(order) {
               <div class="order-items-list">
                 ${items.map((item) => renderOrderItem(item)).join("")}
               </div>
-              ${renderOrderTotals(order)}
+              <div class="order-total-breakdown">
+                <div>
+                  <span>Subtotal productos</span>
+                  <strong>${formatCurrency(subtotal)}</strong>
+                </div>
+                <div>
+                  <span>Envío</span>
+                  <strong>${formatCurrency(shipping)}</strong>
+                </div>
+                <div class="is-total">
+                  <span>Total</span>
+                  <strong>${formatCurrency(order.total)}</strong>
+                </div>
+              </div>
             </div>
 
             ${order.notes ? `
@@ -1946,7 +1968,7 @@ function renderOrderCard(order) {
             <div class="order-info-card">
               <span>Datos del cliente</span>
               <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
-              <small>${renderCustomerPhoneLink(order.customer_phone || "", "Sin teléfono")}</small>
+              <small>${renderOrderPhoneLink(order.customer_phone || "")}</small>
               <small>${escapeHtml(order.customer_email || "Sin correo registrado")}</small>
             </div>
             <div class="order-info-card">
@@ -1978,52 +2000,12 @@ function renderOrderCard(order) {
           `}
           <div class="order-action-buttons">
             ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
-            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Mensaje al cliente</button>
+            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Escribir al cliente</button>
             <button class="button ghost" data-order-print-label="${order.id}" type="button">Imprimir etiqueta</button>
           </div>
         </div>
       </div>
     </details>
-  `;
-}
-
-function orderDisplayTitle(order) {
-  const code = String(order?.order_code || "").trim();
-  return code ? `#${code}` : "#";
-}
-
-function normalizeWhatsappPhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("593")) return digits;
-  if (digits.length === 10 && digits.startsWith("0")) return `593${digits.slice(1)}`;
-  if (digits.length === 9) return `593${digits}`;
-  return digits;
-}
-
-function renderCustomerPhoneLink(phone, emptyText = "Sin teléfono") {
-  const raw = String(phone || "").trim();
-  const whatsappPhone = normalizeWhatsappPhone(raw);
-  if (!whatsappPhone) return `<span class="order-phone-link is-empty">${escapeHtml(emptyText)}</span>`;
-  return `<a class="order-phone-link" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">${escapeHtml(raw)}</a>`;
-}
-
-function renderOrderBadge(label, value, className = "") {
-  return `
-    <span class="order-badge ${className ? `order-badge-${escapeAttr(className)}` : ""}">
-      <small>${escapeHtml(label)}</small>
-      <strong>${escapeHtml(value)}</strong>
-    </span>
-  `;
-}
-
-function renderOrderTotals(order) {
-  return `
-    <div class="order-total-breakdown">
-      <div><span>Subtotal</span><strong>${formatCurrency(order.subtotal)}</strong></div>
-      <div><span>Envío</span><strong>${formatCurrency(order.shipping)}</strong></div>
-      <div class="is-total"><span>Total</span><strong>${formatCurrency(order.total)}</strong></div>
-    </div>
   `;
 }
 
@@ -2073,12 +2055,27 @@ function renderOrderItem(item) {
   `;
 }
 
-function orderDeliveryLabel(order) {
-  return order.delivery_method === "pickup" ? "Retiro coordinado" : "Envío a domicilio";
+function renderOrderBadge(label, value, className = "") {
+  const badgeClass = className ? ` order-badge-${className}` : "";
+  return `
+    <span class="order-badge${badgeClass}">
+      <small>${escapeHtml(label)}</small>
+      <strong>${escapeHtml(value)}</strong>
+    </span>
+  `;
 }
 
-function orderDeliveryShortLabel(order) {
-  return order.delivery_method === "pickup" ? "Retiro" : "Domicilio";
+function renderOrderPhoneLink(phone, fallback = "Sin teléfono") {
+  const cleanPhone = String(phone || "").trim();
+  const whatsappPhone = normalizeWhatsappPhone(cleanPhone);
+  if (!cleanPhone || !whatsappPhone) {
+    return `<span class="order-phone-link is-empty">${escapeHtml(fallback)}</span>`;
+  }
+  return `<a class="order-phone-link" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">${escapeHtml(cleanPhone)}</a>`;
+}
+
+function orderDeliveryLabel(order) {
+  return order.delivery_method === "pickup" ? "Retiro coordinado" : "Envío a domicilio";
 }
 
 function orderStatusClass(status) {
@@ -2389,7 +2386,7 @@ function updateProductGuide(errors = []) {
     setText(copy, "La ficha tiene los datos importantes completos.");
     return;
   }
-  setText(title, "Completa lo básico");
+  setText(title, "Datos necesarios");
   setText(copy, "Nombre, categoría, precio, stock e imagen.");
 }
 
@@ -2748,7 +2745,6 @@ async function openOrderWhatsapp(id) {
 
 function buildOrderLabelHtml(order) {
   const address = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Retiro / coordinar por WhatsApp";
-  const orderTitle = orderDisplayTitle(order);
   const products = (order.items || []).map((item) => {
     const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`].filter(Boolean).join(" · ");
     return `<li><strong>${Number(item.quantity || 0)}x</strong> ${escapeHtml(item.name)}${variants ? `<small>${escapeHtml(variants)}</small>` : ""}</li>`;
@@ -2759,7 +2755,7 @@ function buildOrderLabelHtml(order) {
     <html lang="es">
     <head>
       <meta charset="utf-8">
-      <title>Etiqueta ${escapeHtml(orderTitle)}</title>
+      <title>Etiqueta ${escapeHtml(order.order_code)}</title>
       <style>
         * { box-sizing: border-box; }
         @page { size: 100mm 150mm; margin: 6mm; }
@@ -2791,7 +2787,7 @@ function buildOrderLabelHtml(order) {
             <p>Etiqueta de paquete</p>
           </div>
           <div class="code">
-            ${escapeHtml(orderTitle)}<br>
+            ${escapeHtml(order.order_code)}<br>
             ${escapeHtml(statusLabels[order.status] || order.status)}
           </div>
         </div>
@@ -2890,7 +2886,7 @@ function openDrawer(drawer, focusTarget) {
 function closeDrawer(drawer) {
   if (!drawer) return;
   drawer.hidden = true;
-  if (isHidden(adminEls.productDrawer) && isHidden(adminEls.categoryDrawer) && isHidden(adminEls.confirmOverlay)) {
+  if (isHidden(adminEls.productDrawer) && isHidden(adminEls.categoryDrawer) && isHidden(adminEls.confirmOverlay) && isHidden(adminEls.customerModal)) {
     document.body.classList.remove("drawer-open");
   }
 }
@@ -3065,7 +3061,7 @@ function settleConfirm(value) {
   const resolve = adminState.pendingConfirm;
   adminState.pendingConfirm = null;
   if (adminEls.confirmOverlay) adminEls.confirmOverlay.hidden = true;
-  if (isHidden(adminEls.productDrawer) && isHidden(adminEls.categoryDrawer)) {
+  if (isHidden(adminEls.productDrawer) && isHidden(adminEls.categoryDrawer) && isHidden(adminEls.customerModal)) {
     document.body.classList.remove("drawer-open");
   }
   resolve(value);
@@ -3322,6 +3318,15 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatOptionalDate(value, fallback = "Sin fecha") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat("es-EC", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+
 function orderDateKey(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "sin-fecha";
@@ -3381,7 +3386,7 @@ function renderCustomers() {
   renderCustomersOverview();
   const customers = adminState.customers || [];
   adminEls.customersList.innerHTML = customers.map(renderCustomerRow).join("")
-    || `<tr><td colspan="8">${emptyAdminState("Todavia no hay clientes guardados.", "Cuando entren pedidos con correo, apareceran aqui.")}</td></tr>`;
+    || emptyAdminState("Sin clientes guardados.", "Los clientes se crean automáticamente cuando entran pedidos.");
   renderAdminPagination("customers", adminEls.customersPagination);
 }
 
@@ -3412,35 +3417,213 @@ function filteredCustomers() {
 }
 
 function renderCustomerRow(customer) {
-  const whatsappPhone = String(customer.phone || "").replace(/[^\d]/g, "");
-  const lastOrder = customer.last_order_code ? `#${customer.last_order_code}` : "Sin codigo";
+  const customerId = String(customer.id || "").trim();
+  const name = customer.name || "Cliente sin nombre";
+  const email = customer.email || "Sin correo";
+  const phone = customer.phone || "Sin teléfono";
+  const location = [customer.city, customer.address].filter(Boolean).join(" · ") || "Sin dirección registrada";
+  const lastOrder = customer.last_order_code ? `#${customer.last_order_code}` : "Sin código";
   const lastOrderDate = customer.last_order_at ? formatDate(customer.last_order_at) : "Sin fecha";
+  const ordersCount = Number(customer.order_count || 0);
+  const whatsappPhone = normalizeWhatsappPhone(customer.phone || "");
   return `
-    <tr>
-      <td data-label="Cliente">
-        <strong>${escapeHtml(customer.name || "Cliente sin nombre")}</strong>
-        <small>${escapeHtml(customer.marketing_status || "cliente")}</small>
-      </td>
-      <td data-label="Contacto">
-        <strong>${escapeHtml(customer.email || "Sin correo")}</strong>
-        <small>${escapeHtml(customer.phone || "Sin teléfono")}</small>
-      </td>
-      <td data-label="Ciudad">${escapeHtml(customer.city || "Sin ciudad")}</td>
-      <td data-label="Dirección">${escapeHtml(customer.address || "Sin dirección")}</td>
-      <td data-label="Pedidos">${Number(customer.order_count || 0)}</td>
-      <td data-label="Total"><strong>${formatCurrency(customer.total_spent)}</strong></td>
-      <td data-label="Ultimo pedido">
-        <strong>${escapeHtml(lastOrder)}</strong>
-        <small>${escapeHtml(lastOrderDate)}</small>
-      </td>
-      <td data-label="Acciones">
-        <div class="row-actions">
-          ${customer.email ? `<a class="small-button" href="mailto:${escapeAttr(customer.email)}">Email</a>` : ""}
-          ${whatsappPhone ? `<a class="small-button" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
-        </div>
-      </td>
-    </tr>
+    <article class="customer-card-row">
+      <button class="customer-row-main" type="button" data-customer-open="${escapeAttr(customerId)}">
+        <span class="customer-avatar">${escapeHtml(customerInitials(name))}</span>
+        <span class="customer-primary">
+          <strong>${escapeHtml(name)}</strong>
+          <small>${escapeHtml(email)}</small>
+          <small>${escapeHtml(phone)}</small>
+          <small>${escapeHtml(location)}</small>
+        </span>
+        <span class="customer-kpis">
+          <span>
+            <small>Pedidos</small>
+            <strong>${ordersCount}</strong>
+          </span>
+          <span>
+            <small>Total comprado</small>
+            <strong>${formatCurrency(customer.total_spent)}</strong>
+          </span>
+          <span>
+          <small>Último pedido</small>
+            <strong>${escapeHtml(lastOrder)}</strong>
+            <em>${escapeHtml(lastOrderDate)}</em>
+          </span>
+        </span>
+      </button>
+      <div class="customer-row-actions">
+        <button class="small-button" type="button" data-customer-open="${escapeAttr(customerId)}">Historial</button>
+        ${customer.email ? `<a class="small-button" href="mailto:${escapeAttr(customer.email)}">Correo</a>` : ""}
+        ${whatsappPhone ? `<a class="small-button" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+      </div>
+    </article>
   `;
+}
+
+function customerInitials(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return (words.map((word) => word[0]).join("") || "C").toUpperCase();
+}
+
+async function openCustomerModal(customerId) {
+  if (!adminEls.customerModal || !adminEls.customerModalBody) return;
+  const id = String(customerId || "").trim();
+  if (!id) return;
+  adminEls.customerModal.hidden = false;
+  document.body.classList.add("drawer-open");
+  setText(adminEls.customerModalTitle, "Cargando cliente");
+  adminEls.customerModalBody.innerHTML = emptyAdminState("Cargando cliente", "Estamos preparando el historial.");
+  try {
+    const data = await adminApi(`/api/admin/customers/${encodeURIComponent(id)}`);
+    adminState.activeCustomer = data.customer || null;
+    adminState.activeCustomerOrders = data.orders || [];
+    if (!adminState.activeCustomer) {
+      adminEls.customerModalBody.innerHTML = emptyAdminState("Cliente no encontrado", "No hay pedidos asociados a este registro.");
+      return;
+    }
+    setText(adminEls.customerModalTitle, adminState.activeCustomer.name || "Cliente sin nombre");
+    adminEls.customerModalBody.innerHTML = renderCustomerModal(adminState.activeCustomer, adminState.activeCustomerOrders);
+  } catch (error) {
+    adminEls.customerModalBody.innerHTML = emptyAdminState("No se pudo abrir el cliente", error.message || "Intenta actualizar la página.");
+    showErrorToast(error);
+  }
+}
+
+function closeCustomerModal() {
+  if (!adminEls.customerModal) return;
+  adminEls.customerModal.hidden = true;
+  adminState.activeCustomer = null;
+  adminState.activeCustomerOrders = [];
+  if (isHidden(adminEls.productDrawer) && isHidden(adminEls.categoryDrawer) && isHidden(adminEls.confirmOverlay)) {
+    document.body.classList.remove("drawer-open");
+  }
+}
+
+function renderCustomerModal(customer, orders = []) {
+  const orderCount = Number(customer.order_count || orders.length || 0);
+  const totalSpent = Number(customer.total_spent || 0);
+  const averageOrder = Number(customer.average_order || (orderCount ? totalSpent / orderCount : 0));
+  const firstOrderAt = formatOptionalDate(customer.first_order_at, "Sin fecha");
+  const lastOrderAt = formatOptionalDate(customer.last_order_at, "Sin fecha");
+  const phone = customer.phone || "";
+  const whatsappPhone = normalizeWhatsappPhone(phone);
+  const address = [customer.city, customer.address].filter(Boolean).join(" · ") || "Sin dirección registrada";
+  return `
+    <section class="customer-profile-head">
+      <span class="customer-avatar customer-avatar-large">${escapeHtml(customerInitials(customer.name))}</span>
+      <div>
+        <span class="eyebrow">Cliente</span>
+        <h3>${escapeHtml(customer.name || "Cliente sin nombre")}</h3>
+        <p>${renderCustomerPhoneLink(phone, "Sin teléfono")}</p>
+        <p>${escapeHtml(customer.email || "Sin correo registrado")}</p>
+      </div>
+      <div class="customer-profile-actions">
+        ${customer.email ? `<a class="button ghost" href="mailto:${escapeAttr(customer.email)}">Enviar correo</a>` : ""}
+        ${whatsappPhone ? `<a class="button primary" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+      </div>
+    </section>
+
+    <section class="customer-metric-grid" aria-label="Resumen de cliente">
+      ${renderCustomerMetric("Total comprado", formatCurrency(totalSpent))}
+      ${renderCustomerMetric("Pedidos", orderCount)}
+      ${renderCustomerMetric("Ticket promedio", formatCurrency(averageOrder))}
+      ${renderCustomerMetric("Primera compra", firstOrderAt)}
+      ${renderCustomerMetric("Última compra", lastOrderAt)}
+    </section>
+
+    <section class="customer-detail-grid">
+      <article>
+        <span>Contacto</span>
+        <strong>${escapeHtml(customer.email || "Sin correo")}</strong>
+        <small>${renderCustomerPhoneLink(phone, "Sin teléfono")}</small>
+      </article>
+      <article>
+        <span>Entrega frecuente</span>
+        <strong>${escapeHtml(address)}</strong>
+        <small>${escapeHtml(customer.preferred_delivery_method || "Según cada pedido")}</small>
+      </article>
+      <article>
+        <span>Último pago</span>
+        <strong>${escapeHtml(paymentMethodLabel(customer.last_payment_method || "whatsapp"))}</strong>
+        <small>${escapeHtml(customer.last_payment_status === "paid" ? "Pago confirmado" : "Pendiente o por coordinar")}</small>
+      </article>
+    </section>
+
+    <section class="customer-history">
+      <div class="customer-history-heading">
+        <div>
+          <span class="eyebrow">Historial</span>
+          <h3>Pedidos recientes</h3>
+        </div>
+        <strong>${orders.length} visibles</strong>
+      </div>
+      <div class="customer-history-list">
+        ${orders.map(renderCustomerHistoryOrder).join("") || emptyAdminState("Sin pedidos visibles", "Este cliente no tiene compras registradas todavía.")}
+      </div>
+    </section>
+  `;
+}
+
+function renderCustomerMetric(label, value) {
+  return `
+    <article>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </article>
+  `;
+}
+
+function renderCustomerHistoryOrder(order) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const firstItem = items[0]?.name || "Sin productos";
+  const extraItems = items.length > 1 ? ` + ${items.length - 1} más` : "";
+  const statusClass = orderStatusClass(order.status);
+  return `
+    <article class="customer-history-order">
+      <div class="customer-history-main">
+        <strong>${escapeHtml(orderDisplayTitle(order))}</strong>
+        <small>${escapeHtml(formatOptionalDate(order.created_at, "Sin fecha"))}</small>
+        <p>${escapeHtml(`${itemCount} unidad${itemCount === 1 ? "" : "es"} · ${firstItem}${extraItems}`)}</p>
+      </div>
+      <div class="customer-history-meta">
+        <span class="order-badge ${statusClass ? `order-badge-${escapeAttr(statusClass)}` : ""}">
+          <small>Estado</small>
+          <strong>${escapeHtml(statusLabels[order.status] || order.status || "Nuevo")}</strong>
+        </span>
+        <span>
+          <small>Pago</small>
+          <strong>${escapeHtml(paymentLabel(order.payment_method, order.payment_status))}</strong>
+        </span>
+        <span>
+          <small>Total</small>
+          <strong>${formatCurrency(order.total)}</strong>
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function orderDisplayTitle(order) {
+  const code = order?.order_code || order?.id || "";
+  return code ? `#${code}` : "Pedido";
+}
+
+function renderCustomerPhoneLink(phone, fallback = "Sin teléfono") {
+  const cleanPhone = String(phone || "").trim();
+  const whatsappPhone = normalizeWhatsappPhone(cleanPhone);
+  if (!cleanPhone || !whatsappPhone) return escapeHtml(fallback);
+  return `<a href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">${escapeHtml(cleanPhone)}</a>`;
+}
+
+function normalizeWhatsappPhone(phone) {
+  const digits = String(phone || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("593")) return digits;
+  if (digits.startsWith("0") && digits.length >= 9) return `593${digits.slice(1)}`;
+  if (digits.length === 9) return `593${digits}`;
+  return digits;
 }
 
 function emailStatusLabel(status) {
@@ -3462,7 +3645,7 @@ function emailStatusClass(status) {
 
 function emailStatusDetail(order) {
   if (order.email_error) return friendlyEmailErrorText(order.email_error);
-  if (order.email_sent_at) return `Ultimo intento: ${formatDate(order.email_sent_at)}`;
+  if (order.email_sent_at) return `Último intento: ${formatDate(order.email_sent_at)}`;
   return "Sin intento registrado";
 }
 
@@ -3476,7 +3659,7 @@ function friendlyEmailErrorText(value) {
   }
 
   if (lower.includes("testing emails") && lower.includes("own email address")) {
-    reasons.push("Resend esta en modo prueba. Verifica el dominio/remitente o autoriza el correo del cliente.");
+    reasons.push("Resend está en modo prueba. Verifica el dominio/remitente o autoriza el correo del cliente.");
   }
 
   if (lower.includes("domain") && lower.includes("verified")) {
@@ -3492,7 +3675,7 @@ function renderEmailModule() {
   renderEmailOverview();
   const orders = adminState.orders || [];
   adminEls.emailsTable.innerHTML = orders.map(renderEmailRow).join("")
-    || `<tr><td colspan="7">${emptyAdminState("No hay correos para este filtro.", "Ajusta la busqueda o revisa los pedidos recientes.")}</td></tr>`;
+    || `<tr><td colspan="7">${emptyAdminState("No hay correos para este filtro.", "Cambia el filtro o revisa pedidos recientes.")}</td></tr>`;
   renderAdminPagination("emails", adminEls.emailPagination);
 }
 
@@ -3547,7 +3730,7 @@ function renderEmailRow(order) {
   return `
     <tr class="email-row email-row-${escapeAttr(emailOrderState(order))}">
       <td data-label="Pedido">
-        <strong>${escapeHtml(orderDisplayTitle(order))}</strong>
+        <strong>${escapeHtml(order.order_code)}</strong>
         <small>${escapeHtml(formatDate(order.created_at))}</small>
       </td>
       <td data-label="Cliente">
@@ -3561,7 +3744,7 @@ function renderEmailRow(order) {
       <td data-label="Admin">
         <span class="status-pill ${emailStatusClass(order.admin_email_status)}">${escapeHtml(adminStatus)}</span>
       </td>
-      <td data-label="Ultimo intento">${escapeHtml(lastAttempt)}</td>
+      <td data-label="Último intento">${escapeHtml(lastAttempt)}</td>
       <td data-label="Detalle" class="email-detail-cell">${escapeHtml(detail)}</td>
       <td data-label="Acciones">
         <div class="row-actions">

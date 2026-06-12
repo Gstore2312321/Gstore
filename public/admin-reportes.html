@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260610-print-label">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="reports">
   <main class="admin-shell">
@@ -23,7 +23,7 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
@@ -76,6 +76,7 @@
           <div>
             <span class="eyebrow">Rentabilidad</span>
             <h1>Reportes</h1>
+            <p class="admin-topbar-copy">Ventas, ganancia, margen e inventario separados para saber qué se cobró y qué falta mover.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="refreshReportsButton" type="button">Actualizar reportes</button>
@@ -86,7 +87,7 @@
         <section class="reports-hero" aria-label="Resumen de reportes">
           <div>
             <span class="eyebrow">Lectura del negocio</span>
-            <h2>Dónde se vende, dónde se gana y qué conviene mover.</h2>
+            <h2>Rentabilidad clara para decidir compras y promociones.</h2>
             <p id="reportsSummaryText">Calculando ventas, margen y valor del inventario.</p>
           </div>
           <div class="reports-hero-metrics">
@@ -203,10 +204,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260610-print-label" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
-
 
 
 

@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260611-products-list">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="products">
   <main class="admin-shell">
@@ -23,7 +23,7 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
@@ -74,8 +74,9 @@
       <div class="admin-content">
         <header class="admin-topbar">
           <div>
-            <span class="eyebrow">Mercadería</span>
+            <span class="eyebrow">Inventario</span>
             <h1>Productos</h1>
+            <p class="admin-topbar-copy">Administra precio, stock, categorías, promociones y fotos desde una vista pensada para vender.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="newProductButton" type="button">Nuevo producto</button>
@@ -83,16 +84,16 @@
           </div>
         </header>
 
-        <section class="admin-page-brief" aria-label="Guía de productos">
+        <section class="admin-page-brief admin-page-brief-compact" aria-label="Gestión de productos">
           <div>
-            <span class="eyebrow">Vitrina</span>
-            <h2>Sube mercadería sin perder el control.</h2>
-            <p>Cada ficha separa lo público de lo privado: precio de venta, costo, stock, promo, tallas, colores e imagen.</p>
+            <span class="eyebrow">Control de inventario</span>
+            <h2>Productos listos para vender.</h2>
+            <p>La tienda pública muestra solo artículos activos y con stock. Lo agotado queda visible aquí para reponer o editar.</p>
           </div>
           <div class="admin-brief-stack">
-            <span><strong>01</strong> Completa datos básicos</span>
-            <span><strong>02</strong> Sube foto o conserva la actual</span>
-            <span><strong>03</strong> Activa promo si conviene vender rápido</span>
+            <span><strong>Venta</strong> Precio y promo</span>
+            <span><strong>Stock</strong> Disponible</span>
+            <span><strong>Margen</strong> Costo privado</span>
           </div>
         </section>
 
@@ -100,7 +101,7 @@
           <div class="admin-section-heading">
             <div>
               <span class="eyebrow">Catálogo</span>
-              <h2>Inventario visible</h2>
+              <h2>Lista de productos</h2>
             </div>
             <div class="section-actions">
               <label class="search-control product-search-control">
@@ -146,7 +147,7 @@
         </header>
 
         <div class="product-form-guide" id="productFormGuide" role="status" aria-live="polite">
-          <strong>Completa lo básico</strong>
+          <strong>Datos necesarios</strong>
           <span>Nombre, categoría, precio, stock e imagen.</span>
         </div>
 
@@ -206,7 +207,7 @@
                 <label class="discount-toggle">
                   <input name="has_discount" type="checkbox">
                   <span>
-                    <strong>¿Quieres poner esto en descuento?</strong>
+                    <strong>¿Quieres poner esto en descuento</strong>
                     <small>Actívalo solo si quieres mostrar un precio anterior en la tienda.</small>
                   </span>
                 </label>
@@ -384,11 +385,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260611-products-list" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
-
-
-
 
 

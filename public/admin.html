@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260610-print-label">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="dashboard">
   <main class="admin-shell">
@@ -23,7 +23,7 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, imágenes, categorías y pedidos en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Productos y stock</span>
             <span>Pedidos guardados</span>
@@ -114,6 +114,7 @@
           <div>
             <span class="eyebrow">Control diario</span>
             <h1>Resumen operativo</h1>
+            <p class="admin-topbar-copy">Ventas, pedidos, stock y configuración rápida para tomar decisiones sin recorrer todo el panel.</p>
           </div>
           <div class="topbar-actions">
             <a class="button primary" href="/admin-productos">Gestionar productos</a>
@@ -123,8 +124,8 @@
 
         <section class="dashboard-brief" aria-label="Resumen operativo">
           <div class="dashboard-brief-copy">
-            <span class="eyebrow">Panel de trabajo</span>
-            <h2>Lo importante primero.</h2>
+            <span class="eyebrow">Hoy</span>
+            <h2>Vista rápida del negocio.</h2>
             <p id="profitSummaryText">Calculando utilidad del negocio.</p>
             <div class="brief-actions" aria-label="Acciones rápidas">
               <a class="button primary" href="/admin-pedidos">Revisar pedidos</a>
@@ -135,7 +136,7 @@
             <a class="daily-action" href="/admin-pedidos">
               <span>Pedidos abiertos</span>
               <strong id="summaryOrders">0</strong>
-              <small>Entradas para revisar hoy</small>
+              <small>Revisar y preparar</small>
             </a>
             <a class="daily-action" href="/admin-productos">
               <span>Stock bajo</span>
@@ -173,14 +174,14 @@
           </article>
         </section>
 
-        <section class="store-settings-admin" aria-label="Configuración de tienda">
-          <div class="banner-admin-head">
+        <details class="store-settings-admin admin-collapsible-tool" aria-label="Configuración de tienda">
+          <summary class="banner-admin-head">
             <div>
-              <span class="eyebrow">Configuración</span>
+              <span class="eyebrow">Ajustes rápidos</span>
               <h2>Entrega y cobros</h2>
             </div>
             <span id="shippingCostBadge">$0.00 envío</span>
-          </div>
+          </summary>
           <form id="storeSettingsForm" class="settings-form" novalidate>
             <label>
               Costo de envío
@@ -189,16 +190,16 @@
             <p class="form-message" id="storeSettingsMessage"></p>
             <button class="button primary" type="submit">Guardar envío</button>
           </form>
-        </section>
+        </details>
 
-        <section class="store-banner-admin" aria-label="Banners publicitarios de la tienda">
-          <div class="banner-admin-head">
+        <details class="store-banner-admin admin-collapsible-tool" aria-label="Banners publicitarios de la tienda">
+          <summary class="banner-admin-head">
             <div>
-              <span class="eyebrow">Cabecera de tienda</span>
-              <h2>Banners publicitarios</h2>
+              <span class="eyebrow">Publicidad</span>
+              <h2>Banners de tienda</h2>
             </div>
             <span id="bannerCountText">0 activos</span>
-          </div>
+          </summary>
 
           <div class="banner-admin-grid">
             <form id="bannerForm" class="banner-form" novalidate>
@@ -231,7 +232,7 @@
                 <input name="imageFile" type="file" accept="image/*">
               </label>
               <div class="banner-preview full" id="bannerPreview">
-                <span>Vista previa del banner</span>
+                <span>Imagen del banner</span>
               </div>
               <div class="image-frame-controls banner-frame-controls full" aria-label="Ajuste visual del banner">
                 <label>
@@ -268,7 +269,7 @@
 
             <div class="banner-admin-list" id="bannerAdminList" aria-live="polite"></div>
           </div>
-        </section>
+        </details>
 
         <section class="dashboard-focus-grid" aria-label="Lectura principal">
           <article class="chart-panel dashboard-chart-primary">
@@ -299,8 +300,8 @@
             </article>
             <article class="decision-card">
               <span class="eyebrow">Pedido reciente</span>
-              <h3 id="insightLatestOrderTitle">Sin pedidos aún</h3>
-              <p id="insightLatestOrder">Cuando entre una orden aparecerá aqué.</p>
+              <h3 id="insightLatestOrderTitle">Sin pedidos abiertos</h3>
+              <p id="insightLatestOrder">Las nuevas órdenes aparecerán aquí para preparar rápido.</p>
               <a class="button ghost" href="/admin-pedidos">Gestionar pedidos</a>
             </article>
           </aside>
@@ -362,11 +363,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260610-print-label" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
-
-
-
-
 

@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260610-print-label">
-  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-admin-owner">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="emails">
   <main class="admin-shell">
@@ -23,11 +23,11 @@
           <img class="panel-brand-logo" src="assets/gstore-logo.svg?v=20260608" alt="GStore" width="220" height="104" decoding="async">
           <span class="eyebrow">Panel privado</span>
           <h1>Panel GStore</h1>
-          <p>Inventario, pedidos, clientes y correos en un panel hecho para operar sin tocar código.</p>
+          <p>Control de productos, pedidos, clientes y reportes para operar GStore con orden.</p>
           <div class="login-highlights" aria-label="Funciones del panel">
             <span>Estado de correos</span>
-            <span>Reenvio de pedidos</span>
-            <span>Diagnostico Resend</span>
+            <span>Reenvío de pedidos</span>
+            <span>Diagnóstico Resend</span>
           </div>
         </div>
         <div class="login-form-panel">
@@ -76,6 +76,7 @@
           <div>
             <span class="eyebrow">Notificaciones</span>
             <h1>Correos</h1>
+            <p class="admin-topbar-copy">Controla las confirmaciones que recibe el cliente y las alertas internas de cada pedido.</p>
           </div>
           <div class="topbar-actions">
             <button class="button primary" id="refreshEmailStatusButton" type="button">Actualizar correos</button>
@@ -88,7 +89,7 @@
             <div>
               <span class="eyebrow">Configuración</span>
               <h2>Estado de Resend</h2>
-              <p id="emailHint"><strong>Correo</strong> Revisando configuracion</p>
+              <p id="emailHint"><strong>Correo</strong> Revisando configuración</p>
             </div>
           </div>
 
@@ -116,7 +117,7 @@
             <div>
               <span class="eyebrow">Pedidos</span>
               <h2>Registro de correos</h2>
-              <p>Consulta el estado de envío por pedido y reenvía solo cuando haga falta.</p>
+              <p>Revisa qué pedidos ya notificaron al cliente y cuáles necesitan reintento.</p>
             </div>
             <div class="section-actions order-toolbar">
               <label class="search-control">
@@ -160,7 +161,7 @@
                   <th>Cliente</th>
                   <th>Cliente email</th>
                   <th>Admin</th>
-                  <th>Ultimo intento</th>
+                  <th>Último intento</th>
                   <th>Detalle</th>
                   <th>Acciones</th>
                 </tr>
@@ -177,11 +178,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260610-print-label" defer></script>
-  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
+  <script src="js/admin.js?v=20260612-admin-owner" defer></script>
 </body>
 </html>
-
-
 
 
 
