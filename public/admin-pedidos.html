@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260611-order-email-v2">
-  <link rel="stylesheet" href="css/admin.css?v=20260611-order-email-v2">
+  <link rel="stylesheet" href="css/admin.css?v=20260612-orders-filters">
 </head>
 <body class="admin-body is-auth-checking" data-admin-page="orders">
   <main class="admin-shell">
@@ -92,6 +92,27 @@
               <p>Confirma, prepara y cierra pedidos sin perder de vista pago, entrega y productos.</p>
             </div>
           </div>
+          <div class="orders-filter-bar" aria-label="Filtros de pedidos">
+            <label class="orders-search-control">
+              Buscar pedido
+              <input id="orderSearch" type="search" autocomplete="off" placeholder="Número, cliente o teléfono">
+            </label>
+            <label class="orders-range-control">
+              Tiempo
+              <select id="orderDateRange">
+                <option value="all">Todo el tiempo</option>
+                <option value="24h">Últimas 24 horas</option>
+                <option value="7d">Últimos 7 días</option>
+                <option value="30d">Últimos 30 días</option>
+                <option value="90d">Últimos 90 días</option>
+              </select>
+            </label>
+            <div class="orders-scope-tabs" role="group" aria-label="Vista de pedidos">
+              <button class="small-button is-active" data-order-scope="active" type="button" aria-pressed="true">Activos</button>
+              <button class="small-button" data-order-scope="completed" type="button" aria-pressed="false">Mostrar completados</button>
+              <button class="small-button" data-order-scope="cancelled" type="button" aria-pressed="false">Mostrar cancelados</button>
+            </div>
+          </div>
           <div class="orders-overview" aria-label="Resumen de pedidos">
             <article>
               <span>Nuevos</span>
@@ -120,7 +141,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/admin-money.js?v=20260611-order-email-v2" defer></script>
-  <script src="js/admin.js?v=20260611-order-email-v2" defer></script>
+  <script src="js/admin.js?v=20260612-orders-filters" defer></script>
 </body>
 </html>
 

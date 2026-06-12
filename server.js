@@ -1478,6 +1478,8 @@ async function getOrderById(id) {
 function orderListQuery(options = {}) {
   const search = cleanSearchText(options.search);
   const status = cleanText(options.status || "all").toLowerCase();
+  const scope = cleanText(options.scope || (status && status !== "all" ? "all" : "active")).toLowerCase();
+  const dateRange = cleanText(options.dateRange || options.range || "all").toLowerCase();
   const emailStatus = cleanText(options.emailStatus || "all").toLowerCase();
   const where = [];
   const params = [];
@@ -1490,6 +1492,18 @@ function orderListQuery(options = {}) {
   if (status && status !== "all" && ORDER_STATUSES.includes(status)) {
     where.push("status = ?");
     params.push(status);
+  } else if (scope === "completed") {
+    where.push("status = 'completed'");
+  } else if (scope === "cancelled") {
+    where.push("status = 'cancelled'");
+  } else if (scope !== "all") {
+    where.push("status NOT IN ('completed', 'cancelled')");
+  }
+
+  const rangeStart = orderDateRangeStart(dateRange);
+  if (rangeStart) {
+    where.push("created_at >= ?");
+    params.push(rangeStart);
   }
   if (emailStatus && emailStatus !== "all") {
     const emailStateSql = orderEmailStateSql();
@@ -1501,6 +1515,18 @@ function orderListQuery(options = {}) {
     whereSql: where.length ? `WHERE ${where.join(" AND ")}` : "",
     params
   };
+}
+
+function orderDateRangeStart(range) {
+  const daysByRange = {
+    "24h": 1,
+    "7d": 7,
+    "30d": 30,
+    "90d": 90
+  };
+  const days = daysByRange[range];
+  if (!days) return "";
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function orderEmailStateSql() {
@@ -1536,7 +1562,7 @@ async function orderSummary(options = {}) {
 }
 
 async function emailSummary(options = {}) {
-  const listQuery = orderListQuery({ search: options.search });
+  const listQuery = orderListQuery({ search: options.search, scope: "all" });
   const rows = await dbAll(`
     SELECT email_state, COUNT(*) AS count
     FROM (
@@ -1571,7 +1597,7 @@ async function paginatedOrders(options = {}) {
   return {
     orders: rows.map(publicOrder),
     pagination: paginationMeta(pagination, totalRow?.count),
-    summary: options.emailStatus ? await emailSummary({ search: options.search }) : await orderSummary(options)
+    summary: options.emailStatus ? await emailSummary({ search: options.search, scope: "all" }) : await orderSummary(options)
   };
 }
 
@@ -3702,7 +3728,9 @@ app.get("/api/admin/orders", requireAdmin, asyncHandler(async (req, res) => {
   res.json(await paginatedOrders({
     pagination,
     search: req.query.q || req.query.search,
-    status: req.query.status
+    status: req.query.status,
+    scope: req.query.scope,
+    dateRange: req.query.range || req.query.dateRange
   }));
 }));
 
@@ -3719,7 +3747,8 @@ app.get("/api/admin/email/orders", requireAdmin, asyncHandler(async (req, res) =
   res.json(await paginatedOrders({
     pagination,
     search: req.query.q || req.query.search,
-    emailStatus: req.query.status || req.query.emailStatus || "all"
+    emailStatus: req.query.status || req.query.emailStatus || "all",
+    scope: "all"
   }));
 }));
 

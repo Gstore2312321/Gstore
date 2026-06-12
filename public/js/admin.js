@@ -34,6 +34,9 @@ const adminState = {
   productCategoryFilter: "all",
   productBrandFilter: "all",
   productFilters: { categories: [], brands: [] },
+  orderSearch: "",
+  orderDateRange: "all",
+  orderStatusScope: "active",
   customerSearch: "",
   emailSearch: "",
   emailStatusFilter: "all",
@@ -137,6 +140,9 @@ const adminEls = {
   ordersDoneCount: document.querySelector("#ordersDoneCount"),
   ordersVisibleTotal: document.querySelector("#ordersVisibleTotal"),
   refreshOrdersButton: document.querySelector("#refreshOrdersButton"),
+  orderSearch: document.querySelector("#orderSearch"),
+  orderDateRange: document.querySelector("#orderDateRange"),
+  orderScopeButtons: document.querySelectorAll("[data-order-scope]"),
   customersList: document.querySelector("#customersList"),
   customersPagination: document.querySelector("#customersPagination"),
   customersTotal: document.querySelector("#customersTotal"),
@@ -216,6 +222,23 @@ function bindAdminEvents() {
   on(adminEls.resetProductForm, "click", () => resetProductForm());
   on(adminEls.resetCategoryForm, "click", () => resetCategoryForm());
   on(adminEls.refreshOrdersButton, "click", () => refreshOrders().catch(showErrorToast));
+  on(adminEls.orderSearch, "input", (event) => {
+    adminState.orderSearch = event.target.value.trim().toLowerCase();
+    adminState.pagination.orders.page = 1;
+    debounceAdminRefresh("orders", () => refreshOrders().catch(showErrorToast));
+  });
+  on(adminEls.orderDateRange, "change", (event) => {
+    adminState.orderDateRange = event.target.value;
+    adminState.pagination.orders.page = 1;
+    refreshOrders().catch(showErrorToast);
+  });
+  adminEls.orderScopeButtons?.forEach((button) => {
+    on(button, "click", () => {
+      adminState.orderStatusScope = button.dataset.orderScope || "active";
+      adminState.pagination.orders.page = 1;
+      refreshOrders().catch(showErrorToast);
+    });
+  });
   on(adminEls.refreshCustomersButton, "click", () => refreshCustomers().catch(showErrorToast));
   on(adminEls.exportCustomersButton, "click", exportCustomers);
   on(adminEls.refreshEmailStatusButton, "click", () => refreshEmailModule().catch(showErrorToast));
@@ -426,6 +449,12 @@ function markActiveNav() {
 }
 
 function handleDocumentClick(event) {
+  const phoneLink = event.target.closest(".order-phone-link");
+  if (phoneLink && phoneLink.tagName === "A") {
+    event.stopPropagation();
+    return;
+  }
+
   const pageButton = event.target.closest("[data-admin-pagination]");
   if (pageButton) {
     changeAdminPage(pageButton.dataset.adminPagination, pageButton.dataset.pageDirection);
@@ -783,9 +812,13 @@ async function refreshStoreSettings() {
 
 async function refreshOrders(updateSummary = true) {
   const page = adminState.pagination.orders.page || 1;
+  const isOrdersPage = adminState.page === "orders";
   const data = await adminApi(buildAdminUrl("/api/admin/orders", {
     page,
-    limit: ADMIN_PAGE_LIMIT
+    limit: ADMIN_PAGE_LIMIT,
+    q: isOrdersPage ? adminState.orderSearch : "",
+    range: isOrdersPage ? adminState.orderDateRange : "all",
+    scope: isOrdersPage ? adminState.orderStatusScope : "all"
   }));
   adminState.orders = data.orders || [];
   adminState.pagination.orders = normalizePagination(data.pagination, page);
@@ -1781,6 +1814,7 @@ function renderOrders() {
 }
 
 function renderOrdersOverview() {
+  renderOrderFilters();
   renderAdminPagination("orders", adminEls.ordersPagination);
   const orders = adminState.orders || [];
   const summary = adminState.summaries.orders || {};
@@ -1794,6 +1828,20 @@ function renderOrdersOverview() {
   setText(adminEls.ordersPendingCount, pendingCount);
   setText(adminEls.ordersDoneCount, doneCount);
   setText(adminEls.ordersVisibleTotal, formatCurrency(visibleTotal));
+}
+
+function renderOrderFilters() {
+  if (adminEls.orderSearch && adminEls.orderSearch.value !== adminState.orderSearch) {
+    adminEls.orderSearch.value = adminState.orderSearch;
+  }
+  if (adminEls.orderDateRange && adminEls.orderDateRange.value !== adminState.orderDateRange) {
+    adminEls.orderDateRange.value = adminState.orderDateRange;
+  }
+  adminEls.orderScopeButtons?.forEach((button) => {
+    const isActive = button.dataset.orderScope === adminState.orderStatusScope;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
 }
 
 function groupOrdersByDay(orders) {
@@ -1862,7 +1910,7 @@ function renderOrderCard(order) {
               ${renderOrderBadge("Entrega", orderDeliveryShortLabel(order), "")}
               ${renderOrderBadge("Pago", paymentStateLabel, order.payment_status === "paid" ? "success" : "warning")}
             </div>
-            <p><strong>${escapeHtml(clientName)}</strong><span>${escapeHtml(clientPhone)}</span></p>
+            <p><strong>${escapeHtml(clientName)}</strong>${renderCustomerPhoneLink(clientPhone)}</p>
             <small>${escapeHtml(productSummary)}</small>
           </div>
         </div>
@@ -1898,7 +1946,7 @@ function renderOrderCard(order) {
             <div class="order-info-card">
               <span>Datos del cliente</span>
               <strong>${escapeHtml(order.customer_name || "Cliente sin nombre")}</strong>
-              <small>${escapeHtml(order.customer_phone || "Sin teléfono")}</small>
+              <small>${renderCustomerPhoneLink(order.customer_phone || "", "Sin teléfono")}</small>
               <small>${escapeHtml(order.customer_email || "Sin correo registrado")}</small>
             </div>
             <div class="order-info-card">
@@ -1942,6 +1990,22 @@ function renderOrderCard(order) {
 function orderDisplayTitle(order) {
   const code = String(order?.order_code || "").trim();
   return code ? `#${code}` : "#";
+}
+
+function normalizeWhatsappPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("593")) return digits;
+  if (digits.length === 10 && digits.startsWith("0")) return `593${digits.slice(1)}`;
+  if (digits.length === 9) return `593${digits}`;
+  return digits;
+}
+
+function renderCustomerPhoneLink(phone, emptyText = "Sin teléfono") {
+  const raw = String(phone || "").trim();
+  const whatsappPhone = normalizeWhatsappPhone(raw);
+  if (!whatsappPhone) return `<span class="order-phone-link is-empty">${escapeHtml(emptyText)}</span>`;
+  return `<a class="order-phone-link" href="https://wa.me/${escapeAttr(whatsappPhone)}" target="_blank" rel="noreferrer">${escapeHtml(raw)}</a>`;
 }
 
 function renderOrderBadge(label, value, className = "") {
