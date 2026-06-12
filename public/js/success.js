@@ -84,8 +84,9 @@ function renderOrder(order) {
 }
 
 function renderDetails(order) {
+  const orderCode = String(order.order_code || "").trim();
   details.innerHTML = `
-    <div><span>Pedido</span><strong>${escapeHtml(order.order_code)}</strong></div>
+    <div><span>Pedido</span><strong>${escapeHtml(orderCode ? `#${orderCode}` : "#")}</strong></div>
     <div><span>Estado</span><strong>${escapeHtml(statusLabels[order.status] || order.status)}</strong></div>
     <div><span>Total</span><strong>${formatCurrency(order.total)}</strong></div>
   `;

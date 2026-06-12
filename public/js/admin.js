@@ -855,7 +855,7 @@ function renderInsights() {
   setText(adminEls.insightActiveCategories, `${activeCategories} activa${activeCategories === 1 ? "" : "s"} de ${adminState.categories.length || 0}. ${featured} producto${featured === 1 ? "" : "s"} destacado${featured === 1 ? "" : "s"}.`);
 
   if (latestOrder) {
-    setText(adminEls.insightLatestOrderTitle, latestOrder.order_code);
+    setText(adminEls.insightLatestOrderTitle, orderDisplayTitle(latestOrder));
     setText(adminEls.insightLatestOrder, `${latestOrder.customer_name}, ${formatCurrency(latestOrder.total)}, ${statusLabels[latestOrder.status] || latestOrder.status}.`);
   } else {
     setText(adminEls.insightLatestOrderTitle, "Sin pedidos aún");
@@ -1157,7 +1157,7 @@ function renderReportRecentOrders() {
     <div class="report-row">
       <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
       <div>
-        <strong>${escapeHtml(order.order_code)}</strong>
+        <strong>${escapeHtml(orderDisplayTitle(order))}</strong>
         <small>${escapeHtml(order.customer_name)} · ${formatDate(order.created_at)}</small>
       </div>
       <div class="report-row-number">
@@ -1846,20 +1846,21 @@ function renderOrderCard(order) {
   const clientPhone = order.customer_phone || "Sin teléfono";
   const productSummary = `${itemCount} unidad${itemCount === 1 ? "" : "es"} · ${primaryItem}${extraItems}`;
   const paymentStateLabel = order.payment_status === "paid" ? "Pago confirmado" : "Pago pendiente";
+  const orderTitle = orderDisplayTitle(order);
   return `
     <details class="order-card order-status-${escapeAttr(order.status || "new")}">
       <summary class="order-summary">
         <div class="order-summary-main">
           <div class="order-code-block">
-            <h3>${escapeHtml(order.order_code)}</h3>
+            <h3>${escapeHtml(orderTitle)}</h3>
             <span>${escapeHtml(orderTimeLabel(order.created_at))}</span>
             <small>${escapeHtml(address)}</small>
           </div>
           <div class="order-snapshot">
             <div class="order-summary-badges">
-              <span class="status-pill ${orderStatusClass(order.status)}">${escapeHtml(statusLabels[order.status] || order.status)}</span>
-              <span class="status-pill">${escapeHtml(orderDeliveryLabel(order))}</span>
-              <span class="status-pill ${order.payment_status === "paid" ? "success" : "warning"}">${escapeHtml(paymentStateLabel)}</span>
+              ${renderOrderBadge("Estado", statusLabels[order.status] || order.status, orderStatusClass(order.status))}
+              ${renderOrderBadge("Entrega", orderDeliveryShortLabel(order), "")}
+              ${renderOrderBadge("Pago", paymentStateLabel, order.payment_status === "paid" ? "success" : "warning")}
             </div>
             <p><strong>${escapeHtml(clientName)}</strong><span>${escapeHtml(clientPhone)}</span></p>
             <small>${escapeHtml(productSummary)}</small>
@@ -1882,10 +1883,7 @@ function renderOrderCard(order) {
               <div class="order-items-list">
                 ${items.map((item) => renderOrderItem(item)).join("")}
               </div>
-              <div class="order-detail-total">
-                <span>Total</span>
-                <strong>${formatCurrency(order.total)}</strong>
-              </div>
+              ${renderOrderTotals(order)}
             </div>
 
             ${order.notes ? `
@@ -1932,12 +1930,36 @@ function renderOrderCard(order) {
           `}
           <div class="order-action-buttons">
             ${nextAction.status ? `<button class="button ghost" data-order-id="${order.id}" data-order-next-status="${escapeAttr(nextAction.status)}" type="button">${escapeHtml(nextAction.label)}</button>` : ""}
-            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Contactar cliente</button>
+            <button class="button primary" data-order-whatsapp="${order.id}" type="button">Mensaje al cliente</button>
             <button class="button ghost" data-order-print-label="${order.id}" type="button">Imprimir etiqueta</button>
           </div>
         </div>
       </div>
     </details>
+  `;
+}
+
+function orderDisplayTitle(order) {
+  const code = String(order?.order_code || "").trim();
+  return code ? `#${code}` : "#";
+}
+
+function renderOrderBadge(label, value, className = "") {
+  return `
+    <span class="order-badge ${className ? `order-badge-${escapeAttr(className)}` : ""}">
+      <small>${escapeHtml(label)}</small>
+      <strong>${escapeHtml(value)}</strong>
+    </span>
+  `;
+}
+
+function renderOrderTotals(order) {
+  return `
+    <div class="order-total-breakdown">
+      <div><span>Subtotal</span><strong>${formatCurrency(order.subtotal)}</strong></div>
+      <div><span>Envío</span><strong>${formatCurrency(order.shipping)}</strong></div>
+      <div class="is-total"><span>Total</span><strong>${formatCurrency(order.total)}</strong></div>
+    </div>
   `;
 }
 
@@ -1989,6 +2011,10 @@ function renderOrderItem(item) {
 
 function orderDeliveryLabel(order) {
   return order.delivery_method === "pickup" ? "Retiro coordinado" : "Envío a domicilio";
+}
+
+function orderDeliveryShortLabel(order) {
+  return order.delivery_method === "pickup" ? "Retiro" : "Domicilio";
 }
 
 function orderStatusClass(status) {
@@ -2658,6 +2684,7 @@ async function openOrderWhatsapp(id) {
 
 function buildOrderLabelHtml(order) {
   const address = [order.customer_city, order.customer_address].filter(Boolean).join(" · ") || "Retiro / coordinar por WhatsApp";
+  const orderTitle = orderDisplayTitle(order);
   const products = (order.items || []).map((item) => {
     const variants = [item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`].filter(Boolean).join(" · ");
     return `<li><strong>${Number(item.quantity || 0)}x</strong> ${escapeHtml(item.name)}${variants ? `<small>${escapeHtml(variants)}</small>` : ""}</li>`;
@@ -2668,7 +2695,7 @@ function buildOrderLabelHtml(order) {
     <html lang="es">
     <head>
       <meta charset="utf-8">
-      <title>Etiqueta ${escapeHtml(order.order_code)}</title>
+      <title>Etiqueta ${escapeHtml(orderTitle)}</title>
       <style>
         * { box-sizing: border-box; }
         @page { size: 100mm 150mm; margin: 6mm; }
@@ -2700,7 +2727,7 @@ function buildOrderLabelHtml(order) {
             <p>Etiqueta de paquete</p>
           </div>
           <div class="code">
-            ${escapeHtml(order.order_code)}<br>
+            ${escapeHtml(orderTitle)}<br>
             ${escapeHtml(statusLabels[order.status] || order.status)}
           </div>
         </div>
@@ -3322,7 +3349,7 @@ function filteredCustomers() {
 
 function renderCustomerRow(customer) {
   const whatsappPhone = String(customer.phone || "").replace(/[^\d]/g, "");
-  const lastOrder = customer.last_order_code || "Sin codigo";
+  const lastOrder = customer.last_order_code ? `#${customer.last_order_code}` : "Sin codigo";
   const lastOrderDate = customer.last_order_at ? formatDate(customer.last_order_at) : "Sin fecha";
   return `
     <tr>
@@ -3456,7 +3483,7 @@ function renderEmailRow(order) {
   return `
     <tr class="email-row email-row-${escapeAttr(emailOrderState(order))}">
       <td data-label="Pedido">
-        <strong>${escapeHtml(order.order_code)}</strong>
+        <strong>${escapeHtml(orderDisplayTitle(order))}</strong>
         <small>${escapeHtml(formatDate(order.created_at))}</small>
       </td>
       <td data-label="Cliente">
